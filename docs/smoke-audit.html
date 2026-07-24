@@ -1,0 +1,74 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>smoke audit</title>
+<body>
+<div id="out">running…</div>
+<script>
+(async function () {
+  const R = {}, C = []; // surfaces, coherence checks
+  const hash = (s) => { let h = 5381; for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) >>> 0; return h.toString(16); };
+  const safe = (f) => { try { return f(); } catch (e) { return 'ERR:' + e.message; } };
+  const fam = (s) => { s = (s || '').toLowerCase(); if (s.includes('intel')) return 'intel'; if (/amd|radeon|rdna/.test(s)) return 'amd'; if (/apple|\bm[1-4]\b|common-/.test(s)) return 'apple'; if (/nvidia|geforce/.test(s)) return 'nvidia'; return s ? '?' : 'none'; };
+  const add = (n, ok, d) => C.push((ok ? 'OK  ' : 'BAD ') + n + '  [' + d + ']');
+
+  // navigator
+  R.ua = navigator.userAgent; R.platform = navigator.platform;
+  R.cores = navigator.hardwareConcurrency; R.mem = navigator.deviceMemory;
+  R.webdriver = navigator.webdriver;
+  const uad = navigator.userAgentData;
+  if (uad && uad.getHighEntropyValues) { const he = await safe(() => uad.getHighEntropyValues(['platformVersion', 'architecture', 'bitness'])); R.uaArch = he.architecture + '/' + he.bitness; R.uaPlatVer = he.platformVersion; }
+
+  // screen cluster
+  const s = screen, dpr = devicePixelRatio;
+  R.screen = s.width + 'x' + s.height; R.avail = s.availWidth + 'x' + s.availHeight + '@' + s.availLeft + ',' + s.availTop;
+  R.dpr = dpr; R.resolution = (s.width * dpr) + 'x' + (s.height * dpr);
+  R.inner = innerWidth + 'x' + innerHeight; R.outer = outerWidth + 'x' + outerHeight;
+  R.vv = visualViewport ? Math.round(visualViewport.width) + 'x' + Math.round(visualViewport.height) : 'na';
+  const mm = (f, lo, hi) => { for (let v = lo; v <= hi; v++) if (matchMedia('(' + f + ':' + v + 'px)').matches) return v; return null; };
+  R.mDevW = mm('device-width', 200, 8000); R.mW = mm('width', 100, 8000);
+  R.mRes = (function () { for (const q of [1, 1.5, 2, 2.25, 3]) if (matchMedia('(resolution:' + q + 'dppx)').matches) return q; return 'x'; })();
+
+  // webgl + webgpu
+  function wgl(n) { const c = document.createElement('canvas'); const gl = c.getContext(n); if (!gl) return {}; const e = gl.getExtension('WEBGL_debug_renderer_info'); return { r: e ? gl.getParameter(e.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER) }; }
+  R.webgl = (wgl('webgl').r) || 'na';
+  let gpu = 'na', gpuFam = 'none';
+  if (navigator.gpu) { const a = await safe(async () => await navigator.gpu.requestAdapter()); if (a) { const info = a.info || (a.requestAdapterInfo && await safe(() => a.requestAdapterInfo())) || {}; gpu = (info.vendor || '') + '/' + (info.architecture || ''); gpuFam = fam(info.vendor + ' ' + info.architecture); } else gpu = 'no-adapter'; } else gpu = 'gpu-absent';
+  R.webgpu = gpu;
+  R.tz = safe(() => Intl.DateTimeFormat().resolvedOptions().timeZone);
+
+  // ---- coherence checks (what pixelscan/CreepJS actually cross-check) ----
+  add('innerWidth == @media(width)', innerWidth === R.mW, innerWidth + ' vs ' + R.mW);
+  add('visualViewport == innerWidth', visualViewport && Math.abs(visualViewport.width - innerWidth) <= 2, R.vv + ' vs ' + innerWidth);
+  add('innerWidth <= outerWidth', innerWidth <= outerWidth, innerWidth + ' <= ' + outerWidth);
+  add('availWidth <= screen.width', s.availWidth <= s.width, s.availWidth + ' <= ' + s.width);
+  add('availHeight <= screen.height', s.availHeight <= s.height, s.availHeight + ' <= ' + s.height);
+  add('@media resolution == dpr', R.mRes === dpr, R.mRes + ' vs ' + dpr);
+  add('deviceMemory <= 8', !R.mem || R.mem <= 8, '' + R.mem);
+  add('hwConcurrency in {2..16,24,32}', [2, 4, 6, 8, 10, 12, 16, 20, 24, 32].includes(R.cores), '' + R.cores);
+  add('webdriver false', navigator.webdriver === false || navigator.webdriver === undefined, '' + R.webdriver);
+  add('WebGL family == WebGPU family', gpuFam === 'none' || fam(R.webgl) === gpuFam, fam(R.webgl) + ' vs ' + gpuFam + ' (webgpu=' + gpu + ')');
+  const arch = (R.uaArch || '').split('/')[0];
+  add('uaData.arch matches GPU', !arch || (fam(R.webgl) === 'apple' ? arch === 'arm' : arch === 'x86'), arch + ' / gpu=' + fam(R.webgl));
+
+  // --- widened: surfaces my 11 checks didn't cover (for D/E elimination) ---
+  function canvasHash() { const c = document.createElement('canvas'); c.width = 220; c.height = 40; const x = c.getContext('2d'); x.textBaseline = 'top'; x.font = '14px Arial'; x.fillStyle = '#f60'; x.fillRect(1, 1, 80, 18); x.fillStyle = '#069'; x.fillText('Tp \u{1F600} 9876', 2, 2); return hash(c.toDataURL()); }
+  const ch1 = canvasHash(), ch2 = canvasHash(); R.canvas = ch1;
+  let audioH = 'na'; try { const Ctx = window.OfflineAudioContext || window.webkitOfflineAudioContext; const ac = new Ctx(1, 4000, 44100); const o = ac.createOscillator(); o.type = 'triangle'; o.frequency.value = 1000; const cp = ac.createDynamicsCompressor(); o.connect(cp); cp.connect(ac.destination); o.start(0); const b = await ac.startRendering(); let sum = 0; const d = b.getChannelData(0); for (let i = 0; i < d.length; i++) sum += Math.abs(d[i]); audioH = hash(sum.toString()); } catch (e) {}
+  R.audio = audioH; R.plugins = (navigator.plugins || []).length; R.colorDepth = s.colorDepth;
+  R.uaPlat = navigator.userAgentData ? navigator.userAgentData.platform : 'na';
+  add('canvas stable (no noise)', ch1 === ch2, ch1 + (ch1 === ch2 ? '' : ' UNSTABLE'));
+  add('plugins present (real Chrome)', (navigator.plugins || []).length > 0, '' + (navigator.plugins || []).length);
+  add('maxTouchPoints == 0 (desktop)', navigator.maxTouchPoints === 0, '' + navigator.maxTouchPoints);
+  add('colorDepth == 24', s.colorDepth === 24, '' + s.colorDepth);
+  add('uaData.platform == macOS', !navigator.userAgentData || navigator.userAgentData.platform === 'macOS', R.uaPlat);
+  add('UA Chrome ver matches platform 10_15_7', /Mac OS X 10_15_7/.test(navigator.userAgent), navigator.userAgent.slice(-40));
+
+  const bad = C.filter((x) => x.startsWith('BAD'));
+  const payload = JSON.stringify({ surfaces: R, checks: C, bad: bad.length });
+  document.getElementById('out').textContent = payload;
+  // beacon to the local capture server (robust vs --dump-dom)
+  try { new Image().src = 'http://127.0.0.1:8099/r?d=' + encodeURIComponent(payload); } catch (e) {}
+})();
+</script>
+</body>
+</html>

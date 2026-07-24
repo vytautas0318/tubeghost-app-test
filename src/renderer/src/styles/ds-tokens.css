@@ -1,0 +1,279 @@
+/* ============================================================
+   TubeGhost Design System — DESIGN TOKENS
+   Vendored verbatim from 'TubeGhost Design System/tokens/*.css'
+   (fonts.css omitted — Inter/JetBrains Mono are loaded in index.html).
+   These are raw CSS custom properties consumed by ds-kit.css and by
+   ported DS components. Do NOT edit here; edit the source DS + re-vendor.
+   ============================================================ */
+
+/* ===========================================================
+   COLORS
+   Red is the accent, not the room. A clean Mac-native light shell
+   with an always-dark sidebar. Dark theme via [data-theme="dark"].
+   --------------------------------------------------------------
+   Base ramp (theme-independent) lives on :root.
+   Semantic surface/text tokens default to LIGHT on :root, and are
+   re-declared under [data-theme="dark"].
+   =========================================================== */
+
+:root {
+  /* ---- Brand: TubeGhost red ---- */
+  --red: #EF0039;
+  --red-hover: #D82822;
+  /* r,g,b of --red; the accent picker overrides this (prefs.ts) so any
+     rgba(var(--red-rgb), a) glow/shadow follows the chosen accent. */
+  --red-rgb: 239, 0, 57;
+  --red-soft: rgba(239, 0, 57, 0.08);
+  --red-soft-2: rgba(239, 0, 57, 0.14);
+
+  /* ---- Always-dark sidebar palette (RoxyBrowser-style rail) ---- */
+  --sb-bg: #131418;
+  --sb-bg-2: #1A1C21;
+  --sb-line: rgba(255, 255, 255, 0.07);
+  --sb-hover: rgba(255, 255, 255, 0.05);
+  --sb-active: var(--red-soft-2);
+  --sb-t1: #EFF0F2;
+  --sb-t2: #A2A7B0;
+  --sb-t3: #686E78;
+
+  /* ---- Platform brand colors (profile / account chips) ---- */
+  --brand-youtube: #FF0000;
+  --brand-tiktok: #18181B;
+  --brand-x: #18181B;
+  --brand-facebook: #1877F2;
+  --brand-amazon: #FF9900;
+  --brand-instagram-a: #833AB4;
+  --brand-instagram-b: #FD1D1D;
+  --brand-instagram-c: #FCB045;
+  --brand-instagram: linear-gradient(135deg, #833AB4, #FD1D1D, #FCB045); /* @kind color */
+  --brand-windows: #0078D4;
+
+  /* ---- Default (LIGHT) semantic tokens ---- */
+  --bg: #FAFAFA;
+  --panel: #FFFFFF;
+  --panel-2: #FBFBFB;
+  --sidebar: #F6F6F5;
+  --hover: rgba(0, 0, 0, 0.025);
+  --active: #FFFFFF;
+  --line: rgba(0, 0, 0, 0.07);
+  --line-2: rgba(0, 0, 0, 0.04);
+
+  --t1: #18181B; /* primary text */
+  --t2: #5C5C66; /* secondary text */
+  --t3: #909099; /* tertiary / meta */
+  --t4: #BDBDC4; /* disabled / faint */
+
+  /* ---- Semantic status ---- */
+  --green: #16A06A;
+  --green-soft: rgba(22, 160, 106, 0.10);
+  --amber: #C2820C;
+  --amber-soft: rgba(194, 130, 12, 0.10);
+  --blue: #2563EB;
+  --blue-soft: rgba(37, 99, 235, 0.10);
+  --violet: #7C3AED;
+  --violet-soft: rgba(124, 58, 237, 0.10);
+}
+
+[data-theme="light"] {
+  --bg: #FAFAFA;
+  --panel: #FFFFFF;
+  --panel-2: #FBFBFB;
+  --sidebar: #F6F6F5;
+  --hover: rgba(0, 0, 0, 0.025);
+  --active: #FFFFFF;
+  --line: rgba(0, 0, 0, 0.07);
+  --line-2: rgba(0, 0, 0, 0.04);
+  --t1: #18181B;
+  --t2: #5C5C66;
+  --t3: #909099;
+  --t4: #BDBDC4;
+  --green: #16A06A;
+  --green-soft: rgba(22, 160, 106, 0.10);
+  --amber: #C2820C;
+  --amber-soft: rgba(194, 130, 12, 0.10);
+  --blue: #2563EB;
+  --blue-soft: rgba(37, 99, 235, 0.10);
+  --violet: #7C3AED;
+  --violet-soft: rgba(124, 58, 237, 0.10);
+  --red-soft: rgba(239, 0, 57, 0.08);
+  --red-soft-2: rgba(239, 0, 57, 0.14);
+}
+
+[data-theme="dark"] {
+  --bg: #1A1B1F;
+  --panel: #212329;
+  --panel-2: #1E2025;
+  --sidebar: #16171B;
+  --hover: rgba(255, 255, 255, 0.045);
+  --active: #2A2D34;
+  --line: rgba(255, 255, 255, 0.09);
+  --line-2: rgba(255, 255, 255, 0.055);
+  --t1: #F2F3F5;
+  --t2: #A8ACB4;
+  --t3: #767B85;
+  --t4: #565B65;
+  --green: #2DD48A;
+  --green-soft: rgba(45, 212, 138, 0.14);
+  --amber: #E6A532;
+  --amber-soft: rgba(230, 165, 50, 0.14);
+  --blue: #5B8DEF;
+  --blue-soft: rgba(91, 141, 239, 0.16);
+  --violet: #A78BFA;
+  --violet-soft: rgba(167, 139, 250, 0.16);
+  --red-soft: rgba(239, 0, 57, 0.16);
+  --red-soft-2: rgba(239, 0, 57, 0.22);
+}
+/* ===========================================================
+   TYPOGRAPHY
+   Inter for UI; JetBrains Mono for technical strings — profile IDs,
+   IPs, ports, emails, counts. The mono face does a lot of work here:
+   it signals "machine data" everywhere it appears.
+   Base UI size is 14px. Tracking tightens as text gets bigger.
+   =========================================================== */
+
+:root {
+  /* Families */
+  --sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; /* @kind font */
+  --mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace; /* @kind font */
+
+  /* Type scale (px) */
+  --fs-10: 10.5px;  /* nav labels, micro-caps */
+  --fs-11: 11.5px;  /* meta, table headers */
+  --fs-12: 12.5px;  /* secondary body, counts */
+  --fs-13: 13.5px;  /* body / default UI */
+  --fs-14: 14px;    /* base */
+  --fs-15: 15px;    /* section titles */
+  --fs-16: 16px;    /* page / card titles */
+  --fs-22: 22px;    /* H1 page heading */
+  --fs-26: 26px;    /* stat / metric numbers */
+
+  /* Weights — Inter ships a 450 "book" used for relaxed body rows */
+  --fw-regular: 400; /* @kind font */
+  --fw-book: 450; /* @kind font */
+  --fw-medium: 500; /* @kind font */
+  --fw-semi: 550; /* @kind font */
+  --fw-bold: 600; /* @kind font */
+  --fw-heavy: 650; /* @kind font */
+
+  /* Letter-spacing */
+  --ls-tight: -0.4px; /* @kind font */
+  --ls-snug: -0.2px; /* @kind font */
+  --ls-normal: 0; /* @kind font */
+  --ls-caps: 0.6px; /* @kind font */
+
+  /* Line-heights */
+  --lh-tight: 1.1; /* @kind font */
+  --lh-snug: 1.3; /* @kind font */
+  --lh-body: 1.5; /* @kind font */
+}
+/* ===========================================================
+   RADIUS
+   Soft, Mac-native rounding. Controls sit at 7–10px; cards and
+   panels at 14–18px. Pills/avatars use 50% or large radii.
+   =========================================================== */
+
+:root {
+  --r-sm: 7px;   /* small controls, checkboxes, level pills */
+  --r: 10px;     /* default: buttons, inputs, nav items, chips */
+  --r-lg: 14px;  /* cards, tables, panels */
+  --r-xl: 18px;  /* hero / large surfaces, empty-state icons */
+  --r-pill: 999px;
+}
+/* ===========================================================
+   SPACING
+   Loose 4px base grid. Row heights are fixed and dense — this is a
+   data-tool, not a marketing page. Common rhythm: 14 / 16 / 22 / 24.
+   =========================================================== */
+
+:root {
+  --sp-1: 4px;
+  --sp-2: 7px;
+  --sp-3: 9px;
+  --sp-4: 11px;
+  --sp-5: 14px;
+  --sp-6: 16px;
+  --sp-7: 18px;
+  --sp-8: 22px;
+  --sp-9: 24px;
+  --sp-10: 32px;
+  --sp-12: 48px;
+
+  /* Fixed component heights */
+  --h-control: 36px;  /* buttons, dropdowns, filter chips */
+  --h-control-sm: 32px;
+  --h-input: 40px;
+  --h-row: 60px;      /* profile table row */
+  --h-row-lg: 64px;   /* member row */
+  --h-nav: 40px;      /* sidebar nav item */
+  --h-topbar: 56px;
+  --h-sb-top: 64px;   /* sidebar header */
+
+  /* Layout */
+  --sidebar-w: 256px;
+  --content-pad: 24px 32px 60px;
+}
+/* ===========================================================
+   SHADOWS
+   Quiet, layered Mac-native shadows. Cards barely lift; popovers and
+   menus lift hard. The red primary button carries a colored glow.
+   Dark theme deepens every layer.
+   =========================================================== */
+
+:root {
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 4px 12px rgba(0, 0, 0, 0.04);
+  --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.10), 0 2px 6px rgba(0, 0, 0, 0.04);
+  --shadow-pop: 0 12px 40px rgba(0, 0, 0, 0.14);
+
+  /* Red primary button — colored lift + inner top highlight */
+  --shadow-red: 0 1px 2px rgba(var(--red-rgb), 0.3), 0 2px 8px rgba(var(--red-rgb), 0.18);
+  --shadow-red-cta: 0 2px 10px rgba(var(--red-rgb), 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+
+  /* Focus ring */
+  --ring: 0 0 0 3px var(--red-soft);
+}
+
+[data-theme="dark"] {
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 4px 12px rgba(0, 0, 0, 0.22);
+  --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.4);
+  --shadow-pop: 0 12px 40px rgba(0, 0, 0, 0.5);
+}
+/* ===========================================================
+   MOTION
+   One signature easing curve does almost everything: a fast-out,
+   slow-settle cubic that feels native. Transitions are short
+   (0.12–0.18s); theme swaps are slower (0.35s). Live/running states
+   get a soft infinite pulse (the only looping motion allowed).
+   =========================================================== */
+
+:root {
+  --ease: cubic-bezier(0.32, 0.72, 0, 1); /* @kind other */
+
+  --dur-fast: 0.12s; /* @kind other */
+  --dur: 0.15s; /* @kind other */
+  --dur-med: 0.18s; /* @kind other */
+  --dur-slow: 0.25s; /* @kind other */
+  --dur-theme: 0.35s; /* @kind other */
+
+  --t-control: all 0.15s var(--ease);
+  --t-color: background 0.13s var(--ease), color 0.13s var(--ease);
+}
+
+/* Signature pulses — used on live dots & running status */
+@keyframes liveDot {
+  0%   { box-shadow: 0 0 0 0 rgba(45, 212, 138, 0.5); }
+  70%  { box-shadow: 0 0 0 5px rgba(45, 212, 138, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(45, 212, 138, 0); }
+}
+@keyframes dockPulse {
+  0%   { box-shadow: 0 0 0 0 rgba(239, 0, 57, 0.55); }
+  70%  { box-shadow: 0 0 0 6px rgba(239, 0, 57, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(239, 0, 57, 0); }
+}
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.35; }
+}
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: none; }
+}

@@ -1,0 +1,74 @@
+node_modules
+dist
+out
+release
+.DS_Store
+.eslintcache
+*.log*
+.claude.md
+
+# TypeScript incremental build cache — regenerated, never commit.
+*.tsbuildinfo
+
+# Local Python venvs used by scripts/ — generated.
+.venv-icons/
+.icon-venv/
+
+# Per-machine Claude Code scheduling state, not source.
+.claude/scheduled_tasks.lock
+
+# Env files (only the example is checked in)
+.env
+.env.local
+.env.*.local
+
+# Per-machine credentials/scratch files — never commit.
+# r2.md was used during R2 setup and has real Access Key + Secret. Keep
+# locally for reference but never push.
+r2.md
+*.secrets.md
+*.credentials
+
+# Supabase CLI cache (per-machine state, not source).
+supabase/.temp/
+
+.tmp/
+
+# OS-generated files
+Thumbs.db
+ehthumbs.db
+ehthumbs_vista.db
+desktop.ini
+$RECYCLE.BIN/
+*.lnk
+.Spotlight-V100
+.Trashes
+._*
+
+# Editor / IDE artifacts
+.idea/
+*.swp
+*.swo
+*~
+*.bak
+*.orig
+
+# Test / coverage output
+coverage/
+.nyc_output/
+
+# Generic caches
+.cache/
+.parcel-cache/
+
+# Vite dev/build cache (regenerated, never commit).
+.vite/
+node_modules/.vite/
+*.local
+vite.config.ts.timestamp-*
+vitest.config.ts.timestamp-*
+
+# Process / runtime artifacts
+*.pid
+*.seed
+*.pid.lock

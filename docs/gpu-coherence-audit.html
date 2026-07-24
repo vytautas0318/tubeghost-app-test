@@ -1,0 +1,98 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>GPU coherence audit</title>
+<style>
+  body { font: 13px/1.6 ui-monospace, Menlo, monospace; margin: 24px; background:#0f0f0f; color:#e8e8e8; }
+  h2 { color:#E60000; margin:18px 0 6px; }
+  #out { white-space: pre-wrap; }
+  .k { color:#8a8a8a; }
+  .bad { color:#ff5c5c; font-weight:700; }
+  .ok { color:#39d353; font-weight:700; }
+</style>
+<body>
+<h2>GPU surfaces — WebGL, WebGL2 and WebGPU must all name the SAME GPU</h2>
+<div id="out">running…</div>
+<script>
+(async function () {
+  const L = [];
+  const fam = (s) => {
+    s = (s || '').toLowerCase();
+    if (s.includes('intel')) return 'intel';
+    if (s.includes('amd') || s.includes('radeon') || s.includes('rdna')) return 'amd';
+    if (s.includes('apple') || /\bm[1-4]\b/.test(s)) return 'apple';
+    if (s.includes('nvidia') || s.includes('geforce')) return 'nvidia';
+    return s ? '?(' + s + ')' : 'none';
+  };
+
+  function webgl(ctxName) {
+    try {
+      const c = document.createElement('canvas');
+      const gl = c.getContext(ctxName);
+      if (!gl) return { error: 'no ' + ctxName + ' context' };
+      const ext = gl.getExtension('WEBGL_debug_renderer_info');
+      return {
+        vendor: ext ? gl.getParameter(ext.UNMASKED_VENDOR_WEBGL) : gl.getParameter(gl.VENDOR),
+        renderer: ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER)
+      };
+    } catch (e) { return { error: String(e) }; }
+  }
+
+  async function webgpu() {
+    try {
+      if (!navigator.gpu) return { error: 'navigator.gpu absent (WebGPU off)' };
+      const a = await navigator.gpu.requestAdapter();
+      if (!a) return { error: 'requestAdapter() returned null' };
+      let info = a.info;
+      if (!info && a.requestAdapterInfo) info = await a.requestAdapterInfo();
+      info = info || {};
+      return {
+        vendor: info.vendor || '', architecture: info.architecture || '',
+        device: info.device || '', description: info.description || ''
+      };
+    } catch (e) { return { error: String(e) }; }
+  }
+
+  const gl1 = webgl('webgl');
+  const gl2 = webgl('webgl2');
+  const gpu = await webgpu();
+
+  const gl1Fam = fam((gl1.renderer || '') + ' ' + (gl1.vendor || ''));
+  const gl2Fam = fam((gl2.renderer || '') + ' ' + (gl2.vendor || ''));
+  const gpuFam = fam([gpu.vendor, gpu.architecture, gpu.device, gpu.description].join(' '));
+
+  L.push('WebGL  vendor   : ' + (gl1.vendor || gl1.error));
+  L.push('WebGL  renderer : ' + (gl1.renderer || ''));
+  L.push('WebGL  family   : ' + gl1Fam);
+  L.push('');
+  L.push('WebGL2 renderer : ' + (gl2.renderer || gl2.error));
+  L.push('WebGL2 family   : ' + gl2Fam);
+  L.push('');
+  L.push('WebGPU vendor       : ' + (gpu.vendor || gpu.error || ''));
+  L.push('WebGPU architecture : ' + (gpu.architecture || ''));
+  L.push('WebGPU device       : ' + (gpu.device || ''));
+  L.push('WebGPU description  : ' + (gpu.description || ''));
+  L.push('WebGPU family       : ' + gpuFam);
+  L.push('');
+
+  // The verdict: every PRESENT surface must agree. A WebGPU error (absent) is
+  // its own tell under a Chrome UA, but the lethal case is two DIFFERENT GPUs.
+  const present = [['WebGL', gl1Fam], ['WebGL2', gl2Fam]];
+  if (!gpu.error) present.push(['WebGPU', gpuFam]);
+  const fams = [...new Set(present.map((p) => p[1]).filter((f) => f && f !== 'none'))];
+  const out = document.getElementById('out');
+  if (fams.length <= 1) {
+    L.push('✅ MATCH — every GPU surface names the same family (' + (fams[0] || 'n/a') + ')');
+    if (gpu.error) L.push('   (note: WebGPU absent — ' + gpu.error + ' — a separate tell under a Chrome UA)');
+    out.className = 'ok';
+  } else {
+    L.push('❌ MISMATCH — surfaces name DIFFERENT GPUs: ' +
+      present.map((p) => p[0] + '=' + p[1]).join(', '));
+    L.push('   → dual-GPU leak: this is the cross-API contradiction pixelscan flags as "Masking".');
+    out.className = 'bad';
+  }
+  out.textContent = L.join('\n');
+  console.log('[gpu-audit]', { gl1, gl2, gpu, gl1Fam, gl2Fam, gpuFam });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,49 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TubeProxies — Render Quality Test</title>
+<style>
+  body{font-family:-apple-system,BlinkMacSystemFont,"Helvetica Neue",sans-serif;margin:0;padding:16px;background:#0f0f0f;color:#eee}
+  h1{font-size:16px;margin:0 0 8px}
+  .metrics{font:12px/1.6 "SF Mono",Menlo,monospace;background:#1a1a1a;padding:10px 12px;border-radius:8px;white-space:pre}
+  .row{display:flex;gap:16px;flex-wrap:wrap;margin-top:12px}
+  .cell{background:#1a1a1a;border-radius:8px;padding:10px}
+  .cap{font-size:11px;color:#9aa;margin-bottom:6px}
+  /* 1px hairlines + tiny text are the clearest blur tells: crisp at the
+     display's native scale, fuzzy/half-res when the engine renders at 1x on Retina. */
+  .hair{width:200px;height:120px;background:
+    repeating-linear-gradient(0deg,#fff 0,#fff 1px,transparent 1px,transparent 4px),
+    repeating-linear-gradient(90deg,#888 0,#888 1px,transparent 1px,transparent 6px)}
+  .tiny{font:9px/1.25 -apple-system,sans-serif}
+  .diag{stroke:#fff;stroke-width:1;shape-rendering:auto}
+</style></head>
+<body>
+  <h1>TubeProxies — Render Quality Test</h1>
+  <div class="metrics" id="m">measuring…</div>
+  <div class="row">
+    <div class="cell"><div class="cap">1px hairline grid (should be crisp)</div><div class="hair"></div></div>
+    <div class="cell"><div class="cap">SVG 1px diagonals</div>
+      <svg width="200" height="120"><line class="diag" x1="0" y1="0" x2="200" y2="120"/><line class="diag" x1="0" y1="120" x2="200" y2="0"/><line class="diag" x1="0" y1="60" x2="200" y2="60"/></svg>
+    </div>
+    <div class="cell"><div class="cap">Canvas 1px grid (DPR-aware backing)</div><canvas id="cv" width="200" height="120" style="width:200px;height:120px"></canvas></div>
+    <div class="cell"><div class="cap">Tiny text (antialiasing)</div>
+      <div class="tiny">The quick brown fox jumps over the lazy dog 0123456789<br>The quick brown fox jumps over the lazy dog 0123456789<br>The quick brown fox jumps over the lazy dog 0123456789</div>
+    </div>
+  </div>
+<script>
+  const dpr = window.devicePixelRatio;
+  // Backing-aware canvas: at the correct scale the backing store is CSS*dpr, so
+  // 1px grid lines stay crisp; a forced-1x engine on Retina renders a half-res
+  // backing that the OS upscales → fuzzy.
+  const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+  cv.width = 200*dpr; cv.height = 120*dpr; ctx.scale(dpr,dpr);
+  ctx.strokeStyle='#fff'; ctx.lineWidth=1/dpr;
+  for(let x=0.5;x<200;x+=8){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,120);ctx.stroke();}
+  for(let y=0.5;y<120;y+=8){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(200,y);ctx.stroke();}
+  document.getElementById('m').textContent =
+    'window.devicePixelRatio : ' + dpr + (dpr>=2?'  ✓ Retina (sharp)':'  ✗ 1x — BLURRY on a Retina display') + '\n' +
+    'screen.width x height   : ' + screen.width + ' x ' + screen.height + '\n' +
+    'inner W x H (CSS px)     : ' + innerWidth + ' x ' + innerHeight + '\n' +
+    'canvas backing (px)      : ' + cv.width + ' x ' + cv.height + '  (CSS 200x120 * dpr)\n' +
+    'physical pixels implied  : ' + (screen.width*dpr) + ' x ' + (screen.height*dpr);
+</script>
+</body></html>

@@ -1,0 +1,168 @@
+@import 'tailwindcss';
+
+/* TubeGhost Design System — vendored token vars + kit classes. Loaded AFTER
+   tailwind so DS classes can override utilities, but the DS token vars live in
+   their own namespace (--red / --bg / --panel / --t1 …) and don't collide with
+   Tailwind's --color-* theme tokens. */
+@import './ds-tokens.css';
+@import './ds-kit.css';
+@import './assistant.css';
+
+/* Dark mode is driven off BOTH signals so Tailwind `dark:` utilities and the
+   DS's [data-theme="dark"] token switch stay in lock-step. App code sets both
+   on <html> (see store/theme.ts). */
+@custom-variant dark (&:where(.dark, .dark *, [data-theme='dark'], [data-theme='dark'] *));
+
+/* TubeProxies brand theme — RE-POINTED to the TubeGhost Design System palette
+   so any Tailwind utility (bg-brand-red, dark:bg-night-base, …) that hasn't yet
+   been migrated to DS classes still renders on-brand. Concrete values mirror
+   ds-tokens.css. */
+@theme inline {
+  /* Brand palette (DS red + light shell) */
+  --color-brand-red: #EF0039;
+  --color-brand-dark: #18181b;
+  --color-brand-cream: #fafafa;
+  --color-brand-surface: #ececec;
+
+  /* Dark-mode counterparts — DS "night" surfaces */
+  --color-night-base: #1a1b1f;
+  --color-night-surface: #212329;
+  --color-night-raised: #2a2d34;
+  --color-night-border: #2e3036;
+  --color-night-text: #f2f3f5;
+  --color-night-muted: #a8acb4;
+
+  /* Semantic — point at DS tokens so they follow the active [data-theme] */
+  --color-background: var(--bg);
+  --color-foreground: var(--t1);
+  --color-surface: var(--panel);
+  --color-muted: var(--t3);
+  --color-border: var(--line);
+
+  /* Typography — DS uses Inter for UI, JetBrains Mono for machine data */
+  --font-sans: 'Inter', 'Plus Jakarta Sans', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+/* Light mode (default) */
+:root {
+  color-scheme: light;
+}
+
+/* Dark mode — .dark class kept for back-compat; [data-theme] drives DS tokens */
+.dark,
+[data-theme='dark'] {
+  color-scheme: dark;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--t1);
+  font-family: var(--sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow: hidden;
+  transition:
+    background 0.35s var(--ease),
+    color 0.35s var(--ease);
+}
+
+::selection {
+  background: var(--red-soft-2);
+  color: inherit;
+}
+
+/* Scrollbars — DS style, token-driven */
+::-webkit-scrollbar {
+  width: 11px;
+  height: 11px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--line);
+  border-radius: 10px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--t4);
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+
+/* Pointer (finger) cursor on everything clickable. Webkit defaults native
+   <button> and <select> to the arrow cursor, and onClick handlers on
+   div/span/li/tr carry no cursor at all — so make the pointer the default
+   for the whole semantic-clickable set in one place instead of per element.
+   Disabled controls fall back to not-allowed; [aria-disabled] covers
+   custom widgets that can't use the :disabled pseudo-class. */
+button,
+select,
+label[for],
+summary,
+[role='button'],
+[role='tab'],
+[role='menuitem'],
+[role='option'],
+[role='switch'],
+[role='link'],
+a[href],
+input[type='checkbox'],
+input[type='radio'],
+input[type='submit'],
+input[type='button'],
+input[type='reset'],
+[onclick] {
+  cursor: pointer;
+}
+button:disabled,
+select:disabled,
+input:disabled,
+[aria-disabled='true'] {
+  cursor: not-allowed;
+}
+
+/* Custom titlebar drag region (Electron frameless window) */
+.titlebar {
+  -webkit-app-region: drag;
+}
+.titlebar button,
+.titlebar input,
+.titlebar a {
+  -webkit-app-region: no-drag;
+}
+
+/* The automation flow-builder is a full-screen overlay (position:fixed;inset:0)
+   that paints over the titlebar. Electron derives window-drag regions from the
+   DOM independently of z-index, so without this the top bar would stay a drag
+   region — swallowing clicks, blocking the name input, and forcing the arrow
+   cursor over the Cancel / Save buttons. Exclude it explicitly. */
+.builder-top {
+  -webkit-app-region: no-drag;
+}
+
+@keyframes pulse-soft {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+.pulse-soft {
+  animation: pulse-soft 2s ease-in-out infinite;
+}
+
+.mono {
+  font-family: var(--font-mono);
+}

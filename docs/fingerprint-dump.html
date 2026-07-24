@@ -1,0 +1,134 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>Fingerprint dump (A/B)</title>
+<style>
+  body { font: 12px/1.5 ui-monospace, Menlo, monospace; margin: 16px; background:#0f0f0f; color:#e8e8e8; }
+  h2 { color:#E60000; margin:10px 0 6px; }
+  button { background:#E60000; color:#fff; border:0; padding:8px 16px; font:inherit; cursor:pointer; border-radius:4px; }
+  #out { white-space: pre-wrap; margin-top:10px; border:1px solid #333; padding:10px; }
+</style>
+<body>
+<h2>Full fingerprint dump — run in BOTH browsers, click Copy, send me both</h2>
+<button onclick="navigator.clipboard.writeText(document.getElementById('out').textContent).then(()=>this.textContent='Copied!')">Copy all</button>
+<div id="out">running…</div>
+<script>
+(async function () {
+  const R = [];
+  const add = (k, v) => R.push(k.padEnd(26) + ': ' + v);
+  const hash = (s) => { let h = 5381; for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) >>> 0; return h.toString(16); };
+  const safe = (f) => { try { return f(); } catch (e) { return 'ERR:' + e.message; } };
+
+  // --- navigator ---
+  add('userAgent', navigator.userAgent);
+  add('platform', navigator.platform);
+  add('languages', JSON.stringify(navigator.languages));
+  add('hardwareConcurrency', navigator.hardwareConcurrency);
+  add('deviceMemory', navigator.deviceMemory);
+  add('vendor', navigator.vendor);
+  add('webdriver', navigator.webdriver);
+  add('maxTouchPoints', navigator.maxTouchPoints);
+  const uad = navigator.userAgentData;
+  add('uaData.platform', uad ? uad.platform : 'n/a');
+  add('uaData.mobile', uad ? uad.mobile : 'n/a');
+  if (uad && uad.getHighEntropyValues) {
+    const he = await safe(() => uad.getHighEntropyValues(['platformVersion', 'architecture', 'bitness', 'model', 'fullVersionList']));
+    add('uaData.platformVersion', he.platformVersion);
+    add('uaData.architecture', he.architecture + '/' + he.bitness);
+    add('uaData.fullVersionList', JSON.stringify(he.fullVersionList));
+  }
+
+  // --- screen / window / DPR / matchMedia (the cluster) ---
+  const s = screen, dpr = devicePixelRatio;
+  add('screen', s.width + 'x' + s.height);
+  add('screen.avail', s.availWidth + 'x' + s.availHeight + ' @' + s.availLeft + ',' + s.availTop);
+  add('screen.colorDepth', s.colorDepth + '/' + s.pixelDepth);
+  add('devicePixelRatio', dpr);
+  add('PIXELSCAN_resolution', (s.width * dpr) + 'x' + (s.height * dpr));
+  add('window.inner', innerWidth + 'x' + innerHeight);
+  add('window.outer', outerWidth + 'x' + outerHeight);
+  add('window.screenXY', screenX + ',' + screenY);
+  const vv = visualViewport;
+  add('visualViewport', vv ? (Math.round(vv.width) + 'x' + Math.round(vv.height) + ' scale=' + vv.scale) : 'n/a');
+  const mm = (f, lo, hi) => { for (let v = lo; v <= hi; v++) if (matchMedia('(' + f + ':' + v + 'px)').matches) return v; return null; };
+  add('@media device-width', mm('device-width', 320, 8000));
+  add('@media width(viewport)', mm('width', 100, 8000));
+  add('@media resolution', (function () { for (const q of [1,1.25,1.5,1.75,2,2.25,2.5,3]) if (matchMedia('(resolution:' + q + 'dppx)').matches) return q + 'dppx'; return 'non-standard'; })());
+
+  // --- WebGL (vendor/renderer + key params + extension hash) ---
+  function wgl(name) {
+    const c = document.createElement('canvas');
+    const gl = c.getContext(name);
+    if (!gl) return { err: 'no ' + name };
+    const ext = gl.getExtension('WEBGL_debug_renderer_info');
+    const P = (p) => safe(() => gl.getParameter(p));
+    const exts = (gl.getSupportedExtensions() || []).slice().sort();
+    return {
+      vendor: ext ? P(ext.UNMASKED_VENDOR_WEBGL) : P(gl.VENDOR),
+      renderer: ext ? P(ext.UNMASKED_RENDERER_WEBGL) : P(gl.RENDERER),
+      version: P(gl.VERSION),
+      glsl: P(gl.SHADING_LANGUAGE_VERSION),
+      params: [gl.MAX_TEXTURE_SIZE, gl.MAX_VIEWPORT_DIMS, gl.MAX_RENDERBUFFER_SIZE, gl.MAX_CUBE_MAP_TEXTURE_SIZE, gl.MAX_VERTEX_ATTRIBS, gl.MAX_VARYING_VECTORS, gl.MAX_VERTEX_UNIFORM_VECTORS, gl.MAX_FRAGMENT_UNIFORM_VECTORS, gl.ALIASED_LINE_WIDTH_RANGE, gl.ALIASED_POINT_SIZE_RANGE].map((p) => String(P(p))).join('|'),
+      extCount: exts.length,
+      extHash: hash(exts.join(','))
+    };
+  }
+  const g1 = wgl('webgl');
+  add('webgl.vendor', g1.vendor || g1.err);
+  add('webgl.renderer', g1.renderer || '');
+  add('webgl.version', g1.version || '');
+  add('webgl.glsl', g1.glsl || '');
+  add('webgl.params', g1.params || '');
+  add('webgl.extensions', g1.extCount + ' ext, hash=' + g1.extHash);
+  const g2 = wgl('webgl2');
+  add('webgl2.renderer', g2.renderer || g2.err);
+  add('webgl2.params', g2.params || '');
+  add('webgl2.extensions', (g2.extCount || 0) + ' ext, hash=' + (g2.extHash || ''));
+
+  // --- WebGPU ---
+  if (navigator.gpu) {
+    const a = await safe(async () => await navigator.gpu.requestAdapter());
+    if (a && a.requestAdapterInfo) {
+      const info = a.info || await safe(() => a.requestAdapterInfo());
+      add('webgpu.adapter', [info.vendor, info.architecture, info.device, info.description].filter(Boolean).join(' / '));
+      add('webgpu.limits', hash(JSON.stringify(Object.fromEntries(Object.entries(a.limits || {})))));
+    } else add('webgpu.adapter', 'no adapter');
+  } else add('webgpu.adapter', 'navigator.gpu absent');
+
+  // --- canvas (render twice → stability + hash) ---
+  function canvasHash() {
+    const c = document.createElement('canvas'); c.width = 240; c.height = 60;
+    const x = c.getContext('2d');
+    x.textBaseline = 'top'; x.font = '16px Arial'; x.fillStyle = '#f60'; x.fillRect(2, 2, 200, 30);
+    x.fillStyle = '#069'; x.fillText('TubeProxies fp \u{1F600} 0123', 4, 4);
+    x.fillStyle = 'rgba(0,120,200,0.7)'; x.fillText('TubeProxies fp \u{1F600} 0123', 6, 18);
+    return hash(c.toDataURL());
+  }
+  const ch1 = canvasHash(), ch2 = canvasHash();
+  add('canvas.hash', ch1 + (ch1 === ch2 ? ' (stable)' : ' UNSTABLE/noised=' + ch2));
+
+  // --- audio (offline render → hash) ---
+  try {
+    const Ctx = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+    const ac = new Ctx(1, 5000, 44100);
+    const osc = ac.createOscillator(); osc.type = 'triangle'; osc.frequency.value = 1000;
+    const comp = ac.createDynamicsCompressor();
+    osc.connect(comp); comp.connect(ac.destination); osc.start(0);
+    const buf = await ac.startRendering();
+    const d = buf.getChannelData(0); let sum = 0; for (let i = 0; i < d.length; i++) sum += Math.abs(d[i]);
+    add('audio.sampleRate', ac.sampleRate);
+    add('audio.hash', hash(sum.toString()));
+  } catch (e) { add('audio.hash', 'ERR:' + e.message); }
+
+  // --- timezone / locale ---
+  add('Intl.timeZone', safe(() => Intl.DateTimeFormat().resolvedOptions().timeZone));
+  add('Intl.locale', safe(() => Intl.DateTimeFormat().resolvedOptions().locale));
+  add('Date.tzOffset', new Date().getTimezoneOffset());
+
+  // --- plugins ---
+  add('plugins', Array.from(navigator.plugins || []).map((p) => p.name).join(',') || 'none');
+
+  document.getElementById('out').textContent = R.join('\n');
+})();
+</script>
+</body>
+</html>

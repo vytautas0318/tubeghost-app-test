@@ -1,0 +1,103 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>Screen fingerprint audit</title>
+<style>
+  body { font: 13px/1.5 ui-monospace, Menlo, monospace; margin: 24px; background:#0f0f0f; color:#e8e8e8; }
+  h2 { color:#E60000; margin:18px 0 6px; }
+  table { border-collapse: collapse; margin: 4px 0 12px; }
+  td { padding: 2px 14px 2px 0; }
+  .k { color:#8a8a8a; } .v { color:#fff; }
+  .ok { color:#39d353; } .bad { color:#ff5c5c; font-weight:700; }
+  #verdict { white-space: pre-wrap; padding:10px; border:1px solid #333; }
+</style>
+<body>
+<h2>Exposed screen-related values (read BEFORE any interaction)</h2>
+<div id="dump"></div>
+<h2>Consistency verdict</h2>
+<div id="verdict"></div>
+<script>
+(function () {
+  const s = window.screen, vv = window.visualViewport;
+  const dpr = window.devicePixelRatio;
+
+  // --- 1. raw surfaces ---
+  const rows = {
+    'screen.width': s.width, 'screen.height': s.height,
+    'screen.availWidth': s.availWidth, 'screen.availHeight': s.availHeight,
+    'screen.availLeft': s.availLeft, 'screen.availTop': s.availTop,
+    'screen.colorDepth': s.colorDepth, 'screen.pixelDepth': s.pixelDepth,
+    'window.innerWidth': innerWidth, 'window.innerHeight': innerHeight,
+    'window.outerWidth': outerWidth, 'window.outerHeight': outerHeight,
+    'window.screenX': screenX, 'window.screenY': screenY,
+    'visualViewport.width': vv && vv.width, 'visualViewport.height': vv && vv.height,
+    'visualViewport.scale': vv && vv.scale,
+    'visualViewport.offsetLeft': vv && vv.offsetLeft, 'visualViewport.offsetTop': vv && vv.offsetTop,
+    'devicePixelRatio': dpr,
+    // what pixelscan PRINTS as "Resolution" = screen.width * devicePixelRatio
+    'PIXELSCAN_RESOLUTION (= width*dpr)': (s.width * dpr) + 'x' + (s.height * dpr)
+  };
+
+  // --- 2. matchMedia: find the value Chromium actually answers for the CSS surfaces ---
+  function findMedia(feat, lo, hi) {
+    for (let v = lo; v <= hi; v++) if (matchMedia('(' + feat + ':' + v + 'px)').matches) return v;
+    return null;
+  }
+  rows['@media device-width']  = findMedia('device-width', 320, 8000);
+  rows['@media device-height'] = findMedia('device-height', 320, 8000);
+  rows['@media width (viewport)'] = findMedia('width', 100, 8000);
+  rows['@media resolution (dppx)'] = (function () {
+    for (const q of [1, 1.25, 1.5, 1.75, 2, 2.25, 2.5, 3])
+      if (matchMedia('(resolution:' + q + 'dppx)').matches) return q;
+    return '(non-standard)';
+  })();
+
+  let html = '<table>';
+  for (const k in rows) html += '<tr><td class=k>' + k + '</td><td class=v>' + rows[k] + '</td></tr>';
+  document.getElementById('dump').innerHTML = html + '</table>';
+
+  // --- 3. consistency assertions (these are exactly what detectors cross-check) ---
+  const checks = [];
+  const add = (name, ok, detail) => checks.push({ name, ok, detail });
+
+  add('availWidth <= screen.width', s.availWidth <= s.width, s.availWidth + ' <= ' + s.width);
+  add('availHeight <= screen.height', s.availHeight <= s.height, s.availHeight + ' <= ' + s.height);
+  add('outerWidth <= availWidth (window fits screen)', outerWidth <= s.availWidth + 2, outerWidth + ' <= ' + s.availWidth);
+  add('outerHeight <= availHeight (window fits screen)', outerHeight <= s.availHeight + 2, outerHeight + ' <= ' + s.availHeight);
+  add('innerWidth <= outerWidth', innerWidth <= outerWidth, innerWidth + ' <= ' + outerWidth);
+  add('colorDepth === pixelDepth', s.colorDepth === s.pixelDepth, s.colorDepth + ' / ' + s.pixelDepth);
+  add('colorDepth === 24', s.colorDepth === 24, '' + s.colorDepth);
+  add('@media device-width === screen.width', rows['@media device-width'] === s.width,
+      rows['@media device-width'] + ' vs ' + s.width);
+  add('@media device-height === screen.height', rows['@media device-height'] === s.height,
+      rows['@media device-height'] + ' vs ' + s.height);
+  add('@media resolution(dppx) === devicePixelRatio', rows['@media resolution (dppx)'] === dpr,
+      rows['@media resolution (dppx)'] + ' vs ' + dpr);
+  if (vv) {
+    add('visualViewport.width ~= innerWidth', Math.abs(vv.width - innerWidth) <= 2, vv.width + ' vs ' + innerWidth);
+    add('visualViewport.height ~= innerHeight', Math.abs(vv.height - innerHeight) <= 2, vv.height + ' vs ' + innerHeight);
+    add('visualViewport.scale === 1', vv.scale === 1, '' + vv.scale);
+  }
+  // scaled-display heuristic: a Mac at DEFAULT scaling reports a NATIVE panel as
+  // width*dpr; a scaled "More Space" mode reports a non-panel render target.
+  const KNOWN_PANELS = ['2560x1600','2560x1664','2880x1864','3024x1964','3456x2234',
+                        '4480x2520','5120x2880','1920x1080','3840x2160','2560x1440'];
+  const physical = (s.width * dpr) + 'x' + (s.height * dpr);
+  add('width*dpr is a standard panel (not a scaled render target)',
+      KNOWN_PANELS.includes(physical),
+      physical + (KNOWN_PANELS.includes(physical) ? '' : '  ← SCALED display mode; set Displays → Default'));
+
+  const bad = checks.filter(c => !c.ok);
+  let out = checks.map(c => (c.ok ? '✅ ' : '❌ ') + c.name + '   [' + c.detail + ']').join('\n');
+  out += '\n\n' + (bad.length ? bad.length + ' INCONSISTENCY(IES) — these are the leak(s).' :
+                                'All screen surfaces internally consistent (single source).');
+  const vd = document.getElementById('verdict');
+  vd.textContent = out;
+  vd.className = bad.length ? 'bad' : 'ok';
+
+  // also log to console so it's captured before any user interaction
+  console.log('[screen-audit] surfaces', rows);
+  console.log('[screen-audit] checks', checks);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>TubeProxies — GPU / Fingerprint Debug</title>
+<style>
+  body { font: 13px/1.5 ui-monospace, Menlo, Consolas, monospace; background:#0f0f0f; color:#e6e6e6; margin:0; padding:20px; }
+  h1 { font-size:16px; color:#E60000; }
+  h2 { font-size:13px; color:#7fd1ff; margin:18px 0 4px; border-bottom:1px solid #333; padding-bottom:2px; }
+  pre { white-space:pre-wrap; word-break:break-word; margin:0; }
+  .k { color:#9aa0a6; } .v { color:#e6e6e6; } .warn { color:#ffb454; } .ok { color:#7ee787; }
+  button { background:#E60000; color:#fff; border:0; padding:8px 14px; border-radius:6px; cursor:pointer; font:inherit; }
+  #out { margin-top:14px; }
+  .row { display:flex; gap:8px; } .row .k { min-width:230px; display:inline-block; }
+</style>
+</head>
+<body>
+<h1>TubeProxies — GPU / Fingerprint Debug</h1>
+<p class="k">Open this same file in: (1) real Chrome, (2) ungoogled-chromium without patches,
+(3) TubeProxies Real-GPU mode, (4) TubeProxies Custom-GPU mode — and diff the output.
+In <b>Real mode</b>, WebGL vendor/renderer, WebGPU adapter and ANGLE backend must all name the
+<b>same physical GPU</b>; any disagreement is what BrowserScan/PixelScan flag.</p>
+<button onclick="run()">Re-run</button> <button onclick="copyOut()">Copy JSON</button>
+<div id="out"></div>
+<script>
+const lines = [];
+let json = {};
+function sec(t){ lines.push('\n<h2>'+t+'</h2>'); }
+function kv(k,v,cls){ json[k]=v; lines.push('<div class="row"><span class="k">'+k+'</span><span class="v '+(cls||'')+'">'+String(v)+'</span></div>'); }
+
+async function sha(str){
+  const b = new TextEncoder().encode(str);
+  const h = await crypto.subtle.digest('SHA-256', b);
+  return [...new Uint8Array(h)].map(x=>x.toString(16).padStart(2,'0')).join('').slice(0,16);
+}
+
+function glInfo(ctxName){
+  const c = document.createElement('canvas');
+  const gl = c.getContext(ctxName) || c.getContext('experimental-'+ctxName);
+  if (!gl) { kv(ctxName,'unavailable','warn'); return; }
+  const dbg = gl.getExtension('WEBGL_debug_renderer_info');
+  kv(ctxName+'.VENDOR', gl.getParameter(gl.VENDOR));
+  kv(ctxName+'.RENDERER', gl.getParameter(gl.RENDERER));
+  kv(ctxName+'.UNMASKED_VENDOR', dbg ? gl.getParameter(dbg.UNMASKED_VENDOR_WEBGL) : 'no ext');
+  kv(ctxName+'.UNMASKED_RENDERER', dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : 'no ext');
+  kv(ctxName+'.VERSION', gl.getParameter(gl.VERSION));
+  kv(ctxName+'.SHADING_LANGUAGE_VERSION', gl.getParameter(gl.SHADING_LANGUAGE_VERSION));
+  const limits = ['MAX_TEXTURE_SIZE','MAX_CUBE_MAP_TEXTURE_SIZE','MAX_RENDERBUFFER_SIZE',
+    'MAX_VERTEX_ATTRIBS','MAX_VERTEX_UNIFORM_VECTORS','MAX_FRAGMENT_UNIFORM_VECTORS',
+    'MAX_VARYING_VECTORS','MAX_TEXTURE_IMAGE_UNITS','MAX_VERTEX_TEXTURE_IMAGE_UNITS',
+    'MAX_COMBINED_TEXTURE_IMAGE_UNITS','MAX_VIEWPORT_DIMS','ALIASED_LINE_WIDTH_RANGE',
+    'ALIASED_POINT_SIZE_RANGE'];
+  for (const L of limits) if (gl[L]!==undefined) {
+    let val = gl.getParameter(gl[L]); if (val && val.length) val=[...val].join(',');
+    kv(ctxName+'.'+L, val);
+  }
+  if (ctxName==='webgl2') {
+    for (const L of ['MAX_DRAW_BUFFERS','MAX_COLOR_ATTACHMENTS'])
+      if (gl[L]!==undefined) kv('webgl2.'+L, gl.getParameter(gl[L]));
+  }
+  // shader precision (the surface that betrays a string-only spoof)
+  for (const st of ['VERTEX_SHADER','FRAGMENT_SHADER'])
+    for (const pt of ['HIGH_FLOAT','MEDIUM_FLOAT','HIGH_INT']) {
+      const p = gl.getShaderPrecisionFormat(gl[st], gl[pt]);
+      if (p) kv(ctxName+'.PREC.'+st+'.'+pt, p.rangeMin+'/'+p.rangeMax+'/'+p.precision);
+    }
+  const exts = (gl.getSupportedExtensions()||[]).sort();
+  kv(ctxName+'.EXTENSIONS.count', exts.length);
+  kv(ctxName+'.EXTENSIONS', exts.join(' '));
+}
+
+async function run(){
+  lines.length=0; json={};
+  sec('Navigator / UA');
+  kv('userAgent', navigator.userAgent);
+  kv('platform', navigator.platform);
+  kv('hardwareConcurrency', navigator.hardwareConcurrency);
+  kv('deviceMemory', navigator.deviceMemory);
+  if (navigator.userAgentData){
+    kv('uaData.platform', navigator.userAgentData.platform);
+    kv('uaData.mobile', navigator.userAgentData.mobile);
+    kv('uaData.brands', JSON.stringify(navigator.userAgentData.brands));
+    try { const h = await navigator.userAgentData.getHighEntropyValues(['architecture','model','platformVersion','uaFullVersion','bitness']);
+      kv('uaData.highEntropy', JSON.stringify(h)); } catch(e){ kv('uaData.highEntropy','err '+e); }
+  }
+
+  sec('Screen');
+  kv('screen', screen.width+'x'+screen.height+' avail '+screen.availWidth+'x'+screen.availHeight);
+  kv('colorDepth/pixelDepth', screen.colorDepth+'/'+screen.pixelDepth);
+  kv('devicePixelRatio', devicePixelRatio);
+  kv('timezone', Intl.DateTimeFormat().resolvedOptions().timeZone);
+  kv('languages', navigator.languages.join(','));
+
+  sec('WebGL 1'); glInfo('webgl');
+  sec('WebGL 2'); glInfo('webgl2');
+
+  sec('WebGPU');
+  if (navigator.gpu){
+    try {
+      const a = await navigator.gpu.requestAdapter();
+      if (a){
+        const info = a.info || (a.requestAdapterInfo ? await a.requestAdapterInfo() : null);
+        if (info) { for (const k of ['vendor','architecture','device','description'])
+          kv('webgpu.'+k, info[k]??'(empty)'); }
+        else kv('webgpu','adapter present, no info');
+      } else kv('webgpu','requestAdapter null','warn');
+    } catch(e){ kv('webgpu','err '+e,'warn'); }
+  } else kv('webgpu','navigator.gpu undefined','warn');
+
+  sec('Canvas / Audio hashes');
+  try {
+    const c=document.createElement('canvas'); c.width=240;c.height=60; const x=c.getContext('2d');
+    x.textBaseline='top'; x.font='14px Arial'; x.fillStyle='#f60'; x.fillRect(0,0,120,30);
+    x.fillStyle='#069'; x.fillText('TubeProxies \u{1F310} fp',2,15); x.fillStyle='rgba(0,200,80,.7)'; x.fillText('TubeProxies \u{1F310} fp',4,17);
+    kv('canvas.hash', await sha(c.toDataURL()));
+  } catch(e){ kv('canvas.hash','err '+e,'warn'); }
+  try {
+    const Ctx = window.OfflineAudioContext||window.webkitOfflineAudioContext;
+    const ac = new Ctx(1, 5000, 44100); const osc=ac.createOscillator(); osc.type='triangle'; osc.frequency.value=10000;
+    const comp=ac.createDynamicsCompressor(); osc.connect(comp); comp.connect(ac.destination); osc.start(0);
+    const buf = await ac.startRendering(); let acc=0; const d=buf.getChannelData(0);
+    for (let i=0;i<d.length;i++) acc+=Math.abs(d[i]);
+    kv('audio.hash', acc.toString());
+  } catch(e){ kv('audio.hash','err '+e,'warn'); }
+
+  sec('Consistency check (Real mode should pass)');
+  const wv = json['webgl.UNMASKED_VENDOR']||'', wr = json['webgl.UNMASKED_RENDERER']||'', wg = json['webgpu.vendor']||'';
+  const fam = s => /apple|metal/i.test(s)?'apple':/nvidia/i.test(s)?'nvidia':/intel/i.test(s)?'intel':/amd|radeon/i.test(s)?'amd':/swiftshader|software/i.test(s)?'software':'?';
+  const fWebgl=fam(wr), fGpu=fam(wg);
+  const webgpuAbsent = !wg;
+  const same = (fGpu==='?'||fWebgl===fGpu);
+  kv('webgl GPU family', fWebgl);
+  kv('webgpu GPU family', webgpuAbsent ? 'disabled (no adapter)' : fGpu);
+  kv('VERDICT',
+     webgpuAbsent ? 'consistent ✓ (WebGPU disabled — no adapter to contradict WebGL)'
+     : same ? 'consistent ✓ (WebGL & WebGPU agree)'
+     : 'MISMATCH ✗ — WebGL says '+fWebgl+', WebGPU says '+fGpu+' → detectors will flag',
+     (webgpuAbsent||same) ? 'ok' : 'warn');
+
+  document.getElementById('out').innerHTML = lines.join('');
+}
+function copyOut(){ navigator.clipboard?.writeText(JSON.stringify(json,null,2)); }
+run();
+</script>
+</body>
+</html>

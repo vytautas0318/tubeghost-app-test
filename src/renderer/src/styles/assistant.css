@@ -1,0 +1,337 @@
+/* Global assistant — a rounded floating action button (bottom-right) + a chat
+   popover above it. Colours come from ds-tokens.css so light/dark + accent
+   overrides apply automatically. */
+
+/* ── Floating action button ─────────────────────────────────────────────
+   right/bottom are set inline by the component (the button is draggable). */
+.as-fab {
+  position: fixed;
+  z-index: 300;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  border: none;
+  background: var(--red); /* --red is remapped to the workspace accent */
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  touch-action: none; /* let pointer-drag work without the browser panning */
+  box-shadow: var(--shadow-pop, 0 8px 24px rgba(0, 0, 0, 0.24));
+  transition:
+    transform var(--dur-1, 0.12s) var(--ease, ease),
+    filter var(--dur-1, 0.12s) var(--ease, ease),
+    box-shadow var(--dur-1, 0.12s) var(--ease, ease);
+}
+.as-fab:hover {
+  transform: translateY(-2px) scale(1.03);
+  filter: brightness(1.06);
+  box-shadow: 0 10px 30px rgba(var(--red-rgb, 239, 0, 57), 0.4);
+}
+.as-fab:active {
+  transform: translateY(0) scale(0.98);
+}
+.as-fab-open {
+  background: var(--panel-2);
+  color: var(--t1);
+  border: 1px solid var(--line);
+}
+/* While dragging: no hover-lift, grabbing cursor, no transition lag. */
+.as-fab-dragging {
+  cursor: grabbing;
+  transition: none;
+  transform: scale(1.06);
+}
+/* Swap icons (magic ↔ pen) with a soft fade + slight pop. */
+.as-fab svg {
+  transition: opacity var(--dur-1, 0.12s) var(--ease, ease);
+}
+/* The resting "magic" glyph gets a gentle idle shimmer. */
+.as-fab-magic {
+  display: inline-flex;
+  animation: asShimmer 2.6s ease-in-out infinite;
+}
+@keyframes asShimmer {
+  0%, 100% {
+    transform: scale(1) rotate(0deg);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.08) rotate(-6deg);
+    opacity: 0.92;
+  }
+}
+
+/* ── Chat popover ───────────────────────────────────────────────────── */
+.as-panel {
+  position: fixed;
+  /* right/bottom are set inline relative to the (draggable) FAB. */
+  z-index: 300;
+  width: 380px;
+  max-width: calc(100vw - 48px);
+  height: 560px;
+  max-height: calc(100vh - 140px);
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg, 14px);
+  box-shadow: var(--shadow-pop, 0 12px 40px rgba(0, 0, 0, 0.3));
+  overflow: hidden;
+  animation: asFadeUp var(--dur-2, 0.16s) var(--ease, ease);
+}
+@keyframes asFadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.as-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--line);
+}
+.as-head-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  color: var(--t1);
+  font-size: var(--fs-sm, 13px);
+}
+.as-head-title svg {
+  color: var(--red);
+}
+.as-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.as-model {
+  appearance: none;
+  -webkit-appearance: none;
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  color: var(--t1);
+  font-size: var(--fs-xs, 12px);
+  font-family: inherit;
+  padding: 4px 22px 4px 8px;
+  border-radius: var(--r-sm, 8px);
+  cursor: pointer;
+  /* caret */
+  background-image: linear-gradient(45deg, transparent 50%, var(--t3) 50%),
+    linear-gradient(135deg, var(--t3) 50%, transparent 50%);
+  background-position:
+    calc(100% - 12px) center,
+    calc(100% - 8px) center;
+  background-size: 4px 4px, 4px 4px;
+  background-repeat: no-repeat;
+}
+.as-model:hover {
+  border-color: var(--t3);
+}
+.as-model:focus-visible {
+  outline: 2px solid var(--red);
+  outline-offset: 1px;
+}
+.as-x {
+  border: none;
+  background: transparent;
+  color: var(--t3);
+  cursor: pointer;
+  display: flex;
+  padding: 4px;
+  border-radius: var(--r-sm, 8px);
+}
+.as-x:hover {
+  color: var(--t1);
+  background: var(--panel-2);
+}
+
+.as-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.as-msg {
+  display: flex;
+}
+.as-msg-user {
+  justify-content: flex-end;
+}
+.as-msg-assistant {
+  justify-content: flex-start;
+}
+.as-bubble {
+  max-width: 86%;
+  padding: 9px 12px;
+  border-radius: var(--r, 10px);
+  font-size: var(--fs-sm, 13px);
+  line-height: 1.45;
+  word-break: break-word;
+}
+.as-msg-user .as-bubble {
+  background: var(--red);
+  color: #fff;
+  border-bottom-right-radius: 4px;
+}
+.as-msg-assistant .as-bubble {
+  background: var(--panel-2);
+  color: var(--t1);
+  border: 1px solid var(--line);
+  border-bottom-left-radius: 4px;
+}
+.as-line {
+  margin: 0;
+}
+.as-line + .as-line {
+  margin-top: 6px;
+}
+.as-thinking {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--t3);
+}
+
+.as-composer {
+  border-top: 1px solid var(--line);
+  padding: 10px;
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+  background: var(--panel);
+}
+.as-input {
+  flex: 1;
+  resize: none;
+  max-height: 120px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm, 8px);
+  background: var(--panel-2);
+  color: var(--t1);
+  padding: 8px 10px;
+  font-size: var(--fs-sm, 13px);
+  font-family: var(--sans);
+  line-height: 1.4;
+}
+.as-input:focus {
+  outline: none;
+  border-color: var(--red);
+}
+.as-send {
+  flex: 0 0 auto;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--r-sm, 8px);
+  border: none;
+  background: var(--red);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.as-send:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* ── Action plan card (confirm-before-acting) ───────────────────────── */
+.as-plan {
+  max-width: 100%;
+  width: 100%;
+}
+.as-plan-title {
+  font-weight: 600;
+  color: var(--t1);
+  margin-bottom: 4px;
+}
+.as-plan-summary {
+  color: var(--t2);
+  font-size: var(--fs-xs, 12px);
+  margin-bottom: 8px;
+}
+.as-plan-steps {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.as-plan-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  font-size: var(--fs-xs, 12px);
+  color: var(--t1);
+}
+.as-plan-step-ic {
+  flex: 0 0 auto;
+  margin-top: 1px;
+  display: inline-flex;
+}
+.as-plan-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--t4, #888);
+  display: inline-block;
+  margin: 4px 4px;
+}
+.as-plan-step-msg {
+  color: var(--t3);
+}
+.as-log-ok {
+  color: var(--green, #22c55e);
+}
+.as-log-err {
+  color: var(--red);
+}
+.as-plan-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 6px;
+}
+.as-plan-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm, 8px);
+  padding: 6px 10px;
+  font-size: var(--fs-xs, 12px);
+  font-weight: 600;
+  cursor: pointer;
+  background: var(--panel);
+  color: var(--t1);
+}
+.as-plan-approve {
+  background: var(--red);
+  color: #fff;
+  border-color: transparent;
+}
+.as-plan-approve:hover {
+  filter: brightness(1.06);
+}
+.as-plan-cancel:hover {
+  background: var(--panel-2);
+}
+.as-plan-foot {
+  margin-top: 6px;
+  font-size: var(--fs-xs, 12px);
+  color: var(--t3);
+}
