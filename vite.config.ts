@@ -18,6 +18,10 @@ export default defineConfig({
   // env loader there so VITE_* vars are picked up (envDir otherwise defaults to
   // `root` and would miss the repo-root .env).
   envDir: __dirname,
+  // Static assets served at the web root (e.g. /favicon.png). Lives at the repo
+  // root, not <root>/public (which would be src/renderer/public), so point Vite
+  // at it explicitly — otherwise these files are never copied into the build.
+  publicDir: resolve(__dirname, 'public'),
   // Serve assets from the app root; SPA host rewrites all paths → index.html.
   base: '/',
   resolve: {
