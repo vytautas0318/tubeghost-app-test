@@ -109,13 +109,9 @@ export const useWorkspace = create<WorkspaceState>()(
         if (!supabase) return
         set({ loading: true, error: null })
 
-        // The TP Browser data client runs an EXCHANGED session (see
-        // lib/token-exchange.ts). On first login `user` (identity) is set
-        // before that exchange + workspace provisioning finish, so query
-        // it too early and RLS returns nothing → the app wrongly shows the
-        // "Create workspace" screen for a user who already has one. Ensure
-        // the data session (which also lazily provisions the workspace) is
-        // established BEFORE reading memberships.
+        // Confirm the session is ready before reading memberships. (Single
+        // project now: the login session IS the data session, so this resolves
+        // immediately — kept as a guard so the call flow stays identical.)
         const ready = await ensureDataSession()
         if (!ready) {
           set({ error: 'Could not establish data session', loading: false })

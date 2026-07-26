@@ -1,24 +1,30 @@
 import * as React from 'react'
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { getTubeProxies, ensureDataSession } from '@/lib/supabase'
+import { getSupabase } from '@/lib/supabase'
 import { BrandLogo } from '@/components/BrandLogo'
 
 // Web OAuth / magic-link callback. Google (or the email link) redirects the
 // browser here with a PKCE `code` in the query string. We exchange it for a
-// session on the identity client, establish the TP Browser data session, then
-// route into the app. On failure we send the user back to sign-in with a
-// message. Replaces the old Electron popup + window.api.auth.openOAuthWindow.
+// session, then route into the app. On failure we send the user back to
+// sign-in with a message.
+//
+// The exchange must run EXACTLY ONCE: exchangeCodeForSession() consumes both
+// the one-time `code` and the stored PKCE code_verifier, so a second call
+// (e.g. React StrictMode double-invoking the effect in dev, or a component
+// remount) fails with "invalid flow state, no valid flow state found". We
+// guard with a module-level set keyed by the code.
+const exchanged = new Set<string>()
+
 export function AuthCallback(): React.ReactElement {
   const navigate = useNavigate()
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    let cancelled = false
     void (async () => {
-      const supabase = getTubeProxies()
+      const supabase = getSupabase()
       if (!supabase) {
-        if (!cancelled) setError('Supabase not configured')
+        setError('Supabase not configured')
         return
       }
 
@@ -26,27 +32,27 @@ export function AuthCallback(): React.ReactElement {
       // Providers can return an error in the query (e.g. access_denied).
       const providerError = params.get('error_description') ?? params.get('error')
       if (providerError) {
-        if (!cancelled) setError(providerError)
+        setError(providerError)
         return
       }
-      if (!params.get('code')) {
-        if (!cancelled) setError('No authorization code in callback URL')
+      const code = params.get('code')
+      if (!code) {
+        setError('No authorization code in callback URL')
         return
       }
 
-      const { error: exchErr } = await supabase.auth.exchangeCodeForSession(
-        window.location.href
-      )
+      // Run-once guard: if this code was already exchanged (StrictMode second
+      // pass), the first pass owns the outcome — just wait for its navigate.
+      if (exchanged.has(code)) return
+      exchanged.add(code)
+
+      const { error: exchErr } = await supabase.auth.exchangeCodeForSession(code)
       if (exchErr) {
-        if (!cancelled) setError(exchErr.message)
+        setError(exchErr.message)
         return
       }
-      await ensureDataSession()
-      if (!cancelled) navigate('/profiles', { replace: true })
+      navigate('/profiles', { replace: true })
     })()
-    return () => {
-      cancelled = true
-    }
   }, [navigate])
 
   return (

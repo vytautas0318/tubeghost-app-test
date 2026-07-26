@@ -1,101 +1,65 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
-import { ensureTPBrowserSession, clearTPBrowserSession } from '@/lib/token-exchange'
 
-// ── Dual-client setup ──────────────────────────────────────────────
-// TubeProxies is the SINGLE identity provider (ES256). TP Browser (this
-// app's data project) can't verify a raw TubeProxies token and has no
-// pre-populated auth.users, so we bridge the two with a token EXCHANGE:
+// ── Single-client setup ────────────────────────────────────────────
+// This app authenticates DIRECTLY against its own Supabase project
+// (VITE_SUPABASE_URL). Login (email magic-link, Google OAuth) and all data
+// queries run on the same project, so the login session IS the data session —
+// no cross-project token exchange.
 //
-//   * tubeProxies client — owns identity: login / signup / Google OAuth /
-//     token refresh. persistSession + autoRefreshToken here.
-//   * tpBrowser client — app data. Runs a REAL TP Browser GoTrue session
-//     whose sub == the TubeProxies user id, obtained by exchanging the
-//     TubeProxies token at the auth-exchange edge function (see
-//     lib/token-exchange.ts + supabase/functions/auth-exchange). Because
-//     it's a genuine TP Browser session, PostgREST accepts it and
-//     supabase-js auto-refreshes it; RLS sees auth.uid() = public.users id.
+// (Previously this app used a two-project model: TubeProxies as a separate
+// identity provider + a token exchange into this data project. That indirection
+// was removed — see migration that re-instates handle_new_user provisioning on
+// this project.)
 //
-// Call ensureDataSession() after login / on app init to establish the TP
-// Browser session before issuing data queries.
-//
-// Renderer-only: anon keys only (never service-role — see preload guard).
+// Renderer-only: anon key only (never service-role — RLS protects the data).
 
-// TP Browser (data)
-const tpbUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined
-const tpbAnon = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
+const url = import.meta.env.VITE_SUPABASE_URL as string | undefined
+const anon = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
 
-// TubeProxies (identity + commerce)
-const tpUrl = import.meta.env.VITE_TUBEPROXIES_SUPABASE_URL as string | undefined
-const tpAnon = import.meta.env.VITE_TUBEPROXIES_SUPABASE_ANON_KEY as string | undefined
+let client: SupabaseClient | null = null
 
-let tubeProxiesClient: SupabaseClient | null = null
-let tpBrowserClient: SupabaseClient | null = null
-
-// The identity provider. Holds the session; refreshes tokens.
-export function getTubeProxies(): SupabaseClient | null {
-  if (!tpUrl || !tpAnon) return null
-  if (!tubeProxiesClient) {
-    tubeProxiesClient = createClient(tpUrl, tpAnon, {
+function getClient(): SupabaseClient | null {
+  if (!url || !anon) return null
+  if (!client) {
+    client = createClient(url, anon, {
       auth: {
         persistSession: true,
         autoRefreshToken: true,
-        flowType: 'pkce', // web OAuth redirect flow (see store/auth.ts + pages/AuthCallback.tsx)
-        storageKey: 'tp-identity-auth' // distinct from the data client's storage
+        detectSessionInUrl: false, // we exchange the PKCE code explicitly in AuthCallback
+        flowType: 'pkce',
+        storageKey: 'tg-auth'
       }
     })
   }
-  return tubeProxiesClient
+  return client
 }
 
-// The data project. Runs its own exchanged GoTrue session.
-export function getTPBrowser(): SupabaseClient | null {
-  if (!tpbUrl || !tpbAnon) return null
-  if (!tpBrowserClient) {
-    tpBrowserClient = createClient(tpbUrl, tpbAnon, {
-      auth: {
-        persistSession: true,
-        autoRefreshToken: true,
-        detectSessionInUrl: false,
-        storageKey: 'tpb-data-auth' // distinct from the identity client's storage
-      }
-    })
-  }
-  return tpBrowserClient
-}
-
-// Establish (or confirm) the TP Browser data session by exchanging the
-// current TubeProxies token. Call after login and on app init. Returns
-// false if there is no TubeProxies session or the exchange failed (e.g.
-// the user isn't mirrored yet).
-export async function ensureDataSession(): Promise<boolean> {
-  const tpb = getTPBrowser()
-  const tp = getTubeProxies()
-  if (!tpb || !tp) return false
-  return ensureTPBrowserSession(tpb, async () => {
-    const {
-      data: { session }
-    } = await tp.auth.getSession()
-    return session?.access_token ?? null
-  })
-}
-
-// Tear down the TP Browser data session (call on sign-out).
-export async function clearDataSession(): Promise<void> {
-  const tpb = getTPBrowser()
-  if (tpb) await clearTPBrowserSession(tpb)
-}
-
-// ── Back-compat shim ───────────────────────────────────────────────
-// The whole data layer (lib/proxies.ts, lib/profiles.ts, …) calls
-// getSupabase(). Point it at the TP Browser (data) client so those
-// modules keep working unchanged. Auth code uses getTubeProxies().
+// The one client. Auth code and the data layer both use this project.
 export function getSupabase(): SupabaseClient | null {
-  return getTPBrowser()
+  return getClient()
 }
 
-export const isSupabaseConfigured = (): boolean =>
-  Boolean(tpbUrl && tpbAnon && tpUrl && tpAnon)
+// Back-compat: auth code historically called getTubeProxies(); it now returns
+// the same single client. Kept so store/auth.ts + AuthCallback don't need a
+// find-replace churn, and so any stray caller keeps working.
+export function getTubeProxies(): SupabaseClient | null {
+  return getClient()
+}
 
-// True when only the data project is configured (TubeProxies identity
-// env missing) — surfaces a clear setup error instead of "login failed".
-export const isIdentityConfigured = (): boolean => Boolean(tpUrl && tpAnon)
+// The data session is now the login session — nothing to establish. Kept as a
+// no-op so existing call sites (App bootstrap, auth store) stay unchanged.
+export async function ensureDataSession(): Promise<boolean> {
+  return getClient() != null
+}
+
+// Sign-out is handled by the auth store via supabase.auth.signOut(); no
+// separate data session to tear down anymore.
+export async function clearDataSession(): Promise<void> {
+  /* no-op — single session */
+}
+
+export const isSupabaseConfigured = (): boolean => Boolean(url && anon)
+
+// Retained for callers that distinguished identity vs data config; with one
+// project they're the same check.
+export const isIdentityConfigured = (): boolean => Boolean(url && anon)

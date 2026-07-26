@@ -1,8 +1,7 @@
 import { create } from 'zustand'
 import type { Session, User } from '@supabase/supabase-js'
-// Auth runs against the TubeProxies project (the single identity
-// provider). The TP Browser data client borrows its token via
-// Third-Party Auth — see lib/supabase.ts.
+// Auth runs against this app's own Supabase project — the login session is
+// also the data session (single client; see lib/supabase.ts).
 import { getTubeProxies, ensureDataSession, clearDataSession } from '@/lib/supabase'
 
 interface AuthState {
@@ -107,10 +106,11 @@ export const useAuth = create<AuthState>((set) => ({
   signInWithGoogle: async () => {
     const supabase = getTubeProxies()
     if (!supabase) return { error: 'Supabase not configured' }
-    // Standard web OAuth: supabase-js redirects the whole tab to Google, then
-    // Google redirects back to /auth/callback with a PKCE `code`. The callback
-    // route (pages/AuthCallback.tsx) exchanges it for a session. Because this
-    // navigates away, a successful call never returns here — only errors do.
+    // Standard web OAuth against this app's own project: supabase-js redirects
+    // the whole tab to Google, then Google redirects back to /auth/callback with
+    // a PKCE `code`. The callback route (pages/AuthCallback.tsx) exchanges it for
+    // a session. Because this navigates away, a successful call never returns
+    // here — only errors do.
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: { redirectTo: `${window.location.origin}/auth/callback` }
@@ -130,9 +130,12 @@ export const useAuth = create<AuthState>((set) => ({
       email: email.trim(),
       options: {
         emailRedirectTo,
-        // Only sign existing users in; do not silently create accounts from
-        // the sign-in screen. Flip to true if magic-link should also register.
-        shouldCreateUser: false
+        // Register on first use (mirrors Google sign-in, which also creates the
+        // user on first login). With single-project direct auth, most users
+        // have no auth.users row yet — shouldCreateUser:false would silently
+        // send nothing (Supabase returns no error but no email), so the UI
+        // showed "check your email" for a link that was never sent.
+        shouldCreateUser: true
       }
     })
     if (error) {

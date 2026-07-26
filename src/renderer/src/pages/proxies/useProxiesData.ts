@@ -6,8 +6,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { formatDistanceToNow } from 'date-fns'
 import {
   deleteProxy,
+  listMyProxies,
   listProfileNumbersByProxy,
-  listProxies,
   type ProxyRow
 } from '@/lib/proxies'
 import { getSupabase } from '@/lib/supabase'
@@ -39,12 +39,16 @@ export function useProxiesData(workspaceId: string | null, enabled: boolean): Us
     }
     let cancelled = false
     setLoading(true)
-    listProxies(workspaceId)
+    // Email-scoped: returns the user's own proxies (incl. TubeProxies purchases
+    // synced under their email), independent of the active workspace. See
+    // listMyProxies + RLS migration 0039.
+    listMyProxies()
       .then(async (data) => {
         if (cancelled) return
         setRows(data)
         setError(null)
-        // One workspace-wide query is cheaper than one-per-proxy.
+        // Profile-number assignments are per-workspace; only meaningful for
+        // proxies in the current workspace (cross-workspace purchases have none).
         try {
           const map = await listProfileNumbersByProxy(workspaceId)
           if (!cancelled) setProfileNumbers(map)

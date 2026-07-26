@@ -65,6 +65,22 @@ export async function listProxies(workspaceId: string): Promise<ProxyRow[]> {
   return (data ?? []) as ProxyRow[]
 }
 
+// All proxies visible to the current user regardless of the active workspace.
+// With direct login, the user's synced TubeProxies purchases live in the
+// workspace owned by their TubeProxies id (a different workspace than their
+// own). RLS ("proxies.read by email", migration 0039) widens SELECT to those
+// rows by matching the logged-in email, so we omit the workspace_id filter and
+// let RLS return exactly the proxies the user is entitled to see.
+export async function listMyProxies(): Promise<ProxyRow[]> {
+  const { data, error } = await client()
+    .from('proxies')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .range(0, PROXY_PAGE_LIMIT - 1)
+  if (error) throw error
+  return (data ?? []) as ProxyRow[]
+}
+
 export interface NewCustomProxyInput {
   workspace_id: string
   label?: string | null

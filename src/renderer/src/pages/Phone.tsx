@@ -6,19 +6,49 @@ import { Button } from '@/components/ui'
 import { ToastView, useToast } from '@/components/Toast'
 import { PoweredByTubeProxies } from '@/components/PoweredByTubeProxies'
 import { listProfiles } from '@/lib/profiles'
+import { listMyPhoneNumbers } from '@/lib/phone-numbers'
 import { useWorkspace } from '@/store/workspace'
 import { type PhoneNum, type ProfileOpt } from './phone/phoneData'
 import { NumbersPanel } from './phone/NumbersPanel'
 import { RecentSms } from './phone/RecentSms'
 
+// Derive a display area label from the number's country/area code (best-effort;
+// US +1 numbers show their 3-digit area code).
+function areaOf(number: string): string {
+  const digits = number.replace(/\D/g, '')
+  if (digits.length === 11 && digits.startsWith('1')) return digits.slice(1, 4)
+  if (digits.length === 10) return digits.slice(0, 3)
+  return 'US'
+}
+
 export function Phone(): React.ReactElement {
-  // Numbers come from the TubeProxies phone subscription — integration is
-  // pending, so this starts empty (no sample numbers).
+  // Numbers are the current user's TubeProxies purchases, synced into this
+  // project and read by matching the logged-in email (RLS, migration 0039).
   const [nums, setNums] = useState<PhoneNum[]>([])
   const [profileOpts, setProfileOpts] = useState<ProfileOpt[]>([])
   const workspaceId = useWorkspace((s) => s.current?.workspace_id ?? null)
   const { toast, show } = useToast()
   const navigate = useNavigate()
+
+  // Load the user's own phone numbers (email-scoped by RLS).
+  useEffect(() => {
+    listMyPhoneNumbers()
+      .then((rows) =>
+        setNums(
+          rows.map((r) => ({
+            id: r.id,
+            number: r.phone_number,
+            area: areaOf(r.phone_number),
+            profile: 'Unassigned',
+            pl: null,
+            code: null,
+            from: null,
+            tags: r.label ? [['neutral', r.label]] : undefined
+          }))
+        )
+      )
+      .catch(() => setNums([]))
+  }, [])
 
   // Real workspace profiles for the "Assign to profile" popover.
   useEffect(() => {
