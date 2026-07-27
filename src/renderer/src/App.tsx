@@ -24,6 +24,7 @@ import { SignUp } from './pages/SignUp'
 import { NoWorkspace } from './pages/NoWorkspace'
 import { AcceptInvite } from './pages/AcceptInvite'
 import { AuthCallback } from './pages/AuthCallback'
+import { OAuthCallback } from './pages/OAuthCallback'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { useTheme } from './store/theme'
 // Importing the prefs store triggers its persist rehydrate → accent + density
@@ -105,6 +106,9 @@ function App(): React.ReactElement {
           {/* OAuth / magic-link land here mid-flow (still unauthenticated until
               the code is exchanged). */}
           <Route path="/auth/callback" element={<AuthCallback />} />
+          {/* Web version: Electron app sets emailRedirectTo to https://app.tubeghost.com/oauth-callback.
+              This route takes the PKCE code and sends it to the desktop app via deep link. */}
+          <Route path="/oauth-callback" element={<OAuthCallback />} />
           {/* Invitees can preview the invite before authenticating. */}
           <Route path="/invite/:token" element={<AcceptInvite />} />
           <Route path="*" element={<Navigate to="/signin" replace />} />
