@@ -4,7 +4,7 @@
   "outputDirectory": "dist",
   "rewrites": [
     {
-      "source": "/((?!assets/|favicon.png|logo.png|tubeproxies.png).*)",
+      "source": "/((?!api/|assets/|favicon.png|logo.png|tubeproxies.png).*)",
       "destination": "/index.html"
     }
   ]

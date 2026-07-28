@@ -2,7 +2,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 
 // ── Single-client setup ────────────────────────────────────────────
 // This app authenticates DIRECTLY against its own Supabase project
-// (VITE_SUPABASE_URL). Login (email magic-link, Google OAuth) and all data
+// (VITE_SUPABASE_URL). Login (email + password, Google OAuth) and all data
 // queries run on the same project, so the login session IS the data session —
 // no cross-project token exchange.
 //

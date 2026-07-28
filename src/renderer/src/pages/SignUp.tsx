@@ -14,28 +14,26 @@ import {
 
 export function SignUp(): React.ReactElement {
   const { user, signUp, signInWithGoogle } = useAuth()
+  const [workspaceName, setWorkspaceName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [confirmPassword, setConfirmPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [googleBusy, setGoogleBusy] = useState(false)
   const [confirmSent, setConfirmSent] = useState(false)
+  const [alreadyRegistered, setAlreadyRegistered] = useState(false)
 
   if (user) return <Navigate to="/profiles" replace />
 
   const onSubmit = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault()
     setError(null)
-    if (password !== confirmPassword) {
-      setError("Passwords don't match")
-      return
-    }
     setBusy(true)
-    const result = await signUp(email.trim(), password, 'My Workspace')
+    const result = await signUp(email.trim(), password, workspaceName.trim() || 'My Workspace')
     setBusy(false)
     if (result.error) {
       setError(result.error)
+      setAlreadyRegistered(Boolean(result.alreadyRegistered))
       return
     }
     if (result.needsEmailConfirm) setConfirmSent(true)
@@ -78,14 +76,27 @@ export function SignUp(): React.ReactElement {
       <GoogleButton onClick={onGoogle} busy={googleBusy} label="Continue with Google" />
       <AuthDivider />
       <form onSubmit={onSubmit} className="space-y-4">
+        <AuthField label="Workspace name">
+          <input
+            type="text"
+            required
+            autoFocus
+            placeholder="e.g. Pletfree Creations"
+            value={workspaceName}
+            onChange={(e) => setWorkspaceName(e.target.value)}
+            className={authInputClass}
+          />
+        </AuthField>
         <AuthField label="Work email">
           <input
             type="email"
             required
-            autoFocus
             placeholder="you@company.com"
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            onChange={(e) => {
+              setEmail(e.target.value)
+              if (alreadyRegistered) setAlreadyRegistered(false)
+            }}
             className={authInputClass}
           />
         </AuthField>
@@ -95,27 +106,19 @@ export function SignUp(): React.ReactElement {
             required
             minLength={8}
             value={password}
-            onChange={(e) => {
-              setPassword(e.target.value)
-              if (error === "Passwords don't match") setError(null)
-            }}
-            className={authInputClass}
-          />
-        </AuthField>
-        <AuthField label="Confirm password">
-          <input
-            type="password"
-            required
-            minLength={8}
-            value={confirmPassword}
-            onChange={(e) => {
-              setConfirmPassword(e.target.value)
-              if (error === "Passwords don't match") setError(null)
-            }}
+            onChange={(e) => setPassword(e.target.value)}
             className={authInputClass}
           />
         </AuthField>
         {error && <div className={authErrorClass}>{error}</div>}
+        {alreadyRegistered && (
+          <Link
+            to="/forgot-password"
+            className="block text-[12.5px] font-semibold text-[var(--red)] hover:underline"
+          >
+            Set a password for this account →
+          </Link>
+        )}
         <button type="submit" disabled={busy} className={authSubmitClass}>
           {busy ? 'Creating account…' : 'Create account'}
         </button>

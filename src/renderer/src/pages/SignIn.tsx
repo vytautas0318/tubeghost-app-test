@@ -1,46 +1,52 @@
 import * as React from 'react'
 import { useState } from 'react'
-import { Navigate } from 'react-router-dom'
+import { Link, Navigate } from 'react-router-dom'
 import { useAuth } from '@/store/auth'
 import { GoogleButton } from '@/components/GoogleButton'
 import {
   AuthShell,
   AuthDivider,
+  AuthField,
   authInputClass,
   authSubmitClass,
   authErrorClass
 } from '@/components/AuthShell'
 
-// Basic RFC-5322-ish well-formedness check — non-empty, single @, a dot in
-// the domain. The server is the real validator; this just gates the button.
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-
 export function SignIn(): React.ReactElement {
-  const { user, signInWithMagicLink, signInWithGoogle } = useAuth()
+  const { user, signIn, signInWithGoogle, resendConfirmation } = useAuth()
   const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const [unconfirmed, setUnconfirmed] = useState(false)
+  const [resent, setResent] = useState(false)
   const [busy, setBusy] = useState(false)
   const [googleBusy, setGoogleBusy] = useState(false)
-  const [sent, setSent] = useState(false)
 
   if (user) return <Navigate to="/profiles" replace />
 
-  const emailValid = EMAIL_RE.test(email.trim())
-
   const onSubmit = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault()
-    if (!emailValid) return
     setError(null)
+    setUnconfirmed(false)
+    setResent(false)
     setBusy(true)
-    let result: { error?: string; sent?: boolean }
+    let result: { error?: string; unconfirmed?: boolean }
     try {
-      result = await signInWithMagicLink(email.trim())
+      result = await signIn(email.trim(), password)
     } catch {
       result = { error: 'Network error — check your connection and try again.' }
     }
     setBusy(false)
-    if (result.error) setError(result.error)
-    else if (result.sent) setSent(true)
+    if (result.error) {
+      setError(result.error)
+      setUnconfirmed(Boolean(result.unconfirmed))
+    }
+  }
+
+  const onResend = async (): Promise<void> => {
+    const { error } = await resendConfirmation(email.trim())
+    if (error) setError(error)
+    else setResent(true)
   }
 
   const onGoogle = async (): Promise<void> => {
@@ -51,45 +57,57 @@ export function SignIn(): React.ReactElement {
     if (error) setError(error)
   }
 
-  // Confirmation state — replaces the form once the link is sent.
-  if (sent) {
-    return (
-      <AuthShell title="Check your email" subtitle={`We sent a sign-in link to ${email.trim()}.`}>
-        <div className="rounded-[var(--r)] border border-[var(--line)] bg-[var(--panel)] px-4 py-5 text-[13.5px] leading-[1.6] text-[var(--t2)]">
-          Check your email for a sign-in link. Click it to finish signing in — you can close this
-          window once you do.
-        </div>
-        <button
-          type="button"
-          onClick={() => {
-            setSent(false)
-            setError(null)
-          }}
-          className="mt-4 text-[13px] font-semibold text-[var(--t2)] hover:text-[var(--t1)] transition-colors"
-        >
-          Use a different email
-        </button>
-      </AuthShell>
-    )
-  }
-
   return (
-    <AuthShell title="Welcome back" subtitle="Sign in to your TubeGhost workspace.">
+    <AuthShell mode="signin" title="Welcome back" subtitle="Sign in to your TubeGhost workspace.">
       <GoogleButton onClick={onGoogle} busy={googleBusy} label="Continue with Google" />
       <AuthDivider />
       <form onSubmit={onSubmit} className="space-y-4">
-        <input
-          type="email"
-          required
-          autoFocus
-          placeholder="you@company.com"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          className={authInputClass}
-        />
+        <AuthField label="Work email">
+          <input
+            type="email"
+            required
+            autoFocus
+            placeholder="you@company.com"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className={authInputClass}
+          />
+        </AuthField>
+        <div>
+          <div className="flex items-center justify-between mb-1.5">
+            <label className="block text-xs font-semibold text-[var(--t2)]">Password</label>
+            <Link
+              to="/forgot-password"
+              className="text-xs font-[550] text-[var(--red)] hover:underline"
+            >
+              Forgot password?
+            </Link>
+          </div>
+          <input
+            type="password"
+            required
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className={authInputClass}
+          />
+        </div>
         {error && <div className={authErrorClass}>{error}</div>}
-        <button type="submit" disabled={busy || !emailValid} className={authSubmitClass}>
-          {busy ? 'Sending…' : 'Send magic link'}
+        {unconfirmed && !resent && (
+          <button
+            type="button"
+            onClick={onResend}
+            className="text-[12.5px] font-semibold text-[var(--red)] hover:underline"
+          >
+            Resend confirmation email
+          </button>
+        )}
+        {resent && (
+          <div className="text-[12.5px] text-[var(--t2)]">
+            Confirmation email sent — check your inbox.
+          </div>
+        )}
+        <button type="submit" disabled={busy} className={authSubmitClass}>
+          {busy ? 'Signing in…' : 'Sign in'}
         </button>
       </form>
     </AuthShell>

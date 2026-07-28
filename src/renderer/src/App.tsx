@@ -21,10 +21,12 @@ import { Authenticator } from './pages/Authenticator'
 import { BuyProxies } from './pages/BuyProxies'
 import { SignIn } from './pages/SignIn'
 import { SignUp } from './pages/SignUp'
+import { ForgotPassword } from './pages/ForgotPassword'
+import { ResetPassword } from './pages/ResetPassword'
 import { NoWorkspace } from './pages/NoWorkspace'
 import { AcceptInvite } from './pages/AcceptInvite'
 import { AuthCallback } from './pages/AuthCallback'
-import { OAuthCallback } from './pages/OAuthCallback'
+import { AuthClient } from './pages/AuthClient'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { useTheme } from './store/theme'
 // Importing the prefs store triggers its persist rehydrate → accent + density
@@ -38,6 +40,7 @@ import { touchLastSeen } from './lib/members'
 
 function App(): React.ReactElement {
   const { theme } = useTheme()
+  const { pathname } = useLocation()
   const { initialized, user, init } = useAuth()
   const loadWorkspaces = useWorkspace((s) => s.load)
   const resetWorkspaces = useWorkspace((s) => s.reset)
@@ -87,6 +90,15 @@ function App(): React.ReactElement {
     )
   }
 
+  // Desktop OAuth bridge. Handled before every auth/workspace gate — and
+  // before the `initialized` spinner — because this page's only job is to
+  // fire the tubeghost:// deep link. It needs no session (the desktop app
+  // claims the token server-to-server), and the visitor may or may not have
+  // one; either way the gates below must not delay or swallow the redirect.
+  if (pathname === '/auth-client') {
+    return <AuthClient />
+  }
+
   if (!initialized) {
     return (
       <div className="flex flex-col h-screen w-screen overflow-hidden">
@@ -103,16 +115,25 @@ function App(): React.ReactElement {
         <Routes>
           <Route path="/signin" element={<SignIn />} />
           <Route path="/signup" element={<SignUp />} />
-          {/* OAuth / magic-link land here mid-flow (still unauthenticated until
-              the code is exchanged). */}
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          {/* OAuth / email-confirmation links land here mid-flow (still
+              unauthenticated until the code is exchanged). */}
           <Route path="/auth/callback" element={<AuthCallback />} />
-          {/* Web version: Electron app sets emailRedirectTo to https://app.tubeghost.com/oauth-callback.
-              This route takes the PKCE code and sends it to the desktop app via deep link. */}
-          <Route path="/oauth-callback" element={<OAuthCallback />} />
           {/* Invitees can preview the invite before authenticating. */}
           <Route path="/invite/:token" element={<AcceptInvite />} />
           <Route path="*" element={<Navigate to="/signin" replace />} />
         </Routes>
+      </div>
+    )
+  }
+
+  // A recovery link signs the user in, but they came here to set a password —
+  // handle it before the workspace gates below, which would otherwise swallow
+  // the route behind the loading screen or NoWorkspace.
+  if (pathname === '/reset-password') {
+    return (
+      <div className="flex flex-col h-screen w-screen overflow-hidden">
+        <ResetPassword />
       </div>
     )
   }

@@ -14,18 +14,25 @@ interface AuthState {
   // `unconfirmed` is true when sign-in failed only because the email
   // hasn't been confirmed yet — lets the UI offer a resend action.
   signIn: (email: string, password: string) => Promise<{ error?: string; unconfirmed?: boolean }>
+  // `alreadyRegistered` is true when the email is already taken — lets the UI
+  // offer the "set a password instead" path rather than a dead-end error.
   signUp: (
     email: string,
     password: string,
     workspaceName: string
-  ) => Promise<{ error?: string; needsEmailConfirm?: boolean }>
+  ) => Promise<{ error?: string; needsEmailConfirm?: boolean; alreadyRegistered?: boolean }>
   signInWithGoogle: () => Promise<{ error?: string }>
-  // Passwordless magic-link sign-in. Sends a one-time sign-in link to the
-  // given email. The session is not established here — it lands when the
-  // user clicks the link (handled by the OAuth/deep-link callback +
-  // onAuthStateChange), so the UI just shows a "check your email" state.
-  signInWithMagicLink: (email: string) => Promise<{ error?: string; sent?: boolean }>
   resendConfirmation: (email: string) => Promise<{ error?: string; sent?: boolean }>
+  // Sends a password-reset email. Also the supported way to ADD a password to
+  // an account that currently only has a Google identity: Supabase refuses to
+  // attach a password identity via signUp() (it returns a decoy user with an
+  // empty `identities` array), but the recovery link lets the user set one.
+  // Afterwards BOTH Google and email+password sign-in work on the same user —
+  // the Google identity is never unlinked.
+  sendPasswordReset: (email: string) => Promise<{ error?: string; sent?: boolean }>
+  // Sets a new password for the user in the current (recovery) session.
+  // Supabase handles hashing, token single-use, and revoking other sessions.
+  updatePassword: (password: string) => Promise<{ error?: string }>
   signOut: () => Promise<void>
 }
 
@@ -97,7 +104,31 @@ export const useAuth = create<AuthState>((set) => ({
       // forward-compat; v1 provisioning defaults to "My Workspace".
       options: { data: { workspace_name: workspaceName } }
     })
-    if (error) return { error: error.message }
+    if (error) {
+      // Supabase's built-in SMTP is heavily rate-limited (a few messages per
+      // hour, project-wide — not per address). Surface that as something the
+      // user can act on rather than the raw server string.
+      const code = (error as { code?: string }).code
+      if (code === 'over_email_send_rate_limit') {
+        return {
+          error:
+            'Too many confirmation emails sent recently. Please wait a few minutes and try again.'
+        }
+      }
+      return { error: error.message }
+    }
+    // Supabase deliberately does NOT error when the email is already
+    // registered — it returns 200 with an obfuscated user whose `identities`
+    // array is empty, to prevent email enumeration. Without this check the UI
+    // shows "check your email" for an account that was never created (and the
+    // confirmation email is never sent).
+    if (data.user && data.user.identities && data.user.identities.length === 0) {
+      return {
+        error:
+          'An account with this email already exists. Sign in with Google, or use "Forgot password?" on the sign-in page to set a password for it.',
+        alreadyRegistered: true
+      }
+    }
     // If the project requires email confirmation, session will be null.
     if (data.session === null) return { needsEmailConfirm: true }
     return {}
@@ -119,41 +150,45 @@ export const useAuth = create<AuthState>((set) => ({
     return {}
   },
 
-  signInWithMagicLink: async (email) => {
-    const supabase = getTubeProxies()
-    if (!supabase) return { error: 'Supabase not configured' }
-    // Reuse the same web callback route as Google OAuth. The magic link lands
-    // on /auth/callback with a PKCE code; AuthCallback exchanges it, then
-    // onAuthStateChange fires SIGNED_IN and ensureDataSession() runs.
-    const emailRedirectTo = `${window.location.origin}/auth/callback`
-    const { error } = await supabase.auth.signInWithOtp({
-      email: email.trim(),
-      options: {
-        emailRedirectTo,
-        // Register on first use (mirrors Google sign-in, which also creates the
-        // user on first login). With single-project direct auth, most users
-        // have no auth.users row yet — shouldCreateUser:false would silently
-        // send nothing (Supabase returns no error but no email), so the UI
-        // showed "check your email" for a link that was never sent.
-        shouldCreateUser: true
-      }
-    })
-    if (error) {
-      const code = (error as { code?: string }).code
-      if (code === 'over_email_send_rate_limit') {
-        return { error: 'Too many requests — please wait a minute and try again.' }
-      }
-      return { error: error.message }
-    }
-    return { sent: true }
-  },
-
   resendConfirmation: async (email) => {
     const supabase = getTubeProxies()
     if (!supabase) return { error: 'Supabase not configured' }
     const { error } = await supabase.auth.resend({ type: 'signup', email: email.trim() })
     if (error) return { error: error.message }
     return { sent: true }
+  },
+
+  sendPasswordReset: async (email) => {
+    const supabase = getTubeProxies()
+    if (!supabase) return { error: 'Supabase not configured' }
+    // The recovery link lands on /auth/callback with a PKCE code, which
+    // AuthCallback exchanges for a (recovery) session; ResetPassword then
+    // calls updatePassword() to set the new password.
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+      redirectTo: `${window.location.origin}/auth/callback?type=recovery`
+    })
+    if (error) {
+      const code = (error as { code?: string }).code
+      // Only surface failures that are NOT account-specific. Anything else —
+      // notably "user not found" — is swallowed and reported as success, so the
+      // response is identical whether or not the address is registered.
+      if (code === 'over_email_send_rate_limit') {
+        return { error: 'Too many requests — please wait a few minutes and try again.' }
+      }
+      if (code === 'validation_failed') {
+        return { error: 'Enter a valid email address.' }
+      }
+      return { sent: true }
+    }
+    return { sent: true }
+  },
+
+  updatePassword: async (password) => {
+    const supabase = getTubeProxies()
+    if (!supabase) return { error: 'Supabase not configured' }
+    const { error } = await supabase.auth.updateUser({ password })
+    if (error) return { error: error.message }
+    return {}
   },
 
   signOut: async (): Promise<void> => {

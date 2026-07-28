@@ -4,10 +4,10 @@ import { useNavigate } from 'react-router-dom'
 import { getSupabase } from '@/lib/supabase'
 import { BrandLogo } from '@/components/BrandLogo'
 
-// Web OAuth / magic-link callback. Google (or the email link) redirects the
-// browser here with a PKCE `code` in the query string. We exchange it for a
-// session, then route into the app. On failure we send the user back to
-// sign-in with a message.
+// Web OAuth / email-confirmation callback. Google (or the confirmation link
+// sent on signup) redirects the browser here with a PKCE `code` in the query
+// string. We exchange it for a session, then route into the app. On failure we
+// send the user back to sign-in with a message.
 //
 // The exchange must run EXACTLY ONCE: exchangeCodeForSession() consumes both
 // the one-time `code` and the stored PKCE code_verifier, so a second call
@@ -49,6 +49,12 @@ export function AuthCallback(): React.ReactElement {
       const { error: exchErr } = await supabase.auth.exchangeCodeForSession(code)
       if (exchErr) {
         setError(exchErr.message)
+        return
+      }
+      // A recovery link grants a session, but the user came here to set a
+      // password — send them to the reset form instead of straight into the app.
+      if (params.get('type') === 'recovery') {
+        navigate('/reset-password', { replace: true })
         return
       }
       navigate('/profiles', { replace: true })
