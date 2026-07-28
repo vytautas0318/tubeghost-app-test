@@ -25,8 +25,14 @@ import {
 const RATE_LIMIT = 10
 const RATE_WINDOW_SECONDS = 300
 
-// Both values are base64url(sha256(...)) → exactly 43 chars, fixed alphabet.
+// The PKCE `challenge` is base64url(sha256(...)) → 43 chars, url-safe alphabet.
 const B64URL_SHA256 = /^[A-Za-z0-9_-]{43}$/
+// The `hashed_nonce` is HEX(sha256(...)) → 64 lowercase hex chars. It MUST be
+// hex (not base64url) because Supabase GoTrue validates the id_token nonce as
+// hex(sha256(nonce)) === token.nonce (supabase/auth token_oidc.go). The bridge
+// puts this value verbatim into Google's `nonce`, so the token carries the hex
+// hash and GoTrue matches when the app later passes the RAW nonce.
+const HEX_SHA256 = /^[0-9a-f]{64}$/
 
 export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   res.setHeader('Cache-Control', 'no-store')
@@ -62,7 +68,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     res.status(400).json({ error: 'invalid challenge' })
     return
   }
-  if (!B64URL_SHA256.test(hashedNonce)) {
+  if (!HEX_SHA256.test(hashedNonce)) {
     res.status(400).json({ error: 'invalid hashed_nonce' })
     return
   }
