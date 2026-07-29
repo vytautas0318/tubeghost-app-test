@@ -6,8 +6,13 @@ import { Button } from '@/components/ui'
 import { ToastView, useToast } from '@/components/Toast'
 import { PoweredByTubeProxies } from '@/components/PoweredByTubeProxies'
 import { listProfiles } from '@/lib/profiles'
-import { listMyPhoneNumbers } from '@/lib/phone-numbers'
+import {
+  listUserPhoneNumbers,
+  addUserPhoneNumber,
+  type UserPhoneNumberRow
+} from '@/lib/userPhoneNumbers'
 import { useWorkspace } from '@/store/workspace'
+import { useAuth } from '@/store/auth'
 import { type PhoneNum, type ProfileOpt } from './phone/phoneData'
 import { NumbersPanel } from './phone/NumbersPanel'
 import { RecentSms } from './phone/RecentSms'
@@ -22,35 +27,38 @@ function areaOf(number: string): string {
   return 'US'
 }
 
+// Map a persisted user_phone_numbers row to the page's PhoneNum view model.
+function rowToPhoneNum(r: UserPhoneNumberRow): PhoneNum {
+  return {
+    id: r.id,
+    number: r.phone_number,
+    area: areaOf(r.phone_number),
+    profile: 'Unassigned',
+    pl: null,
+    code: null,
+    from: null,
+    tags: r.label ? [['neutral', r.label]] : undefined
+  }
+}
+
 export function Phone(): React.ReactElement {
-  // Numbers are the current user's TubeProxies purchases, synced into this
-  // project and read by matching the logged-in email (RLS, migration 0039).
+  // User-added numbers persist in public.user_phone_numbers (owner-based RLS,
+  // migration 0043). TubeProxies-provisioned numbers are a separate source.
   const [nums, setNums] = useState<PhoneNum[]>([])
   const [profileOpts, setProfileOpts] = useState<ProfileOpt[]>([])
   const [showAdd, setShowAdd] = useState(false)
   const workspaceId = useWorkspace((s) => s.current?.workspace_id ?? null)
+  const user = useAuth((s) => s.user)
   const { toast, show } = useToast()
   const navigate = useNavigate()
 
-  // Load the user's own phone numbers (email-scoped by RLS).
+  // Load the caller's saved numbers from public.user_phone_numbers (owner-based
+  // RLS). Re-runs when the signed-in user changes.
   useEffect(() => {
-    listMyPhoneNumbers()
-      .then((rows) =>
-        setNums(
-          rows.map((r) => ({
-            id: r.id,
-            number: r.phone_number,
-            area: areaOf(r.phone_number),
-            profile: 'Unassigned',
-            pl: null,
-            code: null,
-            from: null,
-            tags: r.label ? [['neutral', r.label]] : undefined
-          }))
-        )
-      )
+    listUserPhoneNumbers()
+      .then((rows) => setNums(rows.map(rowToPhoneNum)))
       .catch(() => setNums([]))
-  }, [])
+  }, [user?.id])
 
   // Real workspace profiles for the "Assign to profile" popover.
   useEffect(() => {
@@ -129,19 +137,19 @@ export function Phone(): React.ReactElement {
       {showAdd && (
         <AddNumbersDialog
           onClose={() => setShowAdd(false)}
-          onSubmit={({ number, label }) => {
+          onSubmit={async ({ number, label }) => {
+            if (!user) throw new Error('You must be signed in to add a number.')
+            const row = await addUserPhoneNumber({
+              userId: user.id,
+              workspaceId,
+              phoneNumber: number,
+              label
+            })
+            // Reflect the saved row; replace any existing entry for the same
+            // number (upsert may have updated a prior row's label).
             setNums((prev) => [
-              {
-                id: `local-${number}`,
-                number,
-                area: areaOf(number),
-                profile: 'Unassigned',
-                pl: null,
-                code: null,
-                from: null,
-                tags: label ? [['neutral', label]] : undefined
-              },
-              ...prev
+              rowToPhoneNum(row),
+              ...prev.filter((n) => n.id !== row.id && n.number !== row.phone_number)
             ])
             show('success', `Added ${number}`)
           }}
