@@ -44,7 +44,13 @@ async function debug(_req: VercelRequest, res: VercelResponse): Promise<void> {
   ]
   const present: Record<string, boolean> = {}
   for (const k of REQUIRED) present[k] = Boolean(process.env[k])
-  res.status(200).json({ present, allPresent: REQUIRED.every((k) => present[k]), node: process.version })
+  // Also report the Vercel KV_* aliases + whether the relay resolves Redis.
+  const kv = {
+    KV_REST_API_URL: Boolean(process.env.KV_REST_API_URL),
+    KV_REST_API_TOKEN: Boolean(process.env.KV_REST_API_TOKEN),
+  }
+  const { relayConfigured } = await import('../_lib/env.js')
+  res.status(200).json({ present, kv, relayConfigured: relayConfigured(), node: process.version })
 }
 
 /** Derive the sub-route from the actual URL path, not the dynamic param —

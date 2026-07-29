@@ -15,8 +15,18 @@ export const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?
 export const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY ?? ''
 
 // Upstash Redis REST — the command bus + presence store.
-export const UPSTASH_REDIS_REST_URL = (process.env.UPSTASH_REDIS_REST_URL ?? '').replace(/\/+$/, '')
-export const UPSTASH_REDIS_REST_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN ?? ''
+//
+// Vercel's Upstash/KV Marketplace integration injects the REST credentials under
+// KV_REST_API_URL / KV_REST_API_TOKEN (Vercel KV is Upstash under the hood — the
+// same REST API). Accept either the canonical UPSTASH_* names or Vercel's KV_*
+// names so the integration works without manual env renaming.
+export const UPSTASH_REDIS_REST_URL = (
+  process.env.UPSTASH_REDIS_REST_URL ??
+  process.env.KV_REST_API_URL ??
+  ''
+).replace(/\/+$/, '')
+export const UPSTASH_REDIS_REST_TOKEN =
+  process.env.UPSTASH_REDIS_REST_TOKEN ?? process.env.KV_REST_API_TOKEN ?? ''
 
 // ── Canonical OAuth / MCP strings (must match exactly, no trailing slash) ──
 export const ISSUER = PUBLIC_BASE_URL
