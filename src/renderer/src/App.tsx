@@ -23,6 +23,7 @@ import { SignIn } from './pages/SignIn'
 import { SignUp } from './pages/SignUp'
 import { ForgotPassword } from './pages/ForgotPassword'
 import { ResetPassword } from './pages/ResetPassword'
+import OAuthConsent from './pages/OAuthConsent'
 import { NoWorkspace } from './pages/NoWorkspace'
 import { AcceptInvite } from './pages/AcceptInvite'
 import { AuthCallback } from './pages/AuthCallback'
@@ -121,6 +122,10 @@ function App(): React.ReactElement {
           <Route path="/auth/callback" element={<AuthCallback />} />
           {/* Invitees can preview the invite before authenticating. */}
           <Route path="/invite/:token" element={<AcceptInvite />} />
+          {/* MCP OAuth consent hit while logged out: remember the return URL
+              (rid included) and send the user to sign in; RedirectAuthRoutes
+              brings them back to /oauth/consent afterward. */}
+          <Route path="/oauth/consent" element={<RememberAndSignIn />} />
           <Route path="*" element={<Navigate to="/signin" replace />} />
         </Routes>
       </div>
@@ -134,6 +139,17 @@ function App(): React.ReactElement {
     return (
       <div className="flex flex-col h-screen w-screen overflow-hidden">
         <ResetPassword />
+      </div>
+    )
+  }
+
+  // MCP OAuth consent. Handled before the workspace gates: a freshly-signed-up
+  // user (no workspace yet) can still authorize a Claude connector. Requires
+  // only a login session, which we have here.
+  if (pathname === '/oauth/consent') {
+    return (
+      <div className="flex flex-col h-screen w-screen overflow-hidden">
+        <OAuthConsent />
       </div>
     )
   }
@@ -179,9 +195,31 @@ function App(): React.ReactElement {
   )
 }
 
+// Logged out and asked for /oauth/consent: remember where to return (rid and
+// all), then send to sign-in. Consumed by RedirectAuthRoutes after login.
+const OAUTH_RETURN_KEY = 'tg-oauth-return'
+function RememberAndSignIn(): React.ReactElement {
+  try {
+    sessionStorage.setItem(OAUTH_RETURN_KEY, window.location.pathname + window.location.search)
+  } catch {
+    /* private mode — the flow still works, just no auto-return */
+  }
+  return <Navigate to="/signin" replace />
+}
+
 function RedirectAuthRoutes(): React.ReactElement | null {
   const { pathname, search } = useLocation()
   if (pathname === '/signin' || pathname === '/signup') {
+    // Highest priority: return to a pending OAuth consent the user was sent to
+    // sign in for.
+    let oauthReturn: string | null = null
+    try {
+      oauthReturn = sessionStorage.getItem(OAUTH_RETURN_KEY)
+      if (oauthReturn) sessionStorage.removeItem(OAUTH_RETURN_KEY)
+    } catch {
+      /* ignore */
+    }
+    if (oauthReturn) return <Navigate to={oauthReturn} replace />
     // Preserve an in-flight invitation: bounce to the accept flow, not the app.
     const invite = new URLSearchParams(search).get('invite')
     return <Navigate to={invite ? `/invite/${invite}` : '/profiles'} replace />

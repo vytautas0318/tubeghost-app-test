@@ -1,6 +1,6 @@
 import * as React from 'react'
 import { useState } from 'react'
-import { User, Fingerprint, Globe, Bell, Lock, CreditCard } from 'lucide-react'
+import { User, Fingerprint, Globe, Bell, Lock, CreditCard, Sparkles } from 'lucide-react'
 import { ToastView, useToast } from '@/components/Toast'
 import { GeneralPanel } from './settings/GeneralPanel'
 import { FingerprintPanel } from './settings/FingerprintPanel'
@@ -8,6 +8,7 @@ import { NetworkPanel } from './settings/NetworkPanel'
 import { NotificationsPanel } from './settings/NotificationsPanel'
 import { SecurityPanel } from './settings/SecurityPanel'
 import { BillingPanel } from './settings/BillingPanel'
+import { ClaudePanel } from './settings/ClaudePanel'
 
 const NAV: [string, React.ReactNode, string][] = [
   ['general', <User key="g" size={16} />, 'General'],
@@ -15,6 +16,7 @@ const NAV: [string, React.ReactNode, string][] = [
   ['network', <Globe key="n" size={16} />, 'Network'],
   ['notifications', <Bell key="no" size={16} />, 'Notifications'],
   ['security', <Lock key="s" size={16} />, 'Security'],
+  ['claude', <Sparkles key="c" size={16} />, 'Claude'],
   ['billing', <CreditCard key="b" size={16} />, 'Billing']
 ]
 
@@ -49,6 +51,7 @@ export function Settings(): React.ReactElement {
             {sn === 'network' && <NetworkPanel onToast={t} />}
             {sn === 'notifications' && <NotificationsPanel onToast={t} />}
             {sn === 'security' && <SecurityPanel onToast={t} />}
+            {sn === 'claude' && <ClaudePanel onToast={t} />}
             {sn === 'billing' && <BillingPanel onToast={t} />}
           </div>
         </div>
