@@ -173,9 +173,12 @@ begin
   end loop;
 
   -- Opportunistic cleanup of stale codes for this user (keeps the table small
-  -- without relying on pg_cron).
+  -- without relying on pg_cron). Qualify expires_at with the table name — the
+  -- RETURNS TABLE OUT parameter is also named expires_at, so a bare reference is
+  -- ambiguous (error 42702).
   delete from public.pairing_codes
-   where user_id = p_user_id and expires_at < now();
+   where public.pairing_codes.user_id = p_user_id
+     and public.pairing_codes.expires_at < now();
 
   code := v_code;
   expires_at := v_expires;
