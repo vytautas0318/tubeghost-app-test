@@ -78,6 +78,25 @@ export function AddProxiesPanel({
     [validParsed, enriched, requireAuthCheck]
   )
 
+  // Rows that were checked but failed the auth/connect test. We split out
+  // connect/timeout failures specifically: those often mean the *checker*
+  // (a cloud edge function on a shifting IP) couldn't reach an
+  // IP-allowlisted proxy that works fine from the user's own machine —
+  // not that the proxy is broken. In that case "uncheck auth" is the fix.
+  const failedChecks = useMemo(() => {
+    let auth = 0
+    let reachability = 0
+    for (const p of validParsed) {
+      const e = enriched[`${p.host}:${p.port}`]
+      if (e?.status !== 'enriched') continue
+      const t = e.test
+      if (!t || t.ok !== false) continue
+      if (t.stage === 'connect' || t.stage === 'timeout') reachability += 1
+      else auth += 1
+    }
+    return { auth, reachability, total: auth + reachability }
+  }, [validParsed, enriched])
+
   const onCheckProxies = (): void => {
     void runChecks(parsed, { authTest: true })
   }
@@ -224,6 +243,28 @@ export function AddProxiesPanel({
           </div>
         </div>
 
+        {/* Explain why nothing is ready when checks failed on reachability —
+            the common "checker can't reach an IP-allowlisted proxy" case. */}
+        {requireAuthCheck && readyToInsert.length === 0 && failedChecks.reachability > 0 && (
+          <div className="text-xs text-[var(--t2)] bg-[var(--red-soft)] border border-[var(--red)]/20 rounded-lg px-3 py-2 space-y-1">
+            <p>
+              <strong className="text-[var(--t1)]">
+                {failedChecks.reachability} {failedChecks.reachability === 1 ? 'proxy' : 'proxies'} couldn&apos;t
+                be reached
+              </strong>{' '}
+              by the checker. If your provider allowlists by IP, the cloud checker&apos;s IP
+              isn&apos;t on the list — the proxy may still work from your machine.
+            </p>
+            <button
+              type="button"
+              onClick={() => setRequireAuthCheck(false)}
+              className="underline text-[var(--red)] hover:text-[var(--red-hover)]"
+            >
+              Add without requiring the auth check to pass
+            </button>
+          </div>
+        )}
+
         {submitError && (
           <div className="text-xs text-[var(--red)] bg-[var(--red-soft)] border border-[var(--red)]/20 rounded-lg px-3 py-2">
             {submitError}
@@ -235,6 +276,15 @@ export function AddProxiesPanel({
           readyCount={readyToInsert.length}
           running={running}
           submitting={submitting}
+          disabledReason={
+            readyToInsert.length > 0
+              ? undefined
+              : failedChecks.total > 0
+                ? `${failedChecks.total} ${failedChecks.total === 1 ? 'proxy' : 'proxies'} failed the auth check — resolve or uncheck "Require auth check" above`
+                : requireAuthCheck
+                  ? 'Click "Check proxies" first — a proxy is only ready once its auth check passes'
+                  : 'Paste at least one valid proxy'
+          }
           onCancel={onClose}
           onCheck={onCheckProxies}
           onSubmit={onSubmit}

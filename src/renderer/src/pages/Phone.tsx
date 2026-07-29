@@ -11,6 +11,7 @@ import { useWorkspace } from '@/store/workspace'
 import { type PhoneNum, type ProfileOpt } from './phone/phoneData'
 import { NumbersPanel } from './phone/NumbersPanel'
 import { RecentSms } from './phone/RecentSms'
+import { AddNumbersDialog } from './phone/AddNumbersDialog'
 
 // Derive a display area label from the number's country/area code (best-effort;
 // US +1 numbers show their 3-digit area code).
@@ -26,6 +27,7 @@ export function Phone(): React.ReactElement {
   // project and read by matching the logged-in email (RLS, migration 0039).
   const [nums, setNums] = useState<PhoneNum[]>([])
   const [profileOpts, setProfileOpts] = useState<ProfileOpt[]>([])
+  const [showAdd, setShowAdd] = useState(false)
   const workspaceId = useWorkspace((s) => s.current?.workspace_id ?? null)
   const { toast, show } = useToast()
   const navigate = useNavigate()
@@ -73,11 +75,7 @@ export function Phone(): React.ReactElement {
             </p>
           </div>
           <div className="phead-actions">
-            <Button
-              variant="primary"
-              icon={<Plus size={15} />}
-              onClick={() => window.open('https://dash.tubeproxies.com/phone-numbers', '_blank')}
-            >
+            <Button variant="primary" icon={<Plus size={15} />} onClick={() => setShowAdd(true)}>
               Add numbers
             </Button>
           </div>
@@ -128,6 +126,27 @@ export function Phone(): React.ReactElement {
           </span>
         </div>
       </div>
+      {showAdd && (
+        <AddNumbersDialog
+          onClose={() => setShowAdd(false)}
+          onSubmit={({ number, label }) => {
+            setNums((prev) => [
+              {
+                id: `local-${number}`,
+                number,
+                area: areaOf(number),
+                profile: 'Unassigned',
+                pl: null,
+                code: null,
+                from: null,
+                tags: label ? [['neutral', label]] : undefined
+              },
+              ...prev
+            ])
+            show('success', `Added ${number}`)
+          }}
+        />
+      )}
       <ToastView toast={toast} position="bottom-center" />
     </div>
   )

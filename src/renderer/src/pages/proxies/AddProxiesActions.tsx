@@ -9,6 +9,7 @@ export function AddProxiesActions({
   readyCount,
   running,
   submitting,
+  disabledReason,
   onCancel,
   onCheck,
   onSubmit
@@ -17,6 +18,7 @@ export function AddProxiesActions({
   readyCount: number
   running: boolean
   submitting: boolean
+  disabledReason?: string
   onCancel: () => void
   onCheck: () => void
   onSubmit: () => void
@@ -60,6 +62,7 @@ export function AddProxiesActions({
       <button
         onClick={onSubmit}
         disabled={submitting || readyCount === 0}
+        title={readyCount === 0 ? disabledReason : undefined}
         className="px-3 py-1.5 text-sm font-medium bg-[var(--red)] text-white rounded-lg hover:bg-[var(--red-hover)] disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5"
       >
         {submitting ? (
