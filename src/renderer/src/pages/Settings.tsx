@@ -1,5 +1,6 @@
 import * as React from 'react'
 import { useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { User, Fingerprint, Globe, Bell, Lock, CreditCard, Sparkles } from 'lucide-react'
 import { ToastView, useToast } from '@/components/Toast'
 import { GeneralPanel } from './settings/GeneralPanel'
@@ -20,10 +21,26 @@ const NAV: [string, React.ReactNode, string][] = [
   ['billing', <CreditCard key="b" size={16} />, 'Billing']
 ]
 
+const TAB_IDS = new Set(NAV.map(([id]) => id))
+
 export function Settings(): React.ReactElement {
-  const [sn, setSn] = useState('general')
+  // Deep-linkable tab: /settings?tab=claude opens the Claude tab directly (e.g.
+  // the desktop app links here to pair). Unknown/absent → General.
+  const [params, setParams] = useSearchParams()
+  const initialTab = params.get('tab')
+  const [sn, setSn] = useState(initialTab && TAB_IDS.has(initialTab) ? initialTab : 'general')
   const { toast, show } = useToast()
   const t = (kind: 'success' | 'error' | 'info', msg: string): void => show(kind, msg)
+
+  const selectTab = (id: string): void => {
+    setSn(id)
+    // Keep the URL in sync so a refresh/share stays on the same tab.
+    setParams((prev) => {
+      const next = new URLSearchParams(prev)
+      next.set('tab', id)
+      return next
+    })
+  }
 
   return (
     <div className="flex-1 min-h-0 overflow-auto">
@@ -38,7 +55,7 @@ export function Settings(): React.ReactElement {
         <div className="set-grid">
           <nav className="set-nav">
             {NAV.map(([id, icon, label]) => (
-              <div key={id} className={'sn' + (sn === id ? ' on' : '')} onClick={() => setSn(id)}>
+              <div key={id} className={'sn' + (sn === id ? ' on' : '')} onClick={() => selectTab(id)}>
                 {icon}
                 {label}
               </div>
