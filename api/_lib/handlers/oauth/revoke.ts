@@ -6,8 +6,8 @@
 // (revoking an unknown token is not an error).
 
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { relayConfigured } from '../_lib/env.js'
-import { revokeChain, splitRefreshToken } from '../_lib/oauth-store.js'
+import { relayConfigured } from '../../env.js'
+import { revokeChain, splitRefreshToken } from '../../oauth-store.js'
 
 function parseBody(req: VercelRequest): Record<string, string> {
   if (typeof req.body === 'string') {

@@ -11,9 +11,9 @@
 // Response: { deviceId, token, refreshToken } | { error }
 
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { relayConfigured } from '../_lib/env.js'
-import { patchDevice } from '../_lib/db.js'
-import { authenticateRefresh, hashToken, mintTokenPair } from '../_lib/device-token.js'
+import { relayConfigured } from '../../env.js'
+import { patchDevice } from '../../db.js'
+import { authenticateRefresh, hashToken, mintTokenPair } from '../../device-token.js'
 
 function parseBody(req: VercelRequest): Record<string, unknown> {
   try {

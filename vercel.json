@@ -4,8 +4,7 @@
   "outputDirectory": "dist",
   "functions": {
     "api/mcp/index.ts": { "maxDuration": 60, "includeFiles": "lib/mcp/**" },
-    "api/mcp-debug.ts": { "includeFiles": "lib/mcp/**" },
-    "api/agent/poll.ts": { "maxDuration": 60 }
+    "api/agent/[action].ts": { "maxDuration": 60 }
   },
   "rewrites": [
     {

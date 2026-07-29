@@ -8,8 +8,8 @@
 // Response: 201 { client_id, redirect_uris, token_endpoint_auth_method, ... }
 
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { relayConfigured } from '../_lib/env.js'
-import { putClient, randomId, type OAuthClient } from '../_lib/oauth-store.js'
+import { relayConfigured } from '../../env.js'
+import { putClient, randomId, type OAuthClient } from '../../oauth-store.js'
 
 function parseBody(req: VercelRequest): Record<string, unknown> {
   try {

@@ -6,7 +6,7 @@
 // authorization server to use. `resource` MUST equal the token audience exactly.
 
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { ISSUER, MCP_RESOURCE, relayConfigured } from '../_lib/env.js'
+import { ISSUER, MCP_RESOURCE, relayConfigured } from '../../env.js'
 
 export default function handler(_req: VercelRequest, res: VercelResponse): void {
   res.setHeader('Cache-Control', 'no-store')

@@ -5,7 +5,7 @@
 // Every URL is derived from PUBLIC_BASE_URL — never hardcoded.
 
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { ISSUER, PUBLIC_BASE_URL, relayConfigured } from '../_lib/env.js'
+import { ISSUER, PUBLIC_BASE_URL, relayConfigured } from '../../env.js'
 
 export default function handler(_req: VercelRequest, res: VercelResponse): void {
   res.setHeader('Cache-Control', 'no-store')

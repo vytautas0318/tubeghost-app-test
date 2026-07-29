@@ -14,8 +14,8 @@
 //        code_challenge, code_challenge_method=S256, resource
 
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { PUBLIC_BASE_URL, relayConfigured } from '../_lib/env.js'
-import { getClient, putRequest, randomId } from '../_lib/oauth-store.js'
+import { PUBLIC_BASE_URL, relayConfigured } from '../../env.js'
+import { getClient, putRequest, randomId } from '../../oauth-store.js'
 
 function q(req: VercelRequest, k: string): string {
   const v = req.query[k]

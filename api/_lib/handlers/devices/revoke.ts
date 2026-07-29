@@ -13,10 +13,10 @@
 // Response: { ok: true } | { error }
 
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { relayConfigured } from '../_lib/env.js'
-import { requireSession } from '../_lib/session.js'
-import { revokeDevice } from '../_lib/db.js'
-import { dropDeviceState } from '../_lib/bus.js'
+import { relayConfigured } from '../../env.js'
+import { requireSession } from '../../session.js'
+import { revokeDevice } from '../../db.js'
+import { dropDeviceState } from '../../bus.js'
 
 export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   res.setHeader('Cache-Control', 'no-store')

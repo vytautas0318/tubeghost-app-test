@@ -12,11 +12,11 @@
 // second identity system.
 
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { relayConfigured } from '../../_lib/env.js'
-import { requireSession } from '../../_lib/session.js'
-import { getClient, getRequest, delRequest, putCode, randomId, type AuthCode } from '../../_lib/oauth-store.js'
-import { listDevices } from '../../_lib/db.js'
-import { onlineSet } from '../../_lib/bus.js'
+import { relayConfigured } from '../../env.js'
+import { requireSession } from '../../session.js'
+import { getClient, getRequest, delRequest, putCode, randomId, type AuthCode } from '../../oauth-store.js'
+import { listDevices } from '../../db.js'
+import { onlineSet } from '../../bus.js'
 
 function parseBody(req: VercelRequest): Record<string, unknown> {
   try {

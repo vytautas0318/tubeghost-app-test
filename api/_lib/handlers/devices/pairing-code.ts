@@ -7,9 +7,9 @@
 // Response: { code, expiresAt } | { error }
 
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { relayConfigured } from '../_lib/env.js'
-import { requireSession } from '../_lib/session.js'
-import { mintPairingCode } from '../_lib/db.js'
+import { relayConfigured } from '../../env.js'
+import { requireSession } from '../../session.js'
+import { mintPairingCode } from '../../db.js'
 
 export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   res.setHeader('Cache-Control', 'no-store')

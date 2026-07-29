@@ -10,10 +10,10 @@
 //                         writeEnabled, createdAt }] } | { error }
 
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { relayConfigured } from '../_lib/env.js'
-import { requireSession } from '../_lib/session.js'
-import { listDevices } from '../_lib/db.js'
-import { onlineSet } from '../_lib/bus.js'
+import { relayConfigured } from '../../env.js'
+import { requireSession } from '../../session.js'
+import { listDevices } from '../../db.js'
+import { onlineSet } from '../../bus.js'
 
 export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   res.setHeader('Cache-Control', 'no-store')

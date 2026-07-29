@@ -12,8 +12,8 @@
 
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { createHash, timingSafeEqual } from 'node:crypto'
-import { relayConfigured, MCP_RESOURCE } from '../_lib/env.js'
-import { signAccessToken, jwtConfigured } from '../_lib/jwt.js'
+import { relayConfigured, MCP_RESOURCE } from '../../env.js'
+import { signAccessToken, jwtConfigured } from '../../jwt.js'
 import {
   consumeCode,
   consumeRefresh,
@@ -24,7 +24,7 @@ import {
   sha256hex,
   splitRefreshToken,
   type RefreshRecord,
-} from '../_lib/oauth-store.js'
+} from '../../oauth-store.js'
 
 function parseBody(req: VercelRequest): Record<string, string> {
   // The token endpoint receives application/x-www-form-urlencoded per spec;

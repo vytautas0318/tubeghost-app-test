@@ -68,7 +68,7 @@ const challengeFor = (verifier: string): string => b64url(createHash('sha256').u
 
 describe('authorization_code + PKCE', () => {
   it('MISSING PKCE: authorize rejects a request without code_challenge', async () => {
-    const { default: authorize } = await import('../../oauth/authorize.js')
+    const { default: authorize } = await import('../handlers/oauth/authorize.js')
     // Register a client + redirect first.
     const { putClient } = await import('../oauth-store.js')
     await putClient({
@@ -94,7 +94,7 @@ describe('authorization_code + PKCE', () => {
 
   it('exchanges a code with the right verifier and rejects a wrong one', async () => {
     const { putCode } = await import('../oauth-store.js')
-    const { default: token } = await import('../../oauth/token.js')
+    const { default: token } = await import('../handlers/oauth/token.js')
     const verifier = 'the-real-verifier-string-1234567890'
     await putCode({
       code: 'code123',
@@ -136,7 +136,7 @@ describe('authorization_code + PKCE', () => {
 
   it('a consumed code cannot be replayed', async () => {
     const { putCode } = await import('../oauth-store.js')
-    const { default: token } = await import('../../oauth/token.js')
+    const { default: token } = await import('../handlers/oauth/token.js')
     const verifier = 'v'.repeat(40)
     await putCode({
       code: 'once',
@@ -159,7 +159,7 @@ describe('authorization_code + PKCE', () => {
 describe('refresh rotation + reuse-revokes-chain', () => {
   async function mintInitial(): Promise<string> {
     const { putCode } = await import('../oauth-store.js')
-    const { default: token } = await import('../../oauth/token.js')
+    const { default: token } = await import('../handlers/oauth/token.js')
     const verifier = 'r'.repeat(40)
     await putCode({ code: 'rc', client_id: 'c1', user_id: 'u', redirect_uri: 'https://claude.ai/cb', scope: 'mcp', code_challenge: challengeFor(verifier), resource: null })
     const cap = mkRes()
@@ -168,7 +168,7 @@ describe('refresh rotation + reuse-revokes-chain', () => {
   }
 
   it('rotates: old refresh token stops working, new one works', async () => {
-    const { default: token } = await import('../../oauth/token.js')
+    const { default: token } = await import('../handlers/oauth/token.js')
     const rt1 = await mintInitial()
 
     const r1 = mkRes()
@@ -184,7 +184,7 @@ describe('refresh rotation + reuse-revokes-chain', () => {
   })
 
   it('REPLAY of a rotated token revokes the whole chain', async () => {
-    const { default: token } = await import('../../oauth/token.js')
+    const { default: token } = await import('../handlers/oauth/token.js')
     const rt1 = await mintInitial()
 
     const r1 = mkRes()

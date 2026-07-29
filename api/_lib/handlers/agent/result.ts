@@ -13,10 +13,10 @@
 // Response: { ok: true } | { error }
 
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { relayConfigured } from '../_lib/env.js'
-import { updateCommandLog } from '../_lib/db.js'
-import { putResult } from '../_lib/bus.js'
-import { authOrReject, parseBody } from '../_lib/agent-http.js'
+import { relayConfigured } from '../../env.js'
+import { updateCommandLog } from '../../db.js'
+import { putResult } from '../../bus.js'
+import { authOrReject, parseBody } from '../../agent-http.js'
 
 export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   res.setHeader('Cache-Control', 'no-store')

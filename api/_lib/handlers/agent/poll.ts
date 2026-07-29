@@ -18,18 +18,16 @@
 // Response: { commands: [{ command_id, tool, args, deadline }] } | { error }
 
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { relayConfigured } from '../_lib/env.js'
-import { patchDevice } from '../_lib/db.js'
+import { relayConfigured } from '../../env.js'
+import { patchDevice } from '../../db.js'
 import {
   claimCommand,
   dequeueCommand,
   pollLimiter,
   touchPresence,
   type QueuedCommand,
-} from '../_lib/bus.js'
-import { authOrReject, parseBody } from '../_lib/agent-http.js'
-
-export const config = { maxDuration: 60 }
+} from '../../bus.js'
+import { authOrReject, parseBody } from '../../agent-http.js'
 
 const MAX_WAIT_MS = 25_000
 const TICK_MS = 300
