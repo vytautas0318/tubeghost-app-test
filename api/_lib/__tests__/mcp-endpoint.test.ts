@@ -1,7 +1,9 @@
 import { describe, it, expect, vi, beforeAll } from 'vitest'
 import type { VercelRequest, VercelResponse } from '@vercel/node'
+import { FakeRedis } from './fake-redis.js'
 
-vi.mock('@upstash/redis', () => ({ Redis: class { constructor() { return {} } } }))
+const redis = new FakeRedis()
+vi.mock('@upstash/redis', () => ({ Redis: class { constructor() { return redis } } }))
 vi.mock('@upstash/ratelimit', () => ({
   Ratelimit: class {
     static slidingWindow(): object {
@@ -11,6 +13,14 @@ vi.mock('@upstash/ratelimit', () => ({
       return { success: true }
     }
   },
+}))
+// No devices → create_profile takes the NO_DEVICE error-envelope path.
+vi.mock('../db.js', () => ({
+  listDevices: vi.fn(async () => []),
+  getDeviceById: vi.fn(async () => null),
+  insertCommandLog: vi.fn(async () => {}),
+  updateCommandLog: vi.fn(async () => {}),
+  getCommandLogById: vi.fn(async () => null),
 }))
 
 beforeAll(() => {
@@ -101,5 +111,33 @@ describe('/api/mcp endpoint', () => {
     )
     expect(state.status).toBe(200)
     expect((state.body as { result: { serverInfo: { name: string } } }).result.serverInfo.name).toBe('tubeghost')
+  })
+
+  // REGRESSION: a tools/call that returns the { error } envelope (or a running
+  // handle) must NOT be rejected by output-schema validation. Registering a
+  // strict outputSchema previously turned every non-success shape into an
+  // "internal response mismatch" (the create_profile bug).
+  it('create_profile with no device returns a clean tool result (NO_DEVICE), not a validation error', async () => {
+    const { signAccessToken } = await import('../jwt.js')
+    const { token } = signAccessToken('user-1', 'mcp')
+    const mod = await import('../../mcp/index.js')
+    const { state, res } = makeRes()
+    await mod.default(
+      mkReq(
+        { jsonrpc: '2.0', id: 5, method: 'tools/call', params: { name: 'create_profile', arguments: { name: 'X' } } },
+        { authorization: `Bearer ${token}` },
+      ),
+      res,
+    )
+    expect(state.status).toBe(200)
+    const body = state.body as {
+      result?: { isError?: boolean; structuredContent?: { error?: { code: string } } }
+      error?: unknown
+    }
+    // It must be a normal tool RESULT (not a JSON-RPC protocol error).
+    expect(body.error).toBeUndefined()
+    expect(body.result).toBeDefined()
+    // And it carries the structured NO_DEVICE error the executor produced.
+    expect(body.result?.structuredContent?.error?.code).toBe('NO_DEVICE')
   })
 })
