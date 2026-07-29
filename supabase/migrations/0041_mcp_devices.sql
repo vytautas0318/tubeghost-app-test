@@ -63,15 +63,18 @@ create unique index if not exists devices_refresh_token_hash_idx
 -- Owner may read + manage their own devices from the dashboard (anon key +
 -- these policies). Insert happens server-side via service_role (pairing), so
 -- there is deliberately no INSERT policy for authenticated users.
+drop policy if exists "devices.select own" on public.devices;
 create policy "devices.select own" on public.devices for select
   using (user_id = (select auth.uid()));
 
 -- Rename + toggle write_enabled from the dashboard. Cannot change ownership or
 -- token hashes: those columns are managed only by the service-role endpoints.
+drop policy if exists "devices.update own" on public.devices;
 create policy "devices.update own" on public.devices for update
   using (user_id = (select auth.uid()))
   with check (user_id = (select auth.uid()));
 
+drop policy if exists "devices.delete own" on public.devices;
 create policy "devices.delete own" on public.devices for delete
   using (user_id = (select auth.uid()));
 
@@ -92,6 +95,7 @@ create index if not exists pairing_codes_expires_at_idx on public.pairing_codes 
 
 -- The user may read their own outstanding codes (to display / regenerate).
 -- Creation + consumption are service-role only, so no insert/update policies.
+drop policy if exists "pairing_codes.select own" on public.pairing_codes;
 create policy "pairing_codes.select own" on public.pairing_codes for select
   using (user_id = (select auth.uid()));
 
@@ -121,6 +125,7 @@ create index if not exists command_log_device_id_idx on public.command_log (devi
 
 -- The user may read their own audit trail (dashboard shows the last 50).
 -- Writes are service-role only from the relay.
+drop policy if exists "command_log.select own" on public.command_log;
 create policy "command_log.select own" on public.command_log for select
   using (user_id = (select auth.uid()));
 

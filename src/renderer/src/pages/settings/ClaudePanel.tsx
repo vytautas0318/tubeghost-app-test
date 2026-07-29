@@ -13,10 +13,12 @@ import {
 import { CommandLogTable, DeviceList } from './ClaudeDevices'
 import { type Toast } from './settingsCommon'
 
-// The connector URL is env-driven server-side; the dashboard shows the same
-// canonical string. VITE_PUBLIC_BASE_URL mirrors the server's PUBLIC_BASE_URL
-// so the UI never hardcodes the host (falls back to the current origin).
-const BASE = (import.meta.env.VITE_PUBLIC_BASE_URL as string | undefined)?.replace(/\/+$/, '') || window.location.origin
+// The connector URL. The dashboard is served from the SAME origin as the MCP
+// endpoint, so window.location.origin is always correct — no env var needed.
+// (An optional VITE_PUBLIC_BASE_URL override is honored only if it looks like a
+// real URL, so a mis-set value like the literal var name can't leak through.)
+const ENV_BASE = import.meta.env.VITE_PUBLIC_BASE_URL as string | undefined
+const BASE = (ENV_BASE && /^https?:\/\//.test(ENV_BASE) ? ENV_BASE : window.location.origin).replace(/\/+$/, '')
 const CONNECTOR_URL = `${BASE}/api/mcp`
 
 export function ClaudePanel({ onToast }: { onToast: Toast }): React.ReactElement {

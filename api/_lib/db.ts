@@ -48,7 +48,12 @@ export async function mintPairingCode(userId: string): Promise<{ code: string; e
     method: 'POST',
     body: JSON.stringify({ p_user_id: userId }),
   })
-  if (!res.ok) throw new Error(`mint_pairing_code failed (${res.status})`)
+  if (!res.ok) {
+    // Include PostgREST's error body so a missing RPC / migration surfaces
+    // clearly (e.g. "Could not find the function public.mint_pairing_code").
+    const detail = await res.text().catch(() => '')
+    throw new Error(`mint_pairing_code failed (${res.status}): ${detail.slice(0, 300)}`)
+  }
   const rows = (await res.json()) as { code: string; expires_at: string }[]
   const row = rows[0]
   if (!row) throw new Error('mint_pairing_code returned no row')

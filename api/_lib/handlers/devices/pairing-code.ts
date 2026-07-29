@@ -32,7 +32,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
   try {
     const { code, expiresAt } = await mintPairingCode(session.userId)
     res.status(200).json({ code, expiresAt })
-  } catch {
-    res.status(500).json({ error: 'server_error' })
+  } catch (e) {
+    // TEMP: surface the underlying reason (missing migration/RPC, etc.) so the
+    // dashboard shows something actionable instead of a bare "server_error".
+    res.status(500).json({ error: 'server_error', detail: e instanceof Error ? e.message : String(e) })
   }
 }
