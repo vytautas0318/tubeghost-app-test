@@ -5,7 +5,7 @@
 // COPY-SYNCABLE: no Next.js / server / Node imports. zod v4 only.
 
 import type { z } from 'zod'
-import * as S from './schemas'
+import * as S from './schemas.js'
 
 // ── Tool metadata ───────────────────────────────────────────────────
 // annotations mirror the MCP spec's tool hints. `mode` decides whether the

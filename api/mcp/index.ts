@@ -1,33 +1,25 @@
-// POST /api/mcp — the Streamable HTTP MCP endpoint (stateless).
+// POST /api/mcp — the MCP endpoint (stateless JSON-RPC over HTTP).
 //
-// Stateless per the Phase-4 brief: a FRESH McpServer + transport per request,
-// sessionIdGenerator undefined, connect → handleRequest(req, res, req.body) →
-// close both on response end. Serverless has no cross-invocation memory, so no
-// session state is held in module scope.
+// Transport: rather than StreamableHTTPServerTransport (which streams SSE by
+// bridging Node req/res → Web Request/Response and crashes on @vercel/node), we
+// dispatch each JSON-RPC message against a fresh McpServer via the SDK's
+// InMemoryTransport and return the reply as plain JSON. This is fully stateless
+// (a new server per request; tools/list + tools/call work without a prior
+// initialize handshake) and needs no HTTP streaming.
 //
-// Auth: OAuth 2.1 Bearer (JWT, aud = MCP_RESOURCE). An unauthenticated/invalid
-// request gets the spec-required 401 + WWW-Authenticate so Claude starts the
-// OAuth flow. Origin is validated (DNS-rebinding protection).
-//
-// GET + DELETE: 405 with a JSON-RPC error body (allowed in stateless mode).
+// Auth: OAuth 2.1 Bearer (JWT, aud = MCP_RESOURCE). Unauthenticated → 401 +
+// WWW-Authenticate so Claude starts the OAuth flow. Origin is validated.
+// GET/DELETE: 405 (no sessions to stream/tear down).
 
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
 import { relayConfigured } from '../_lib/env.js'
 import { jwtConfigured } from '../_lib/jwt.js'
 import { authenticateMcp, originAllowed, unauthorized } from '../_lib/mcp-auth.js'
-import { buildServer } from '../_lib/mcp-server.js'
+// buildServer + dispatchOne (which pull in the MCP SDK + lib/mcp contract) are
+// imported LAZILY inside the handler so a bundling/resolution failure surfaces
+// as a catchable JSON error instead of an uncatchable module-load crash.
 
 export const config = { maxDuration: 60 }
-
-function methodNotAllowed(res: VercelResponse): void {
-  res.status(405).json({
-    jsonrpc: '2.0',
-    error: { code: -32000, message: 'Method not allowed. Use POST for Streamable HTTP.' },
-    id: null,
-  })
-}
 
 export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   res.setHeader('Cache-Control', 'no-store')
@@ -36,42 +28,43 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     res.status(500).json({ jsonrpc: '2.0', error: { code: -32603, message: 'server not configured' }, id: null })
     return
   }
-
-  // DNS-rebinding protection: reject unexpected browser origins.
   if (!originAllowed(req)) {
     res.status(403).json({ jsonrpc: '2.0', error: { code: -32001, message: 'origin not allowed' }, id: null })
     return
   }
-
-  // Streamable HTTP is POST-only in stateless mode. GET (SSE stream) and DELETE
-  // (session teardown) have no meaning without sessions → 405.
   if (req.method !== 'POST') {
-    methodNotAllowed(res)
+    res.status(405).json({ jsonrpc: '2.0', error: { code: -32000, message: 'Use POST.' }, id: null })
     return
   }
 
-  // OAuth Bearer. On failure, the 401 + WWW-Authenticate bootstraps the flow.
   const claims = authenticateMcp(req)
   if (!claims) {
     unauthorized(res)
     return
   }
 
-  // Fresh server + transport per request (stateless). Tools close over the
-  // authenticated userId so a tool can NEVER act for another user.
-  const server: McpServer = buildServer(claims.sub)
-  const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined })
-
-  res.on('close', () => {
-    void transport.close()
-    void server.close()
-  })
+  // @vercel/node pre-parses the JSON body. Accept a single request or a batch.
+  const body = req.body as unknown
+  const isBatch = Array.isArray(body)
+  const messages = (isBatch ? body : [body]) as { jsonrpc: '2.0'; id?: string | number | null; method?: string }[]
 
   try {
-    await server.connect(transport)
-    // @vercel/node pre-parses the body; pass it as the 3rd arg so the transport
-    // does not try to re-read the (already-consumed) request stream.
-    await transport.handleRequest(req, res, req.body)
+    const { buildServer } = await import('../_lib/mcp-server.js')
+    const { dispatchOne } = await import('../_lib/mcp-dispatch.js')
+    const results = []
+    for (const message of messages) {
+      // Fresh server per message so a tool always closes over THIS user only.
+      const server = buildServer(claims.sub)
+      const reply = await dispatchOne(server, message)
+      if (reply) results.push(reply)
+    }
+
+    // Notifications produce no reply → 202 with no body (per JSON-RPC).
+    if (results.length === 0) {
+      res.status(202).end()
+      return
+    }
+    res.status(200).json(isBatch ? results : results[0])
   } catch {
     if (!res.headersSent) {
       res.status(500).json({ jsonrpc: '2.0', error: { code: -32603, message: 'internal error' }, id: null })

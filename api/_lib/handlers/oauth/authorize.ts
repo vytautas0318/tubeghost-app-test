@@ -93,7 +93,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
   })
 
   // 4. Hand off to the SPA consent route. It resolves the Supabase session
-  //    (redirecting to /signin if needed) and calls /api/oauth/authorize/approve.
+  //    (redirecting to /signin if needed) and calls /api/oauth/approve.
   const consent = new URL('/oauth/consent', PUBLIC_BASE_URL)
   consent.searchParams.set('rid', rid)
   res.redirect(302, consent.toString())

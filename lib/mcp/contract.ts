@@ -14,6 +14,6 @@
 // whole lib/mcp/ folder into the Electron repo verbatim to stay in sync.
 // ─────────────────────────────────────────────────────────────────────────
 
-export * from './errors'
-export * from './schemas'
-export * from './registry'
+export * from './errors.js'
+export * from './schemas.js'
+export * from './registry.js'

@@ -4,7 +4,7 @@
 // the request and 302s here with ?rid=<pending request id>. This page reuses the
 // EXISTING Supabase login session: if the user isn't signed in, App-level gating
 // bounces to /signin and returns here afterward. On approve we POST to
-// /api/oauth/authorize/approve (with the Supabase access token) and navigate to
+// /api/oauth/approve (with the Supabase access token) and navigate to
 // the returned client redirect (back to Claude).
 
 import * as React from 'react'
@@ -22,6 +22,27 @@ const SCOPE_LABEL: Record<string, string> = {
   mcp: 'Control your TubeGhost desktop app — create, launch, and manage browser profiles',
 }
 
+// Build a detailed, non-swallowed error from a failed response: HTTP status +
+// the server's error code/description (JSON) or the raw body (HTML/text). Logs
+// the raw body to the console so an unexpected shape is always diagnosable.
+interface ServerError {
+  error?: string
+  error_description?: string
+}
+async function readError(res: Response, rid: string): Promise<string> {
+  const raw = await res.text().catch(() => '')
+  let parsed: ServerError | null = null
+  try {
+    parsed = raw ? (JSON.parse(raw) as ServerError) : null
+  } catch {
+    // Not JSON (e.g. an HTML 404 page) — log the raw body for diagnosis.
+    console.error('[oauth/consent] non-JSON error response', { status: res.status, rid, raw: raw.slice(0, 500) })
+  }
+  const code = parsed?.error ?? (res.status === 404 ? 'not_found' : 'request_failed')
+  const desc = parsed?.error_description ? ` — ${parsed.error_description}` : ''
+  return `HTTP ${res.status} · ${code}${desc} (rid: ${rid || 'none'})`
+}
+
 export default function OAuthConsent(): React.ReactElement {
   const { session } = useAuth()
   const token = session?.access_token
@@ -34,18 +55,40 @@ export default function OAuthConsent(): React.ReactElement {
   // A missing rid is derived, not stateful — no effect needed for it.
   const error = !rid ? 'Missing authorization request.' : fetchError
 
+  // No session yet: send the user to sign in and return to THIS consent URL
+  // (rid preserved) rather than erroring. RedirectAuthRoutes honors the stash.
+  function goSignIn(): void {
+    try {
+      sessionStorage.setItem('tg-oauth-return', window.location.pathname + window.location.search)
+    } catch {
+      /* private mode — flow still works, just no auto-return */
+    }
+    window.location.href = '/signin'
+  }
+
   React.useEffect(() => {
-    if (!token || !rid) return
+    if (!rid) return
+    if (!token) {
+      goSignIn()
+      return
+    }
     let cancelled = false
     void (async () => {
       try {
-        const res = await fetch(`/api/oauth/authorize/approve?rid=${encodeURIComponent(rid)}`, {
+        const res = await fetch(`/api/oauth/approve?rid=${encodeURIComponent(rid)}`, {
           headers: { Authorization: `Bearer ${token}` },
         })
-        if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? 'request_failed')
+        if (res.status === 401) {
+          goSignIn()
+          return
+        }
+        if (!res.ok) {
+          if (!cancelled) setFetchError(await readError(res, rid))
+          return
+        }
         if (!cancelled) setDetails((await res.json()) as Details)
       } catch (e) {
-        if (!cancelled) setFetchError(e instanceof Error ? e.message : 'Could not load the request.')
+        if (!cancelled) setFetchError(e instanceof Error ? `Network error: ${e.message}` : 'Could not load the request.')
       }
     })()
     return () => {
@@ -58,16 +101,24 @@ export default function OAuthConsent(): React.ReactElement {
     setSubmitting(true)
     setFetchError(null)
     try {
-      const res = await fetch('/api/oauth/authorize/approve', {
+      const res = await fetch('/api/oauth/approve', {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ rid }),
       })
-      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? 'approve_failed')
+      if (res.status === 401) {
+        goSignIn()
+        return
+      }
+      if (!res.ok) {
+        setFetchError(await readError(res, rid))
+        setSubmitting(false)
+        return
+      }
       const { redirect } = (await res.json()) as { redirect: string }
       window.location.href = redirect // back to Claude with ?code=...
     } catch (e) {
-      setFetchError(e instanceof Error ? e.message : 'Could not authorize.')
+      setFetchError(e instanceof Error ? `Network error: ${e.message}` : 'Could not authorize.')
       setSubmitting(false)
     }
   }

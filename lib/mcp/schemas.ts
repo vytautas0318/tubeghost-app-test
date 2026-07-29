@@ -7,7 +7,7 @@
 // COPY-SYNCABLE: no Next.js / server / Node imports. zod v4 only.
 
 import { z } from 'zod'
-import { errorSchema } from './errors'
+import { errorSchema } from './errors.js'
 
 // ── Reusable primitives ─────────────────────────────────────────────
 export const deviceIdSchema = z

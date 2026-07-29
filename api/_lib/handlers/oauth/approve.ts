@@ -1,4 +1,4 @@
-// /api/oauth/authorize/approve — the SPA consent step.
+// /api/oauth/approve — the SPA consent step.
 //
 // GET  ?rid=...  → { clientName, scopes, devices: [{name, online}] }
 //                  Details for the consent screen. Session-authed.
