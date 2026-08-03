@@ -8,8 +8,7 @@
 // This module is a thin typed wrapper; RLS is the source of truth. Mirrors the
 // error-classification style already used inline in pages/members/useMembersData.
 
-import type { SupabaseClient } from '@supabase/supabase-js'
-import { getSupabase } from '@/lib/supabase'
+import { getSupabase, type GhostClient } from '@/lib/supabase'
 
 export type MemberStatus = 'pending' | 'active' | 'disabled' | 'removed'
 
@@ -30,7 +29,7 @@ export type MemberFailure =
 
 export type MemberResult = { ok: true } | MemberFailure
 
-function client(): SupabaseClient {
+function client(): GhostClient {
   const c = getSupabase()
   if (!c)
     throw new Error('Supabase not configured — check VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY')

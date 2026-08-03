@@ -1,22 +1,23 @@
 import * as React from 'react'
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, ChevronRight, Users } from 'lucide-react'
+import { ExternalLink, ChevronRight, Users } from 'lucide-react'
 import { Button } from '@/components/ui'
 import { ToastView, useToast } from '@/components/Toast'
 import { PoweredByTubeProxies } from '@/components/PoweredByTubeProxies'
 import { listProfiles } from '@/lib/profiles'
 import {
-  listUserPhoneNumbers,
-  addUserPhoneNumber,
-  type UserPhoneNumberRow
-} from '@/lib/userPhoneNumbers'
+  getPhoneOverview,
+  openPhonePurchase,
+  type PhoneNumberRow,
+  type PhoneOverview,
+  type PhoneSmsRow
+} from '@/lib/phone-numbers'
 import { useWorkspace } from '@/store/workspace'
 import { useAuth } from '@/store/auth'
-import { type PhoneNum, type ProfileOpt } from './phone/phoneData'
+import { type PhoneNum, type Sms, type ProfileOpt } from './phone/phoneData'
 import { NumbersPanel } from './phone/NumbersPanel'
 import { RecentSms } from './phone/RecentSms'
-import { AddNumbersDialog } from './phone/AddNumbersDialog'
 
 // Derive a display area label from the number's country/area code (best-effort;
 // US +1 numbers show their 3-digit area code).
@@ -27,12 +28,14 @@ function areaOf(number: string): string {
   return 'US'
 }
 
-// Map a persisted user_phone_numbers row to the page's PhoneNum view model.
-function rowToPhoneNum(r: UserPhoneNumberRow): PhoneNum {
+// Map a TubeProxies-provisioned number to the page's PhoneNum view model.
+// `phone_number` is null while the number is still provisioning upstream.
+function rowToPhoneNum(r: PhoneNumberRow): PhoneNum {
+  const number = r.phone_number ?? 'Provisioning…'
   return {
     id: r.id,
-    number: r.phone_number,
-    area: areaOf(r.phone_number),
+    number,
+    area: r.phone_number ? areaOf(r.phone_number) : '—',
     profile: 'Unassigned',
     pl: null,
     code: null,
@@ -41,23 +44,45 @@ function rowToPhoneNum(r: UserPhoneNumberRow): PhoneNum {
   }
 }
 
+// Map a received SMS to the inbox view model. `parsed_code` is withheld
+// (locked) when the phone subscription is past due — show a placeholder
+// rather than an empty cell so the reason is visible.
+function smsToView(m: PhoneSmsRow): Sms {
+  return {
+    id: m.id,
+    from: m.from_number ?? 'Unknown',
+    body: m.body,
+    code: m.locked ? '•••••' : (m.parsed_code ?? ''),
+    time: new Date(m.received_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    pl: 'yt'
+  }
+}
+
 export function Phone(): React.ReactElement {
-  // User-added numbers persist in public.user_phone_numbers (owner-based RLS,
-  // migration 0043). TubeProxies-provisioned numbers are a separate source.
+  // Numbers, SMS and the subscription all come from TubeProxies'
+  // public.phone_numbers / phone_sms / phone_subscriptions via the
+  // `phone-numbers` Edge Function. READ-ONLY here — buying and cancelling
+  // happen on dash.tubeproxies.com. The old user-typed store
+  // (ghost.user_phone_numbers) was dropped in the DB consolidation.
+  const [overview, setOverview] = useState<PhoneOverview | null>(null)
   const [nums, setNums] = useState<PhoneNum[]>([])
   const [profileOpts, setProfileOpts] = useState<ProfileOpt[]>([])
-  const [showAdd, setShowAdd] = useState(false)
   const workspaceId = useWorkspace((s) => s.current?.workspace_id ?? null)
   const user = useAuth((s) => s.user)
   const { toast, show } = useToast()
   const navigate = useNavigate()
 
-  // Load the caller's saved numbers from public.user_phone_numbers (owner-based
-  // RLS). Re-runs when the signed-in user changes.
+  // Load the caller's phone overview. Re-runs when the signed-in user changes.
   useEffect(() => {
-    listUserPhoneNumbers()
-      .then((rows) => setNums(rows.map(rowToPhoneNum)))
-      .catch(() => setNums([]))
+    getPhoneOverview()
+      .then((o) => {
+        setOverview(o)
+        setNums(o.phone_numbers.map(rowToPhoneNum))
+      })
+      .catch(() => {
+        setOverview(null)
+        setNums([])
+      })
   }, [user?.id])
 
   // Real workspace profiles for the "Assign to profile" popover.
@@ -70,6 +95,11 @@ export function Phone(): React.ReactElement {
 
   const active = nums.filter((n) => n.profile !== 'Unassigned').length
   const teamGap = Math.max(0, 5 - nums.length)
+  const sub = overview?.subscription ?? null
+  const inbox = (overview?.sms ?? []).map(smsToView)
+  const renewal = sub?.current_period_end
+    ? new Date(sub.current_period_end).toLocaleDateString()
+    : 'No subscription'
 
   return (
     <div className="flex-1 min-h-0 overflow-auto">
@@ -83,8 +113,14 @@ export function Phone(): React.ReactElement {
             </p>
           </div>
           <div className="phead-actions">
-            <Button variant="primary" icon={<Plus size={15} />} onClick={() => setShowAdd(true)}>
-              Add numbers
+            {/* Commerce lives on the TubeProxies dashboard — deep-link out
+                rather than reimplementing Stripe here. */}
+            <Button
+              variant="primary"
+              icon={<ExternalLink size={15} />}
+              onClick={openPhonePurchase}
+            >
+              {nums.length > 0 ? 'Manage numbers' : 'Get numbers'}
             </Button>
           </div>
         </div>
@@ -100,7 +136,7 @@ export function Phone(): React.ReactElement {
           <div className="ps-div" />
           <div className="ps-stat">
             <div className="ps-k">Next renewal</div>
-            <div className="ps-v">{nums.length > 0 ? '—' : 'No subscription'}</div>
+            <div className="ps-v">{renewal}</div>
           </div>
           <div className="ps-div" />
           <div className="ps-stat">
@@ -114,7 +150,7 @@ export function Phone(): React.ReactElement {
 
         <div className="phone-grid">
           <NumbersPanel nums={nums} setNums={setNums} profileOpts={profileOpts} show={show} />
-          <RecentSms inbox={[]} onCopied={(val) => show('success', `Copied ${val}`)} />
+          <RecentSms inbox={inbox} onCopied={(val) => show('success', `Copied ${val}`)} />
         </div>
 
         <div className="phone-team">
@@ -134,27 +170,6 @@ export function Phone(): React.ReactElement {
           </span>
         </div>
       </div>
-      {showAdd && (
-        <AddNumbersDialog
-          onClose={() => setShowAdd(false)}
-          onSubmit={async ({ number, label }) => {
-            if (!user) throw new Error('You must be signed in to add a number.')
-            const row = await addUserPhoneNumber({
-              userId: user.id,
-              workspaceId,
-              phoneNumber: number,
-              label
-            })
-            // Reflect the saved row; replace any existing entry for the same
-            // number (upsert may have updated a prior row's label).
-            setNums((prev) => [
-              rowToPhoneNum(row),
-              ...prev.filter((n) => n.id !== row.id && n.number !== row.phone_number)
-            ])
-            show('success', `Added ${number}`)
-          }}
-        />
-      )}
       <ToastView toast={toast} position="bottom-center" />
     </div>
   )

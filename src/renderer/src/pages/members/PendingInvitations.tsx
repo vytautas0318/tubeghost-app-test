@@ -4,7 +4,7 @@ import { Check, Copy, Link2, RefreshCw, Send, X } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
 import { Badge } from '@/components/ui'
 import { invitationLink } from '@/lib/invitations'
-import type { MutateInvitationResult } from '@/lib/invitations'
+import type { MutateInvitationResult, ResendInvitationResult } from '@/lib/invitations'
 import type { InvitationView } from './useInvitationsData'
 
 function StatusChip({ inv }: { inv: InvitationView }): React.ReactElement {
@@ -24,7 +24,7 @@ export function PendingInvitations({
 }: {
   invitations: InvitationView[]
   canManage: boolean
-  onResend: (id: string) => Promise<MutateInvitationResult>
+  onResend: (id: string) => Promise<ResendInvitationResult>
   onRevoke: (id: string) => Promise<MutateInvitationResult>
   onNotify: (kind: 'success' | 'error' | 'info', text: string) => void
 }): React.ReactElement | null {
@@ -59,6 +59,32 @@ export function PendingInvitations({
           ? 'You do not have permission to manage invitations.'
           : r.message || 'Action failed.'
     )
+  }
+
+  // Resend is delivery-aware: report whether the email actually went out, and
+  // on failure nudge toward the copy-link fallback (the invite row still has a
+  // fresh valid link).
+  const runResend = async (id: string): Promise<void> => {
+    setBusyId(id)
+    const r = await onResend(id)
+    setBusyId(null)
+    if (!r.ok) {
+      onNotify(
+        'error',
+        r.reason === 'permission'
+          ? 'You do not have permission to manage invitations.'
+          : r.message || 'Resend failed.'
+      )
+      return
+    }
+    if (r.delivery === 'sent') {
+      onNotify('success', 'Invitation email resent.')
+    } else {
+      onNotify(
+        'info',
+        "Link refreshed, but the email couldn't be delivered — copy the link and share it directly."
+      )
+    }
   }
 
   return (
@@ -110,7 +136,7 @@ export function PendingInvitations({
                     className="kebab"
                     style={{ opacity: 1 }}
                     disabled={busyId === inv.id}
-                    onClick={() => void run(inv.id, onResend, 'Invitation resent.')}
+                    onClick={() => void runResend(inv.id)}
                   >
                     {inv.status === 'expired' || inv.isExpired ? (
                       <RefreshCw size={15} />

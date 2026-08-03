@@ -84,7 +84,7 @@ export function useAutomationsData(
         'postgres_changes',
         {
           event: '*',
-          schema: 'public',
+          schema: 'ghost',
           table: 'automations',
           filter: `workspace_id=eq.${workspaceId}`
         },
@@ -94,7 +94,7 @@ export function useAutomationsData(
         'postgres_changes',
         {
           event: '*',
-          schema: 'public',
+          schema: 'ghost',
           table: 'automation_runs',
           filter: `workspace_id=eq.${workspaceId}`
         },

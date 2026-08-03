@@ -8,7 +8,8 @@ import type {
   CreateInvitationResult,
   InvitationRow,
   InviteInput,
-  MutateInvitationResult
+  MutateInvitationResult,
+  ResendInvitationResult
 } from '@/lib/invitations'
 
 export interface InvitationView extends InvitationRow {
@@ -24,7 +25,7 @@ export interface UseInvitationsDataResult {
   refresh: () => void
   create: (input: InviteInput) => Promise<CreateInvitationResult>
   revoke: (id: string) => Promise<MutateInvitationResult>
-  resend: (id: string) => Promise<MutateInvitationResult>
+  resend: (id: string) => Promise<ResendInvitationResult>
 }
 
 export function useInvitationsData(

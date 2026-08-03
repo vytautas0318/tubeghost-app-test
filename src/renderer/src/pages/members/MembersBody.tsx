@@ -1,5 +1,6 @@
 import * as React from 'react'
 import { useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { AlertCircle, Clock, ShieldAlert, UserPlus } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
 import { useWorkspace } from '@/store/workspace'
@@ -30,6 +31,7 @@ import type { SortKey, StatusFilter, ViewMember } from './types'
 export function MembersBody(): React.ReactElement {
   const workspace = useWorkspace((s) => s.current)
   const { user } = useAuth()
+  const navigate = useNavigate()
   const { toast, show } = useToast(4500)
 
   const canViewMembers = useHasAnyPermission('members.view', 'roles.view')
@@ -56,6 +58,25 @@ export function MembersBody(): React.ReactElement {
 
   const wsName = workspace?.workspace_name ?? 'Workspace'
   const ownerCount = useMemo(() => view.filter((v) => v.roleName === 'Owner').length, [view])
+
+  // Rank lookup + the caller's own rank. Lower number = more powerful (Owner=0).
+  // Used to stop a member acting on someone at or above their own rank — e.g. an
+  // Admin must not be able to change the role of, suspend, or remove the Owner.
+  const hierarchyByRoleId = useMemo(() => new Map(roles.map((r) => [r.id, r.hierarchy])), [roles])
+  const myHierarchy = useMemo(() => {
+    const me = view.find((v) => v.userId === user?.id)
+    const h = me?.roleId ? hierarchyByRoleId.get(me.roleId) : undefined
+    // Unknown rank → treat as the weakest possible, so we fail closed.
+    return h ?? Number.MAX_SAFE_INTEGER
+  }, [view, user?.id, hierarchyByRoleId])
+
+  // True when the caller outranks this row strictly (my rank is a smaller
+  // number). Rows at or above the caller's rank are read-only to them.
+  const outranks = (m: (typeof view)[number]): boolean => {
+    const target = m.roleId ? hierarchyByRoleId.get(m.roleId) : undefined
+    if (target === undefined) return false // unknown target rank → fail closed
+    return myHierarchy < target
+  }
   const rows = useMemo(
     () => filterAndSortMembers(view, query, statusFilter, sort),
     [view, query, statusFilter, sort]
@@ -159,17 +180,19 @@ export function MembersBody(): React.ReactElement {
               proxyCount={stats.proxyCounts.get(m.userId) ?? 0}
               actions={{
                 isMe: user?.id === m.userId,
-                canAssignRole: canAssignRole && !isPreview,
-                canRemove: canRemove && !isPreview,
-                canDisable: canDisable && !isPreview,
+                // Each action additionally requires outranking the target row,
+                // so nobody can act on a peer or a superior (e.g. an Admin on
+                // the Owner). Mirrors the can_user_modify_role hierarchy rule.
+                canAssignRole: canAssignRole && !isPreview && outranks(m),
+                canRemove: canRemove && !isPreview && outranks(m),
+                canDisable: canDisable && !isPreview && outranks(m),
                 isSoleOwner: m.roleName === 'Owner' && ownerCount === 1,
                 busyRole: actions.pendingChange === m.userId,
                 onRoleChange: (roleId) => void actions.changeRole(m, roleId),
                 onRemove: () => setConfirmRemove(m),
                 onDisable: () => void actions.setStatus(m, 'disabled'),
                 onEnable: () => void actions.setStatus(m, 'active'),
-                onViewProfiles: () => show('info', 'Assigned-profiles view is coming soon.'),
-                onReset2fa: () => show('info', 'Two-factor reset is coming soon.')
+                onViewProfiles: () => navigate(`/profiles?assignedTo=${m.userId}`)
               }}
             />
           ))}
@@ -213,7 +236,21 @@ export function MembersBody(): React.ReactElement {
           onClose={() => setInviteOpen(false)}
           onSubmit={async (input) => {
             const r = await invites.create(input)
-            if (r.ok) show('success', `Invitation sent to ${input.email}.`)
+            if (r.ok) {
+              // Distinguish a real delivery from "invited but the email didn't
+              // send" — the latter used to show a false success and leave the
+              // invitee waiting for a mail that never arrived. On failure, point
+              // the owner at the copy-link fallback in the pending list.
+              if (r.delivery === 'sent') {
+                show('success', `Invitation email sent to ${input.email}.`)
+              } else {
+                show(
+                  'info',
+                  `${input.email} was invited, but the email couldn't be delivered. ` +
+                    `Copy the invite link from the list below and share it directly.`
+                )
+              }
+            }
             return r
           }}
         />

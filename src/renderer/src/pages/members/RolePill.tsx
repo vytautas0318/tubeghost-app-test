@@ -4,6 +4,10 @@ import { Check, ChevronDown } from 'lucide-react'
 import { roleIcon, roleTone } from './roleVisuals'
 import type { AppRoleRow, ViewMember } from './types'
 
+// Rank of the top-level Owner role (seeded at 0 in 0002_full_schema.sql; lower
+// = more powerful). Roles at this rank are excluded from the assign menu.
+const OWNER_HIERARCHY = 0
+
 /**
  * RolePill — the member's role as a TubeGhost pill; when the caller may
  * assign roles it opens an "ASSIGN ROLE" dropdown of the workspace's roles,
@@ -34,6 +38,16 @@ export function RolePill({
     onOpenChange?.(v)
   }
   const wrapRef = useRef<HTMLDivElement>(null)
+
+  // Owner is never assignable from this menu — handing over ownership is a
+  // deliberate transfer, not a role tweak, and letting it happen here would
+  // silently create a second owner (the server's hierarchy guard permits it,
+  // since an Owner's rank is <= Owner's rank).
+  //
+  // Matched on `hierarchy`, never on the name: role names are configuration and
+  // are workspace-editable, so a name check would break on a renamed or custom
+  // top-rank role. See CLAUDE.md — "NEVER check role names".
+  const assignableRoles = roles.filter((r) => r.hierarchy > OWNER_HIERARCHY)
 
   useEffect(() => {
     if (!open) return
@@ -78,7 +92,7 @@ export function RolePill({
           }}
         >
           <div className="role-list-h">Assign role</div>
-          {roles.map((r) => {
+          {assignableRoles.map((r) => {
             const active = r.id === member.roleId
             return (
               <button

@@ -45,7 +45,7 @@ export function useProfilesListData(workspaceId: string | null): UseProfilesList
       .channel(`profiles:${workspaceId}`)
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'profiles', filter: `workspace_id=eq.${workspaceId}` },
+        { event: '*', schema: 'ghost', table: 'browser_profiles', filter: `workspace_id=eq.${workspaceId}` },
         (payload) => {
           setRows((prev) => {
             if (payload.eventType === 'INSERT') return [payload.new as ProfileRow, ...prev]

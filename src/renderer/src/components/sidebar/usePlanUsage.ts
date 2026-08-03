@@ -20,7 +20,7 @@ export function usePlanUsage(
     }
     let cancelled = false
     void c
-      .from('profiles')
+      .from('browser_profiles')
       .select('*', { count: 'exact', head: true })
       .eq('workspace_id', workspaceId)
       .then(({ count }) => {

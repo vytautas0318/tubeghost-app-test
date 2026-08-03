@@ -1,7 +1,8 @@
 import * as React from 'react'
-import { useState } from 'react'
-import { Link, Navigate } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { Link, Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from '@/store/auth'
+import { stashPendingInvite, takePendingInvite } from '@/lib/pendingInvite'
 import { GoogleButton } from '@/components/GoogleButton'
 import {
   AuthShell,
@@ -21,8 +22,22 @@ export function SignIn(): React.ReactElement {
   const [resent, setResent] = useState(false)
   const [busy, setBusy] = useState(false)
   const [googleBusy, setGoogleBusy] = useState(false)
+  const { search } = useLocation()
 
-  if (user) return <Navigate to="/profiles" replace />
+  // Persist an in-flight invite token so it survives auth — including the
+  // Google sign-in redirect, which drops URL params. Without this, a teammate
+  // who signs in with Google lands on /profiles and the accept screen is never
+  // reached (the InvitationBanner is the only fallback).
+  useEffect(() => {
+    const invite = new URLSearchParams(search).get('invite')
+    if (invite) stashPendingInvite(invite)
+  }, [search])
+
+  // On successful auth, resume the invite accept flow if one was pending.
+  if (user) {
+    const invite = takePendingInvite()
+    return <Navigate to={invite ? `/invite/${invite}` : '/profiles'} replace />
+  }
 
   const onSubmit = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault()

@@ -20,7 +20,7 @@ const env = Object.fromEntries(
 
 const url = env.VITE_SUPABASE_URL
 const anon = env.VITE_SUPABASE_ANON_KEY
-const supabase = createClient(url, anon)
+const supabase = createClient(url, anon, { db: { schema: 'ghost' } })
 
 const [email, password] = process.argv.slice(2)
 if (email && password) {

@@ -2,11 +2,10 @@
 // per-profile results as the engine progresses, and finalize on completion.
 // RLS gates create/update on automations.edit (see 0026_automations.sql).
 
-import type { SupabaseClient } from '@supabase/supabase-js'
-import { getSupabase } from '@/lib/supabase'
+import { getSupabase, type GhostClient } from '@/lib/supabase'
 import type { ProfileResult, RunStatus } from '../../../../shared/automations/types'
 
-function client(): SupabaseClient {
+function client(): GhostClient {
   const c = getSupabase()
   if (!c) throw new Error('Supabase not configured')
   return c

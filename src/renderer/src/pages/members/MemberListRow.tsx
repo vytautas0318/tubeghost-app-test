@@ -3,7 +3,6 @@ import { useEffect, useRef, useState } from 'react'
 import {
   Ban,
   CheckCircle2,
-  KeyRound,
   Layers as LayersIcon,
   MoreVertical,
   Trash2,
@@ -14,6 +13,10 @@ import { RolePill } from './RolePill'
 import { MemberStatusBadge } from './MemberStatusBadge'
 import { localPart } from './types'
 import type { AppRoleRow, ViewMember } from './types'
+
+// Worst-case kebab-menu height (5 items + padding). Used to decide whether the
+// menu has room to open downward, so the last row doesn't open off-screen.
+const MENU_MAX_HEIGHT = 220
 
 const PRESENCE_COLOR: Record<'on' | 'off', string> = {
   on: 'var(--green)',
@@ -69,8 +72,8 @@ export interface MemberRowActions {
   onRemove: () => void
   onDisable: () => void
   onEnable: () => void
-  onViewProfiles: () => void // stub — feature pending
-  onReset2fa: () => void // stub — feature pending
+  // Navigates to the Profiles page filtered to this member's assigned profiles.
+  onViewProfiles: () => void
 }
 
 export function MemberListRow({
@@ -89,6 +92,9 @@ export function MemberListRow({
   const [menuOpen, setMenuOpen] = useState(false)
   const [roleOpen, setRoleOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
+  // Flip the kebab menu above the button when it would overflow the viewport
+  // bottom — otherwise the last row's menu opens off-screen.
+  const [flipUp, setFlipUp] = useState(false)
   const name = member.displayName ?? localPart(member.email) ?? member.userId.slice(0, 8)
 
   useEffect(() => {
@@ -148,7 +154,16 @@ export function MemberListRow({
         style={{ display: 'flex', justifyContent: 'flex-end', position: 'relative' }}
       >
         {hasMenu && (
-          <button title="Member actions" className="kebab" onClick={() => setMenuOpen((v) => !v)}>
+          <button
+            title="Member actions"
+            className="kebab"
+            onClick={(e) => {
+              // Decide direction from the button's live position, before opening.
+              const r = e.currentTarget.getBoundingClientRect()
+              setFlipUp(window.innerHeight - r.bottom < MENU_MAX_HEIGHT)
+              setMenuOpen((v) => !v)
+            }}
+          >
             <MoreVertical size={15} />
           </button>
         )}
@@ -157,7 +172,7 @@ export function MemberListRow({
             className="role-list"
             style={{
               position: 'absolute',
-              top: 'calc(100% + 4px)',
+              ...(flipUp ? { bottom: 'calc(100% + 4px)' } : { top: 'calc(100% + 4px)' }),
               right: 0,
               zIndex: 80,
               minWidth: 210,
@@ -184,15 +199,6 @@ export function MemberListRow({
                 <UserCog size={14} /> Change role
               </button>
             )}
-            <button
-              className="mm-item"
-              onClick={() => {
-                setMenuOpen(false)
-                actions.onReset2fa()
-              }}
-            >
-              <KeyRound size={14} /> Reset 2FA
-            </button>
             {actions.canDisable && !actions.isMe && (
               <button
                 className="mm-item"

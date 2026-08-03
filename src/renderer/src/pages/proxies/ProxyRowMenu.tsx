@@ -8,7 +8,7 @@
 
 import * as React from 'react'
 import { useEffect, useRef, useState } from 'react'
-import { Eye, MoreVertical, Trash2, Zap } from 'lucide-react'
+import { Eye, MoreVertical, Trash2, UserPlus, Zap } from 'lucide-react'
 import { useHasPermission } from '@/lib/permissions'
 import type { ViewProxy } from './types'
 
@@ -16,15 +16,20 @@ export function ProxyRowMenu({
   proxy,
   onView,
   onTest,
-  onDelete
+  onDelete,
+  onAssign
 }: {
   proxy: ViewProxy
   onView: () => void
   onTest: () => void
   onDelete: () => void
+  onAssign: () => void
 }): React.ReactElement {
   const canTest = useHasPermission('proxies.test')
   const canDelete = useHasPermission('proxies.delete')
+  // Assigning a proxy writes the target profile row, so it's gated on the
+  // profile-edit permission (RLS is the real enforcement).
+  const canAssign = useHasPermission('profiles.edit')
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
@@ -76,6 +81,16 @@ export function ProxyRowMenu({
               onClick={() => {
                 setOpen(false)
                 onTest()
+              }}
+            />
+          )}
+          {canAssign && (
+            <Item
+              icon={UserPlus}
+              label="Assign to profile"
+              onClick={() => {
+                setOpen(false)
+                onAssign()
               }}
             />
           )}

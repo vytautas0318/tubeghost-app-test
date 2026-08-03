@@ -52,7 +52,7 @@ export function useBillingData(workspaceId: string | null, plan: string | null):
             .eq('plan_key', plan)
             .maybeSingle()
         : Promise.resolve({ data: null }),
-      count('profiles'),
+      count('browser_profiles'),
       count('workspace_members'),
       count('proxies')
     ])

@@ -38,7 +38,7 @@ export function useMemberStats(workspaceId: string | null, plan: string | null):
     let cancelled = false
 
     Promise.all([
-      supabase.from('profiles').select('created_by').eq('workspace_id', workspaceId),
+      supabase.from('browser_profiles').select('created_by').eq('workspace_id', workspaceId),
       supabase.from('proxies').select('created_by').eq('workspace_id', workspaceId),
       plan
         ? supabase.from('plans').select('member_seat_limit').eq('plan_key', plan).maybeSingle()

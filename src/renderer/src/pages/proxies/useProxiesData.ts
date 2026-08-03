@@ -2,13 +2,17 @@
 // realtime subscription, profile-count side queries, and basic mutations.
 // Keeps the page component focused on layout/state orchestration.
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { formatDistanceToNow } from 'date-fns'
 import {
   deleteProxy,
-  listMyProxies,
+  getProxySyncHealth,
   listProfileNumbersByProxy,
-  type ProxyRow
+  listProxies,
+  syncMyProxies,
+  type ProxyRow,
+  type ProxySyncIssue,
+  type SyncMyProxiesResult
 } from '@/lib/proxies'
 import { getSupabase } from '@/lib/supabase'
 import type { ViewProxy } from './types'
@@ -21,8 +25,14 @@ interface UseProxiesDataResult {
   lastSync: string | null
   loading: boolean
   error: string | null
+  syncIssues: ProxySyncIssue[]
   removeRow: (id: string) => Promise<void>
   insertLocal: (row: ProxyRow) => void
+  refresh: () => Promise<void>
+  // Pull the user's purchased proxies from TubeProxies, re-fetch rows, then
+  // check the server-side retry queue. Returns the pull outcome plus any
+  // still-stuck syncs so the UI can report a real, specific result.
+  syncNow: () => Promise<{ pull: SyncMyProxiesResult | null; issues: ProxySyncIssue[] }>
 }
 
 export function useProxiesData(workspaceId: string | null, enabled: boolean): UseProxiesDataResult {
@@ -30,6 +40,7 @@ export function useProxiesData(workspaceId: string | null, enabled: boolean): Us
   const [profileNumbers, setProfileNumbers] = useState<Record<string, number[]>>({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [syncIssues, setSyncIssues] = useState<ProxySyncIssue[]>([])
 
   // Initial load
   useEffect(() => {
@@ -39,16 +50,12 @@ export function useProxiesData(workspaceId: string | null, enabled: boolean): Us
     }
     let cancelled = false
     setLoading(true)
-    // Email-scoped: returns the user's own proxies (incl. TubeProxies purchases
-    // synced under their email), independent of the active workspace. See
-    // listMyProxies + RLS migration 0039.
-    listMyProxies()
+    listProxies(workspaceId)
       .then(async (data) => {
         if (cancelled) return
         setRows(data)
         setError(null)
-        // Profile-number assignments are per-workspace; only meaningful for
-        // proxies in the current workspace (cross-workspace purchases have none).
+        // One workspace-wide query is cheaper than one-per-proxy.
         try {
           const map = await listProfileNumbersByProxy(workspaceId)
           if (!cancelled) setProfileNumbers(map)
@@ -74,7 +81,7 @@ export function useProxiesData(workspaceId: string | null, enabled: boolean): Us
         'postgres_changes',
         {
           event: '*',
-          schema: 'public',
+          schema: 'ghost',
           table: 'proxies',
           filter: `workspace_id=eq.${workspaceId}`
         },
@@ -98,14 +105,29 @@ export function useProxiesData(workspaceId: string | null, enabled: boolean): Us
     }
   }, [workspaceId, enabled])
 
+  // host:port → set of distinct sources present, so we can flag the same
+  // endpoint appearing as BOTH a synced (tubeproxies) and a custom row.
+  const sourcesByEndpoint = useMemo(() => {
+    const m = new Map<string, Set<string>>()
+    for (const r of rows) {
+      const key = `${r.host.toLowerCase()}:${r.port}`
+      const set = m.get(key) ?? new Set<string>()
+      set.add(r.source)
+      m.set(key, set)
+    }
+    return m
+  }, [rows])
+
   const view: ViewProxy[] = useMemo(
     () =>
       rows.map((r) => {
         const numbers = profileNumbers[r.id] ?? []
+        const sources = sourcesByEndpoint.get(`${r.host.toLowerCase()}:${r.port}`)
         return {
           ...r,
           profileCount: numbers.length,
           profileNumbers: numbers,
+          duplicateOfOtherSource: (sources?.size ?? 0) > 1,
           expiresRelative: r.expires_at
             ? formatDistanceToNow(new Date(r.expires_at), { addSuffix: true })
             : null,
@@ -114,7 +136,7 @@ export function useProxiesData(workspaceId: string | null, enabled: boolean): Us
             : null
         }
       }),
-    [rows, profileNumbers]
+    [rows, profileNumbers, sourcesByEndpoint]
   )
 
   const countries = useMemo(() => {
@@ -146,10 +168,60 @@ export function useProxiesData(workspaceId: string | null, enabled: boolean): Us
     setRows((prev) => prev.filter((p) => p.id !== id))
   }
 
+  // Manual re-fetch (TubeProxies tab "Refresh"/"Sync now"). Re-pulls the
+  // workspace proxies + profile-number map; realtime keeps them fresh
+  // otherwise, so this is a user-triggered convenience, not the primary path.
+  const refresh = useCallback(async (): Promise<void> => {
+    if (!workspaceId || !enabled) return
+    const data = await listProxies(workspaceId)
+    setRows(data)
+    try {
+      setProfileNumbers(await listProfileNumbersByProxy(workspaceId))
+    } catch {
+      /* keep prior map */
+    }
+  }, [workspaceId, enabled])
+
   const insertLocal = (row: ProxyRow): void => {
     setRows((prev) => [row, ...prev])
     setProfileNumbers((prev) => ({ ...prev, [row.id]: [] }))
   }
 
-  return { rows, view, countries, counts, lastSync, loading, error, removeRow, insertLocal }
+  // "Sync now": PULL the user's purchased proxies from TubeProxies (on-demand
+  // edge function), then refresh the table and check the retry queue. Returns
+  // both the pull outcome and any still-stuck syncs so the UI can report a
+  // specific result instead of silently claiming success. A pull failure is
+  // non-fatal here (still refresh + report) — the caller inspects `pull`.
+  const syncNow = useCallback(async (): Promise<{
+    pull: SyncMyProxiesResult | null
+    issues: ProxySyncIssue[]
+  }> => {
+    let pull: SyncMyProxiesResult | null = null
+    let pullError: Error | null = null
+    try {
+      if (workspaceId) pull = await syncMyProxies(workspaceId)
+    } catch (e) {
+      pullError = e as Error
+    }
+    await refresh()
+    const issues = await getProxySyncHealth()
+    setSyncIssues(issues)
+    if (pullError) throw pullError
+    return { pull, issues }
+  }, [refresh, workspaceId])
+
+  return {
+    rows,
+    view,
+    countries,
+    counts,
+    lastSync,
+    loading,
+    error,
+    syncIssues,
+    removeRow,
+    insertLocal,
+    refresh,
+    syncNow
+  }
 }

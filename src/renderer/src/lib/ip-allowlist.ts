@@ -3,10 +3,9 @@
 // validated client-side before write; enforced server-side by
 // check_workspace_ip_access(). Includes an admin self-lockout guard.
 
-import type { SupabaseClient } from '@supabase/supabase-js'
-import { getSupabase } from '@/lib/supabase'
+import { getSupabase, type GhostClient } from '@/lib/supabase'
 
-function client(): SupabaseClient {
+function client(): GhostClient {
   const c = getSupabase()
   if (!c) throw new Error('Supabase not configured')
   return c

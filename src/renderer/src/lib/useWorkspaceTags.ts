@@ -46,7 +46,7 @@ export function useWorkspaceTags(workspaceId: string | null): UseWorkspaceTags {
       .channel(`tags:${workspaceId}:${instanceId}`)
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'tags', filter: `workspace_id=eq.${workspaceId}` },
+        { event: '*', schema: 'ghost', table: 'tags', filter: `workspace_id=eq.${workspaceId}` },
         (payload) => {
           setTags((prev) => {
             if (payload.eventType === 'INSERT') {

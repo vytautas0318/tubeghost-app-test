@@ -1,7 +1,8 @@
 import * as React from 'react'
-import { useState } from 'react'
-import { Link, Navigate } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { Link, Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from '@/store/auth'
+import { stashPendingInvite, takePendingInvite } from '@/lib/pendingInvite'
 import { GoogleButton } from '@/components/GoogleButton'
 import {
   AuthShell,
@@ -22,8 +23,19 @@ export function SignUp(): React.ReactElement {
   const [googleBusy, setGoogleBusy] = useState(false)
   const [confirmSent, setConfirmSent] = useState(false)
   const [alreadyRegistered, setAlreadyRegistered] = useState(false)
+  const { search } = useLocation()
 
-  if (user) return <Navigate to="/profiles" replace />
+  // Stash an in-flight invite token across auth (the Google redirect drops URL
+  // params) — see lib/pendingInvite + SignIn for the rationale.
+  useEffect(() => {
+    const invite = new URLSearchParams(search).get('invite')
+    if (invite) stashPendingInvite(invite)
+  }, [search])
+
+  if (user) {
+    const invite = takePendingInvite()
+    return <Navigate to={invite ? `/invite/${invite}` : '/profiles'} replace />
+  }
 
   const onSubmit = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault()

@@ -17,8 +17,10 @@ export function InviteDialog({
   onClose: () => void
   onSubmit: (input: InviteInput) => Promise<CreateInvitationResult>
 }): React.ReactElement {
-  // Owner role is never assignable via invite.
-  const assignable = roles.filter((r) => r.name !== 'Owner')
+  // Owner role is never assignable via invite. Matched on `hierarchy` (0 = the
+  // top rank) rather than the name — role names are workspace-editable config,
+  // so a renamed Owner would slip through a name check. See CLAUDE.md.
+  const assignable = roles.filter((r) => r.hierarchy > 0)
   const [email, setEmail] = useState('')
   const [roleId, setRoleId] = useState<string>(
     () => assignable.find((r) => r.name === 'Editor')?.id ?? assignable[0]?.id ?? ''

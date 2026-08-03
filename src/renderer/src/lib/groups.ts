@@ -1,7 +1,6 @@
 // Supabase groups data layer.
 
-import type { SupabaseClient } from '@supabase/supabase-js'
-import { getSupabase } from '@/lib/supabase'
+import { getSupabase, type GhostClient } from '@/lib/supabase'
 
 export interface GroupRow {
   id: string
@@ -24,7 +23,7 @@ export const PRESET_COLORS = [
 
 export const DEFAULT_GROUP_COLOR = PRESET_COLORS[5] // blue
 
-function client(): SupabaseClient {
+function client(): GhostClient {
   const c = getSupabase()
   if (!c) throw new Error('Supabase not configured — check VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY')
   return c
@@ -45,7 +44,7 @@ export async function countProfilesInGroup(
   groupId: string
 ): Promise<number> {
   const { count, error } = await client()
-    .from('profiles')
+    .from('browser_profiles')
     .select('id', { count: 'exact', head: true })
     .eq('workspace_id', workspaceId)
     .eq('group_id', groupId)
@@ -92,7 +91,7 @@ export async function assignProfileGroup(
   groupId: string | null
 ): Promise<void> {
   const { error } = await client()
-    .from('profiles')
+    .from('browser_profiles')
     .update({ group_id: groupId })
     .eq('id', profileId)
   if (error) throw error

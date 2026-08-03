@@ -4,8 +4,7 @@
 // truth for how a tag chip is painted. Names absent from this table fall back
 // to the legacy name-hash in tagColor() so old arrays keep rendering.
 
-import type { SupabaseClient } from '@supabase/supabase-js'
-import { getSupabase } from '@/lib/supabase'
+import { getSupabase, type GhostClient } from '@/lib/supabase'
 
 export interface TagRow {
   id: string
@@ -33,7 +32,7 @@ export const TAG_PRESET_COLORS = [
 
 export const DEFAULT_TAG_COLOR = TAG_PRESET_COLORS[5] // blue
 
-function client(): SupabaseClient {
+function client(): GhostClient {
   const c = getSupabase()
   if (!c)
     throw new Error('Supabase not configured — check VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY')

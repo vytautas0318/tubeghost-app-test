@@ -8,7 +8,9 @@ const env = Object.fromEntries(
     .map((l) => l.split('=').map((s) => s.trim()))
 )
 
-const supabase = createClient(env.VITE_SUPABASE_URL, env.VITE_SUPABASE_ANON_KEY)
+const supabase = createClient(env.VITE_SUPABASE_URL, env.VITE_SUPABASE_ANON_KEY, {
+  db: { schema: 'ghost' }
+})
 
 console.log('Querying public schema as anon (no auth) — should return empty arrays under RLS, not errors:')
 for (const t of ['workspaces', 'workspace_members']) {

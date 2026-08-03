@@ -77,7 +77,7 @@ export function useAuthData(workspaceId: string | null, canView: boolean): UseAu
         'postgres_changes',
         {
           event: '*',
-          schema: 'public',
+          schema: 'ghost',
           table: 'authenticator_tokens',
           filter: `workspace_id=eq.${workspaceId}`
         },

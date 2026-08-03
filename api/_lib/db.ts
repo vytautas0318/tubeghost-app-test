@@ -4,8 +4,24 @@
 // supabase-js: a handful of typed queries against the 0041 tables. Service-role
 // bypasses RLS, so EVERY function here takes a user_id and filters by it — the
 // caller must have already resolved+verified ownership (session or device token).
+//
+// SCHEMA: every table here (devices, pairing_codes, command_log) is TubeGhost's
+// and lives in the `ghost` schema of the shared TubeProxies project since the DB
+// consolidation. PostgREST selects the schema by header, not by path prefix —
+// see GHOST_SCHEMA_HEADERS below.
 
 import { SUPABASE_SERVICE_ROLE_KEY, SUPABASE_URL } from './env.js'
+
+// PostgREST reads `Accept-Profile` on GET/HEAD and `Content-Profile` on
+// POST/PATCH/PUT/DELETE. Sending both on every request is correct — the
+// irrelevant one is ignored — and means no call site has to remember which.
+//
+// `ghost` must be listed in the project's Exposed schemas, or PostgREST
+// answers 406 "The schema must be one of the following".
+const GHOST_SCHEMA_HEADERS = {
+  'Accept-Profile': 'ghost',
+  'Content-Profile': 'ghost',
+} as const
 
 async function rest(path: string, init: RequestInit = {}): Promise<Response> {
   return await fetch(`${SUPABASE_URL}/rest/v1${path}`, {
@@ -14,6 +30,7 @@ async function rest(path: string, init: RequestInit = {}): Promise<Response> {
       apikey: SUPABASE_SERVICE_ROLE_KEY,
       Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
       'Content-Type': 'application/json',
+      ...GHOST_SCHEMA_HEADERS,
       ...(init.headers ?? {}),
     },
   })
@@ -50,7 +67,7 @@ export async function mintPairingCode(userId: string): Promise<{ code: string; e
   })
   if (!res.ok) {
     // Include PostgREST's error body so a missing RPC / migration surfaces
-    // clearly (e.g. "Could not find the function public.mint_pairing_code").
+    // clearly (e.g. "Could not find the function ghost.mint_pairing_code").
     const detail = await res.text().catch(() => '')
     throw new Error(`mint_pairing_code failed (${res.status}): ${detail.slice(0, 300)}`)
   }

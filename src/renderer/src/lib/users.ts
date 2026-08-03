@@ -3,8 +3,7 @@
 // workspaces the caller belongs to. Backed by the get_workspace_user_details
 // SECURITY DEFINER RPC — see supabase/migrations/0004_user_details.sql.
 
-import type { SupabaseClient } from '@supabase/supabase-js'
-import { getSupabase } from '@/lib/supabase'
+import { getSupabase, type GhostClient } from '@/lib/supabase'
 import type { AvatarConfig } from '@/lib/avatar'
 
 export interface WorkspaceUserDetails {
@@ -18,7 +17,7 @@ export interface WorkspaceUserDetails {
   avatar_config: Partial<AvatarConfig> | null
 }
 
-function client(): SupabaseClient {
+function client(): GhostClient {
   const c = getSupabase()
   if (!c) throw new Error('Supabase not configured — check VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY')
   return c

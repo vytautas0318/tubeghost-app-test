@@ -7,8 +7,7 @@
 // assignment. (Local file import/unpacking was a desktop-only capability and
 // has been removed for the web app.)
 
-import type { SupabaseClient } from '@supabase/supabase-js'
-import { getSupabase } from '@/lib/supabase'
+import { getSupabase, type GhostClient } from '@/lib/supabase'
 
 export type ExtSourceType = 'web_store' | 'crx_upload'
 export type PermissionScope = 'minimal' | 'limited' | 'broad'
@@ -41,7 +40,7 @@ export interface ExtensionWithAssignment extends ExtensionRow {
   profileIds: string[]
 }
 
-function client(): SupabaseClient {
+function client(): GhostClient {
   const c = getSupabase()
   if (!c)
     throw new Error('Supabase not configured — check VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY')

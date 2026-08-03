@@ -4,8 +4,7 @@
 // which encrypts on enroll and decrypts to compute codes / reveal keys.
 // RLS gates rows by twofa.* permission keys (migration 0018).
 
-import type { SupabaseClient } from '@supabase/supabase-js'
-import { getSupabase } from '@/lib/supabase'
+import { getSupabase, type GhostClient } from '@/lib/supabase'
 
 export type AuthPlatform = 'yt' | 'ig' | 'tt' | 'x' | 'fb' | 'am' | 'other'
 
@@ -26,7 +25,7 @@ export interface AuthTokenRow {
   created_at: string
 }
 
-function client(): SupabaseClient {
+function client(): GhostClient {
   const c = getSupabase()
   if (!c)
     throw new Error('Supabase not configured — check VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY')

@@ -8,6 +8,8 @@ import { ProfilesList } from './pages/ProfilesList'
 import { ProfileEditor } from './pages/ProfileEditor'
 import { TeamPage } from './pages/team/TeamPage'
 import { PreviewBanner } from './components/PreviewBanner'
+import { InvitationBanner } from './components/InvitationBanner'
+import { takePendingInvite } from './lib/pendingInvite'
 import { EmptyState } from './pages/EmptyState'
 import { Proxies } from './pages/Proxies'
 import { Settings } from './pages/Settings'
@@ -171,6 +173,9 @@ function App(): React.ReactElement {
   if (!wsCurrent) {
     return (
       <div className="flex flex-col h-screen w-screen overflow-hidden">
+        {/* A user invited to their first workspace lands here — the banner is
+            the only in-app path to accept when the email never arrived. */}
+        <InvitationBanner />
         <Routes>
           <Route path="/invite/:token" element={<AcceptInvite />} />
           <Route path="*" element={<NoWorkspace />} />
@@ -182,6 +187,7 @@ function App(): React.ReactElement {
   return (
     <div className="flex flex-col h-screen w-screen overflow-hidden">
       <PreviewBanner />
+      <InvitationBanner />
       <div className="flex flex-1 min-h-0 overflow-hidden">
         <Sidebar />
         <main className="main flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden">
@@ -221,7 +227,9 @@ function RedirectAuthRoutes(): React.ReactElement | null {
     }
     if (oauthReturn) return <Navigate to={oauthReturn} replace />
     // Preserve an in-flight invitation: bounce to the accept flow, not the app.
-    const invite = new URLSearchParams(search).get('invite')
+    // Prefer the URL param; fall back to a token stashed before auth — the
+    // Google OAuth round-trip drops URL params (see lib/pendingInvite).
+    const invite = new URLSearchParams(search).get('invite') ?? takePendingInvite()
     return <Navigate to={invite ? `/invite/${invite}` : '/profiles'} replace />
   }
   return null
@@ -239,7 +247,11 @@ function PageRoutes(): React.ReactElement {
         <Route path="/profiles/empty" element={<EmptyState />} />
         <Route path="/profiles/new" element={<ProfileEditor />} />
         <Route path="/profiles/:id" element={<ProfileEditor />} />
-        <Route path="/proxies" element={<Proxies />} />
+        {/* Proxies is split into TubeProxies-synced vs custom tabs. The tab
+            lives in the route so it survives a refresh and is deep-linkable;
+            the bare /proxies path redirects to the default tab. */}
+        <Route path="/proxies" element={<Navigate to="/proxies/tubeproxies" replace />} />
+        <Route path="/proxies/:tab" element={<Proxies />} />
         {/* Members + Roles & access are now one tabbed page. Both tabs stay
             independently routable (deep-linkable); the old flat paths redirect
             so existing links/bookmarks keep working. */}

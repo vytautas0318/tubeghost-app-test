@@ -1,5 +1,31 @@
 # TubeProxies ⇄ TubeGhost Sync — RUNBOOK
 
+> ## ⚠ SUPERSEDED — historical only
+>
+> This document describes the **two-project** architecture (TP Browser
+> `kyolnnzjhzwjnssijhlo` + TubeProxies `qkntgnepntnbnqipuavv`) with a
+> cross-project sync bridge. That world no longer exists.
+>
+> **Current model:** one Supabase project — `qkntgnepntnbnqipuavv`.
+> TubeGhost's tables were moved into a **`ghost` schema** there; TubeProxies
+> keeps `public`. There is no token exchange, no `users` mirror, no
+> `sync_outbox`, and no `sync-phone-number` / `outbox-retry` / `mirror-user`
+> bridge — one database means an in-database read instead
+> (`ghost.sync_my_purchased_proxies`, the `phone-numbers` Edge Function).
+>
+> **Schema + Edge Function source of truth is the desktop repo**
+> (`tubeproxies-browser-macos`):
+> `supabase/migrations/00000000000001–6_ghost_*.sql`, `supabase/functions/*`,
+> and `docs/cutover.md`. The `supabase/` tree in THIS repo is a stale copy
+> from before the consolidation — do not deploy from it; both repos point at
+> the same project and would clobber each other.
+>
+> App-side consequences for this web app: the browser client sets
+> `db: { schema: 'ghost' }` (`src/renderer/src/lib/supabase.ts`),
+> `profiles` → `browser_profiles`, realtime subscribes on `schema: 'ghost'`,
+> and the serverless PostgREST helpers send `Accept-Profile`/`Content-Profile:
+> ghost` (`api/_lib/db.ts`, `api/_lib/handoff.ts`).
+
 Two Supabase projects, one identity provider, four sync guarantees.
 
 | Role | Project | Ref |

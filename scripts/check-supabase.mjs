@@ -30,14 +30,14 @@ if (!url || !anon) {
 }
 
 console.log('🔌 Connecting to', url)
-const supabase = createClient(url, anon)
+const supabase = createClient(url, anon, { db: { schema: 'ghost' } })
 
 const checks = []
 const fail = (name, msg) => checks.push({ name, ok: false, msg })
 const pass = (name) => checks.push({ name, ok: true })
 
 // 1. Tables exist (anon reads from each — should return [] not an error).
-for (const table of ['workspaces', 'profiles', 'workspace_members', 'activity_log', 'extensions', 'groups']) {
+for (const table of ['workspaces', 'browser_profiles', 'workspace_members', 'activity_log', 'extensions', 'groups']) {
   const { error } = await supabase.from(table).select('id').limit(0)
   if (error) {
     if (error.code === 'PGRST116' || /does not exist/i.test(error.message)) {
@@ -81,6 +81,6 @@ console.log('')
 if (bad === 0) {
   console.log('✅ All checks passed. Schema is ready.')
 } else {
-  console.log(`❌ ${bad} check(s) failed. Run supabase/migrations/0001_init.sql in the SQL Editor.`)
+  console.log(`❌ ${bad} check(s) failed. Apply the ghost migrations (00000000000001–6_ghost_*.sql) from the desktop repo.`)
   process.exit(1)
 }

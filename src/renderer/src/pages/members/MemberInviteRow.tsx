@@ -67,14 +67,19 @@ export function MemberInviteRow({
 
       <div className="mseen" />
 
-      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 2, alignItems: 'center' }}>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6, alignItems: 'center' }}>
+        {/* Always-visible copy-link action — this is the reliable way to get an
+            invitee in when the email is delayed/filtered, so it must NOT be a
+            faint hover-only icon (the old `.kebab` was opacity:0 until row
+            hover, so users couldn't find it). Rendered as a labelled button. */}
         <button
-          title="Copy invitation link"
-          className="kebab"
-          style={{ opacity: 1 }}
+          type="button"
+          className="invite-copy"
           onClick={copy}
+          title="Copy the invite link and share it directly"
         >
-          {copied ? <Check size={15} /> : <Copy size={15} />}
+          {copied ? <Check size={14} /> : <Copy size={14} />}
+          {copied ? 'Copied' : 'Copy link'}
         </button>
         {canManage && (
           <button

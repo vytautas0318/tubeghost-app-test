@@ -53,12 +53,13 @@ export const useAuth = create<AuthState>((set) => ({
       data: { session }
     } = await supabase.auth.getSession()
     set({ session, user: session?.user ?? null, loading: false, initialized: true })
-    // Establish the TP Browser data session (exchange) if already logged in.
+    // No-op since the single-project consolidation — login session IS the
+    // data session. Kept so the call sites stay stable.
     if (session) await ensureDataSession()
 
     supabase.auth.onAuthStateChange((event, newSession) => {
       set({ session: newSession, user: newSession?.user ?? null })
-      // Keep the TP Browser data session in step with the identity session.
+      // Also no-ops; see ensureDataSession() in lib/supabase.ts.
       if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
         void ensureDataSession()
       } else if (event === 'SIGNED_OUT') {
@@ -84,9 +85,9 @@ export const useAuth = create<AuthState>((set) => ({
       }
       return { error: error.message }
     }
-    // Establish the TP Browser data session before returning so the first
-    // data query has a valid session (don't rely solely on the async
-    // onAuthStateChange handler).
+    // No-op (single project) — kept so the first data query after sign-in
+    // has an explicit ordering point rather than relying solely on the async
+    // onAuthStateChange handler.
     await ensureDataSession()
     return {}
   },
@@ -97,12 +98,22 @@ export const useAuth = create<AuthState>((set) => ({
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
-      // Signup happens on TubeProxies (the identity provider). The user's
-      // TP Browser workspace is created shortly after by the mirror-user
-      // edge function (DB webhook on TubeProxies profiles insert →
-      // provision_mirrored_user). workspace_name is passed as metadata for
-      // forward-compat; v1 provisioning defaults to "My Workspace".
-      options: { data: { workspace_name: workspaceName } }
+      // emailRedirectTo is REQUIRED on every call that sends an email. The
+      // Supabase project is now shared with TubeProxies, whose Site URL is
+      // https://dash.tubeproxies.com — without an explicit redirect a
+      // TubeGhost confirmation link drops the user on the TubeProxies
+      // dashboard. The origin must be in the project's Redirect URL
+      // allowlist (https://app.tubeghost.com/** is configured).
+      //
+      // No ghost rows are created here. There is no signup trigger by
+      // design, so TubeProxies customers who never open TubeGhost get no
+      // ghost data; the workspace is created explicitly from the
+      // NoWorkspace screen via create_workspace(). workspace_name rides
+      // along as metadata for forward-compat.
+      options: {
+        emailRedirectTo: `${window.location.origin}/auth/callback`,
+        data: { workspace_name: workspaceName }
+      }
     })
     if (error) {
       // Supabase's built-in SMTP is heavily rate-limited (a few messages per
@@ -153,7 +164,13 @@ export const useAuth = create<AuthState>((set) => ({
   resendConfirmation: async (email) => {
     const supabase = getTubeProxies()
     if (!supabase) return { error: 'Supabase not configured' }
-    const { error } = await supabase.auth.resend({ type: 'signup', email: email.trim() })
+    // Same reason as signUp: the shared project's Site URL points at the
+    // TubeProxies dashboard, so the redirect has to be explicit.
+    const { error } = await supabase.auth.resend({
+      type: 'signup',
+      email: email.trim(),
+      options: { emailRedirectTo: `${window.location.origin}/auth/callback` }
+    })
     if (error) return { error: error.message }
     return { sent: true }
   },

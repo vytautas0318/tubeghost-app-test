@@ -1,7 +1,6 @@
 // Supabase profile data layer. Replaces DEMO_PROFILES.
 
-import type { SupabaseClient } from '@supabase/supabase-js'
-import { getSupabase } from '@/lib/supabase'
+import { getSupabase, type GhostClient } from '@/lib/supabase'
 
 export interface ProfileRow {
   id: string
@@ -90,7 +89,7 @@ export interface ProfileRow {
   session_urls: string[] | null
 }
 
-function client(): SupabaseClient {
+function client(): GhostClient {
   const c = getSupabase()
   if (!c)
     throw new Error('Supabase not configured — check VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY')
@@ -106,7 +105,7 @@ const PROFILE_PAGE_LIMIT = 1000
 
 export async function listProfiles(workspaceId: string): Promise<ProfileRow[]> {
   const { data, error, count } = await client()
-    .from('profiles')
+    .from('browser_profiles')
     .select('*', { count: 'estimated' })
     .eq('workspace_id', workspaceId)
     .order('created_at', { ascending: false })
@@ -122,7 +121,7 @@ export async function listProfiles(workspaceId: string): Promise<ProfileRow[]> {
 }
 
 export async function getProfile(id: string): Promise<ProfileRow | null> {
-  const { data, error } = await client().from('profiles').select('*').eq('id', id).maybeSingle()
+  const { data, error } = await client().from('browser_profiles').select('*').eq('id', id).maybeSingle()
   if (error) throw error
   return (data as ProfileRow | null) ?? null
 }
@@ -168,7 +167,7 @@ export async function createProfile(input: NewProfileInput): Promise<ProfileRow>
     await import('@/pages/profile-editor/randomize')
   const fp = generateRandomFingerprint(platform ? { platform } : undefined)
   const { data, error } = await client()
-    .from('profiles')
+    .from('browser_profiles')
     .insert({
       workspace_id: input.workspace_id,
       name: input.name,
@@ -308,7 +307,7 @@ export async function updateProfile(
   >
 ): Promise<ProfileRow> {
   const { data, error } = await client()
-    .from('profiles')
+    .from('browser_profiles')
     .update(patch)
     .eq('id', id)
     .select('*')
@@ -318,7 +317,7 @@ export async function updateProfile(
 }
 
 export async function deleteProfile(id: string): Promise<void> {
-  const { error } = await client().from('profiles').delete().eq('id', id)
+  const { error } = await client().from('browser_profiles').delete().eq('id', id)
   if (error) throw error
 }
 
@@ -448,7 +447,7 @@ export async function renameTagInWorkspace(
     return { ok: 0, failed: 0, errors: [] }
   }
   const { data, error } = await client()
-    .from('profiles')
+    .from('browser_profiles')
     .select('id, tags')
     .eq('workspace_id', workspaceId)
     .contains('tags', [fromTrim])
@@ -482,7 +481,7 @@ export async function duplicateProfile(id: string): Promise<ProfileRow> {
   //  - new device_name + mac_address
   //  - drop lock + audit columns
   const { data, error } = await client()
-    .from('profiles')
+    .from('browser_profiles')
     .insert({
       workspace_id: src.workspace_id,
       group_id: src.group_id,
@@ -651,7 +650,7 @@ export async function importProfile(json: string, workspaceId: string): Promise<
   if (typeof insert.fingerprint_seed !== 'number') {
     insert.fingerprint_seed = Math.floor(Math.random() * 2_147_483_647)
   }
-  const { data, error } = await client().from('profiles').insert(insert).select('*').single()
+  const { data, error } = await client().from('browser_profiles').insert(insert).select('*').single()
   if (error) throw error
   return data as ProfileRow
 }
@@ -662,7 +661,7 @@ export async function importProfile(json: string, workspaceId: string): Promise<
 // Team=1000 profiles per workspace). Re-fetch on profile editor mount.
 export async function listWorkspaceTags(workspaceId: string): Promise<string[]> {
   const { data, error } = await client()
-    .from('profiles')
+    .from('browser_profiles')
     .select('tags')
     .eq('workspace_id', workspaceId)
   if (error) throw error

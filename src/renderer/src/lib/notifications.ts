@@ -7,10 +7,9 @@
 // here — gateNotification()/the notify-test edge function mark where it plugs
 // in. Only events backed by real features are surfaced.
 
-import type { SupabaseClient } from '@supabase/supabase-js'
-import { getSupabase } from '@/lib/supabase'
+import { getSupabase, type GhostClient } from '@/lib/supabase'
 
-function client(): SupabaseClient {
+function client(): GhostClient {
   const c = getSupabase()
   if (!c) throw new Error('Supabase not configured')
   return c

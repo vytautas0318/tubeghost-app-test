@@ -7,8 +7,7 @@
 // policy already enforces it. The renderer uses caller's hierarchy
 // (loaded from app_roles + the user's role assignment) for UX gating only.
 
-import type { SupabaseClient } from '@supabase/supabase-js'
-import { getSupabase } from '@/lib/supabase'
+import { getSupabase, type GhostClient } from '@/lib/supabase'
 
 export interface AppRoleRow {
   id: string
@@ -61,7 +60,7 @@ export const CATEGORY_ORDER = [
   'activity'
 ]
 
-function client(): SupabaseClient {
+function client(): GhostClient {
   const c = getSupabase()
   if (!c)
     throw new Error('Supabase not configured — check VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY')

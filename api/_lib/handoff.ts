@@ -74,6 +74,11 @@ export function timingSafeEqual(a: string, b: string): boolean {
 // Thin PostgREST fetch rather than pulling in supabase-js: these routes do a
 // handful of queries and one of them (the atomic claim) is a raw delete with
 // a representation preference anyway.
+//
+// SCHEMA: auth_handoffs is TubeGhost's, so it lives in `ghost` on the shared
+// TubeProxies project. PostgREST picks the schema by header — `Accept-Profile`
+// on GET/HEAD, `Content-Profile` on writes — so we send both and let it ignore
+// the irrelevant one. `ghost` must be in the project's Exposed schemas.
 async function rest(path: string, init: RequestInit = {}): Promise<Response> {
   return await fetch(`${SUPABASE_URL}/rest/v1${path}`, {
     ...init,
@@ -81,6 +86,8 @@ async function rest(path: string, init: RequestInit = {}): Promise<Response> {
       apikey: SERVICE_ROLE_KEY,
       Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
       'Content-Type': 'application/json',
+      'Accept-Profile': 'ghost',
+      'Content-Profile': 'ghost',
       ...(init.headers ?? {})
     }
   })

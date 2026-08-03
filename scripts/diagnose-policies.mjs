@@ -14,6 +14,9 @@ const env = Object.fromEntries(
     .map((l) => l.split('=').map((s) => s.trim()))
 )
 
+// No `db.schema` override here: the only thing this script reads is
+// pg_policies, which is a catalog view reached through the default schema.
+// The rows it filters for are ghost's — hence schemaname = 'ghost' below.
 const supabase = createClient(env.VITE_SUPABASE_URL, env.VITE_SUPABASE_ANON_KEY)
 
 // pg_policies is in the catalog and exposed via PostgREST in some setups,
@@ -25,5 +28,5 @@ const { data: policies, error: polErr } = await supabase
   .from('pg_policies')
   .select('schemaname, tablename, policyname, cmd, qual, with_check')
   .eq('tablename', 'workspaces')
-  .eq('schemaname', 'public')
+  .eq('schemaname', 'ghost')
 console.log({ policies, error: polErr?.message })

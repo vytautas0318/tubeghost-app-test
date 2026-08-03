@@ -3,8 +3,7 @@
 // These are the typed query wrappers the renderer calls; the execution engine
 // (lib/automations/engine.ts) and the page hook both go through this module.
 
-import type { SupabaseClient } from '@supabase/supabase-js'
-import { getSupabase } from '@/lib/supabase'
+import { getSupabase, type GhostClient } from '@/lib/supabase'
 import type { Trigger, Step, ProfileScope } from '../../../shared/automations/types'
 
 export interface AutomationRow {
@@ -29,7 +28,7 @@ export interface AutomationWithMeta extends AutomationRow {
   lastRunStatus: string | null
 }
 
-function client(): SupabaseClient {
+function client(): GhostClient {
   const c = getSupabase()
   if (!c)
     throw new Error('Supabase not configured — check VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY')

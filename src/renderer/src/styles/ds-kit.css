@@ -807,28 +807,91 @@ html[data-platform='darwin'] .builder-top .editor-back { -webkit-app-region: no-
 
 /* ---------- PROXY TABLE ---------- */
 .cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 24px; }
-.tbl.proxy .tbl-head, .tbl.proxy .tr { grid-template-columns: 34px 36px minmax(0,1.6fr) minmax(0,1.3fr) minmax(0,0.7fr) minmax(0,0.95fr) minmax(0,0.9fr) 44px; min-width: 820px; }
+/* Grid tracks come from the active tab's column config via the inline
+   --px-cols custom property (set in ProxyTable). Falls back to the original
+   Custom-tab layout if unset. */
+.tbl.proxy .tbl-head, .tbl.proxy .tr { grid-template-columns: var(--px-cols, 34px 36px minmax(0,1.6fr) minmax(0,1.3fr) minmax(0,0.7fr) minmax(0,0.95fr) minmax(0,0.9fr) 44px); min-width: 820px; }
 .px-num { font-family: var(--mono); font-size: 12.5px; color: var(--t3); }
 .proto { width: 38px; height: 24px; border-radius: 6px; display: grid; place-items: center; font-family: var(--mono); font-size: 9px; font-weight: 600; flex-shrink: 0; }
 .proto.http { background: var(--green-soft); color: var(--green); }
 .proto.socks { background: var(--violet-soft); color: var(--violet); }
 .host { display: flex; align-items: center; gap: 11px; min-width: 0; }
-.host-addr { font-family: var(--mono); font-size: 13px; font-weight: 500; white-space: nowrap; }
+.host-addr { font-family: var(--mono); font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
 .host-addr .port { color: var(--t3); }
 .host-lbl { font-size: 11.5px; color: var(--t3); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .src-name { font-size: 13px; font-weight: 500; color: var(--t1); }
 .src-type { font-size: 11.5px; color: var(--t3); margin-top: 1px; }
 .country-cell { display: flex; align-items: center; gap: 9px; min-width: 0; }
-.ctry-name { font-size: 13px; font-weight: 450; color: var(--t1); white-space: nowrap; }
-.ctry-city { font-size: 11.5px; color: var(--t3); margin-top: 1px; white-space: nowrap; }
+/* Truncate long names (e.g. "United States of America") with an ellipsis so the
+   Location column never overflows into Type/Profiles. The flag is fixed-size
+   (flex-shrink:0) and the text block gets min-width:0 to allow the ellipsis. */
+.country-cell > :last-child { min-width: 0; }
+.country-cell > span:first-child { flex-shrink: 0; }
+.ctry-name { font-size: 13px; font-weight: 450; color: var(--t1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ctry-city { font-size: 11.5px; color: var(--t3); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .px-profiles { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 500; color: var(--t1); }
 .px-profiles svg { width: 14px; height: 14px; color: var(--t3); }
 .px-profiles.zero { color: var(--t4); }
 .exp-cell { font-size: 12.5px; color: var(--t2); }
 .exp-cell .exp-soon { color: var(--amber); font-weight: 550; }
 
+/* Duplicate-endpoint flag: same host:port present on both tabs (synced +
+   custom). Non-destructive marker on its own sub-line under the address, so
+   it never overflows into the neighbouring column. */
+.host-sub { margin-top: 2px; }
+.dup-badge { display: inline-block; padding: 1px 7px; border-radius: var(--r-sm); font-family: var(--sans); font-size: 10px; font-weight: 600; letter-spacing: 0.2px; color: var(--amber); background: var(--amber-soft); white-space: nowrap; }
+
+/* Read-only TubeProxies cells (credentials are DB-protected; never editable) */
+.px-ro { font-family: var(--mono); font-size: 12.5px; color: var(--t2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
+.px-type { font-size: 12px; font-weight: 550; color: var(--t2); text-transform: uppercase; letter-spacing: 0.3px; }
+
+/* Password reveal cell */
+/* Value gets a little space, then the eye + copy sit as a tight pair. gap:2px
+   keeps the two 24px icon buttons compact so the cell stays responsive; the
+   value (flex:1, min-width:0) truncates first, icons never clip. */
+.pw-cell { display: inline-flex; align-items: center; gap: 2px; min-width: 0; max-width: 100%; }
+.pw-val { flex: 1 1 auto; min-width: 0; margin-right: 4px; font-family: var(--mono); font-size: 12.5px; color: var(--t2); letter-spacing: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pw-val.err { color: var(--amber); letter-spacing: 0; font-style: italic; }
+.pw-eye { display: grid; place-items: center; width: 24px; height: 24px; border: none; background: none; color: var(--t3); border-radius: var(--r-sm); cursor: pointer; flex-shrink: 0; transition: all 0.12s var(--ease); }
+.pw-eye:hover:not(:disabled) { background: var(--hover); color: var(--t1); }
+.pw-eye:disabled { cursor: default; opacity: 0.6; }
+
+/* TubeProxies toolbar (sync line + search + bulk actions) */
+.tp-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+.tp-sync { font-size: 12.5px; color: var(--t3); }
+.tp-link { display: inline-flex; align-items: center; gap: 4px; border: none; background: none; color: var(--red); font-family: var(--sans); font-size: 12.5px; font-weight: 550; cursor: pointer; padding: 0; }
+.tp-link:hover { text-decoration: underline; }
+.tp-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.tp-search { border: 1px solid var(--line); border-radius: var(--r); background: var(--panel-2); padding: 0 10px; height: 34px; margin: 0; }
+.tp-search svg { width: 14px; height: 14px; }
+
+/* Assign-to-profile modal */
+.assign-scrim { position: fixed; inset: 0; z-index: 90; background: rgba(0,0,0,0.4); display: grid; place-items: center; padding: 24px; }
+.assign-modal { width: 100%; max-width: 420px; max-height: 70vh; display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-lg); box-shadow: var(--shadow-pop); overflow: hidden; animation: fadeUp 0.12s var(--ease); }
+.assign-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 16px; }
+.assign-title { font-size: 14.5px; font-weight: 650; color: var(--t1); }
+.assign-sub { font-family: var(--mono); font-size: 12px; color: var(--t3); margin-top: 2px; }
+.assign-x { width: 28px; height: 28px; border-radius: var(--r-sm); border: none; background: none; color: var(--t3); display: grid; place-items: center; cursor: pointer; flex-shrink: 0; }
+.assign-x:hover { background: var(--hover); color: var(--t1); }
+.assign-err { font-size: 12px; color: var(--red); padding: 6px 16px; }
+.assign-list { overflow-y: auto; padding: 6px; }
+.assign-opt { width: 100%; display: flex; align-items: center; gap: 10px; padding: 9px 10px; border: none; background: none; border-radius: var(--r-sm); cursor: pointer; text-align: left; transition: background 0.12s var(--ease); }
+.assign-opt:hover:not(:disabled) { background: var(--hover); }
+.assign-opt:disabled { opacity: 0.55; cursor: default; }
+.assign-num { font-family: var(--mono); font-size: 12px; color: var(--t3); min-width: 34px; }
+.assign-name { font-size: 13.5px; font-weight: 550; color: var(--t1); flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.assign-cur { font-size: 11px; color: var(--t3); flex-shrink: 0; }
+
 /* ---------- MEMBERS ---------- */
-.mtable { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-lg); overflow: hidden; box-shadow: var(--shadow); }
+/* NOTE: no `overflow: hidden` here. It would clip the row kebab menu (which is
+   absolutely positioned and must escape the table), and clipping wins over
+   z-index. Corner rounding is preserved by rounding the first/last rows below
+   instead, which is all `overflow: hidden` was doing for us. */
+.mtable { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-lg); box-shadow: var(--shadow); }
+/* Match the container radius (minus the 1px border) so rows don't square off
+   the corners now that the parent no longer clips them. */
+.mtable > :first-child { border-top-left-radius: calc(var(--r-lg) - 1px); border-top-right-radius: calc(var(--r-lg) - 1px); }
+.mtable > :last-child { border-bottom-left-radius: calc(var(--r-lg) - 1px); border-bottom-right-radius: calc(var(--r-lg) - 1px); }
 .mhead, .mrow { display: grid; grid-template-columns: 2fr 1.1fr 1fr 1fr 90px 44px; align-items: center; gap: 14px; padding: 0 18px; }
 .mhead { height: 42px; border-bottom: 1px solid var(--line); background: var(--panel-2); }
 .mrow { height: 64px; border-bottom: 1px solid var(--line-2); transition: background 0.12s var(--ease); }
@@ -866,6 +929,12 @@ html[data-platform='darwin'] .builder-top .editor-back { -webkit-app-region: no-
 .mm-danger:hover { background: var(--red-soft); }
 /* Pending-invite row (rendered inside the members table) */
 .invite-avatar { width: 36px; height: 36px; border-radius: 10px; flex-shrink: 0; display: grid; place-items: center; font-size: 15px; font-weight: 700; color: var(--t4); background: var(--panel-2); border: 1px dashed var(--line-2); }
+/* Always-visible "Copy link" action on a pending invite row (the email-less
+   fallback for getting an invitee in). Neutral button, clearly visible — unlike
+   the hover-only .kebab it replaced. */
+.invite-copy { display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; font-weight: 550; color: var(--t2); background: var(--hover); border: 1px solid var(--line); padding: 4px 10px; border-radius: var(--r-sm); cursor: pointer; transition: all 0.12s var(--ease); }
+.invite-copy:hover { color: var(--t1); border-color: var(--line-2); }
+.invite-copy svg { width: 14px; height: 14px; }
 .invite-revoke { font-size: 12.5px; font-weight: 550; color: var(--red); padding: 4px 8px; border-radius: var(--r-sm); cursor: pointer; transition: background 0.12s var(--ease); }
 .invite-revoke:hover { background: var(--red-soft); }
 .invite-revoke:disabled { opacity: 0.5; cursor: default; }
@@ -1181,6 +1250,117 @@ html[data-platform='darwin'] .builder-top .editor-back { -webkit-app-region: no-
 .inv-list { margin-top: 2px; }
 .inv-doc { width: 34px; height: 34px; border-radius: 8px; background: var(--hover); color: var(--t3); display: grid; place-items: center; flex-shrink: 0; }
 .inv-doc svg { width: 16px; height: 16px; }
+
+/* Usage meter ramp: default → amber ≥80% → red at 100%. The base .usage-bar i
+   gradient is red, so `.warn` and `.over` override it explicitly. */
+.usage-bar.warn i { background: linear-gradient(90deg, var(--amber), #A06B0A); }
+.usage-bar.over i { background: linear-gradient(90deg, var(--red), var(--red-hover)); }
+.usage-bar:not(.warn):not(.over) i { background: linear-gradient(90deg, var(--t3), var(--t2)); }
+
+/* Billing email inline edit */
+.bill-contact-v { display: inline-flex; align-items: center; gap: 7px; }
+.bill-contact-v button,
+.bill-email-edit button { background: none; border: none; padding: 2px; cursor: pointer; color: var(--t3); display: grid; place-items: center; border-radius: 5px; }
+.bill-contact-v button:hover,
+.bill-email-edit button:hover { color: var(--t1); background: var(--hover); }
+.bill-email-edit { display: inline-flex; align-items: center; gap: 6px; }
+.bill-email-edit input { height: 28px; font-size: 12.5px; }
+
+.pay-brand { font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--t2); padding: 4px 8px; border: 1px solid var(--line); border-radius: 5px; }
+
+/* Per-card error + skeleton states */
+.bill-err-inline { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 14px; margin-bottom: 16px; border: 1px solid var(--line); border-radius: var(--r); background: var(--red-soft); color: var(--t1); font-size: 12.5px; }
+.bill-skel { background: var(--hover); border-radius: var(--r); min-height: 44px; animation: bill-pulse 1.4s ease-in-out infinite; }
+.bill-skel-text { display: inline-block; width: 54px; height: 11px; border-radius: 4px; background: var(--hover); animation: bill-pulse 1.4s ease-in-out infinite; }
+@keyframes bill-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
+@media (prefers-reduced-motion: reduce) { .bill-skel, .bill-skel-text { animation: none; } }
+
+/* Add-on / invoice rows */
+.bill-rows { margin-top: 4px; }
+.bill-row { display: grid; grid-template-columns: 1.4fr 0.8fr 1.2fr 1fr 0.8fr; gap: 12px; align-items: center; padding: 12px 4px; border-bottom: 1px solid var(--line-2); font-size: 12.5px; color: var(--t2); }
+.bill-row:last-child { border-bottom: none; }
+.bill-row-head { font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--t3); font-weight: 600; }
+.bill-row-name { color: var(--t1); font-weight: 550; }
+.bill-row-amt { font-family: var(--mono); color: var(--t1); }
+.bill-row-amt em { font-style: normal; color: var(--t3); font-size: 11px; }
+.ta-r { text-align: right; }
+
+.bill-empty { padding: 34px 16px; text-align: center; color: var(--t3); }
+.bill-empty svg { margin: 0 auto 8px; display: block; }
+.bill-empty-t { font-size: 13.5px; font-weight: 600; color: var(--t1); }
+.bill-empty-s { font-size: 12.5px; color: var(--t3); margin-top: 4px; }
+
+/* ---------- UPGRADE MODAL ---------- */
+.bill-up-backdrop { position: fixed; inset: 0; z-index: 50; background: rgba(0, 0, 0, 0.45); display: grid; place-items: center; padding: 24px; overflow: auto; }
+.bill-up { width: min(980px, 100%); max-height: 90vh; overflow: auto; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-lg, 14px); padding: 22px; }
+.bill-up-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
+.bill-up-head h2 { font-size: 17px; font-weight: 650; color: var(--t1); }
+.bill-up-head p { font-size: 12.5px; color: var(--t3); margin-top: 3px; }
+.bill-up-x { background: none; border: none; cursor: pointer; color: var(--t3); padding: 4px; border-radius: 6px; display: grid; place-items: center; }
+.bill-up-x:hover { background: var(--hover); color: var(--t1); }
+
+.bill-up-cycles { display: inline-flex; gap: 4px; padding: 4px; background: var(--panel-2); border: 1px solid var(--line); border-radius: var(--r-pill, 999px); margin-bottom: 16px; }
+.bill-up-cycles button { display: inline-flex; align-items: center; gap: 6px; border: none; background: none; cursor: pointer; font-size: 12.5px; font-weight: 550; color: var(--t2); padding: 7px 14px; border-radius: var(--r-pill, 999px); transition: all 0.13s var(--ease); }
+.bill-up-cycles button:hover { color: var(--t1); }
+.bill-up-cycles button.on { background: var(--panel); color: var(--t1); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06); }
+.bill-up-cycles button span { font-size: 10.5px; font-weight: 600; color: var(--red); background: var(--red-soft); padding: 2px 6px; border-radius: var(--r-pill, 999px); }
+
+.bill-up-err { display: flex; align-items: center; gap: 8px; padding: 10px 13px; margin-bottom: 14px; border: 1px solid var(--red-soft-2); border-radius: var(--r); background: var(--red-soft); color: var(--t1); font-size: 12.5px; }
+.bill-up-err svg { color: var(--red); flex-shrink: 0; }
+
+.bill-up-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+.bill-up-card { position: relative; display: flex; flex-direction: column; padding: 18px; border: 1px solid var(--line); border-radius: var(--r); background: var(--panel-2); }
+.bill-up-card.featured { border-color: var(--red-soft-2); box-shadow: 0 0 0 1px var(--red-soft) inset; }
+.bill-up-card h3 { font-size: 15px; font-weight: 650; color: var(--t1); }
+.bill-up-tag { font-size: 12px; color: var(--t3); margin: 4px 0 14px; min-height: 32px; }
+.bill-up-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--line-2); }
+/* Profiles row gets the marketing page's inset dashed panel. */
+.bill-up-row.inset { background: var(--bg); border: 1px dashed var(--line); border-radius: 12px; padding: 12px 14px; margin-bottom: 10px; }
+
+/* Ghost cluster — PNG masks tinted per tier, matching the marketing page. */
+.pg-ghosts { display: flex; align-items: flex-end; gap: 7px; height: 40px; margin-bottom: 14px; }
+.pg-ghost-logo { position: relative; display: block; width: 38px; height: 38px; transform-origin: bottom center; flex: none; }
+.pg-ghost-glasses { position: absolute; inset: 0; background: #fff; }
+.pg-ghosts .pg-ghost-logo:nth-child(2) { transform: scale(0.86); opacity: 0.82; }
+.pg-ghosts .pg-ghost-logo:nth-child(3) { transform: scale(0.74); opacity: 0.66; }
+.pg-ghosts .pg-ghost-logo:nth-child(4) { transform: scale(0.64); opacity: 0.52; }
+.pg-ghosts .pg-ghost-logo:nth-child(n + 5) { transform: scale(0.55); opacity: 0.4; }
+
+/* "CROWD FAVOURITE" sticker on the Team card. */
+.pg-sticker { position: absolute; top: -11px; right: 18px; background: var(--red); color: #fff; font-family: var(--mono); font-size: 9.5px; font-weight: 700; letter-spacing: 0.12em; padding: 6px 10px; border-radius: 6px; transform: rotate(5deg); box-shadow: 0 6px 18px -6px rgba(var(--red-rgb), 0.5); white-space: nowrap; }
+
+/* Feature checklist under each CTA. */
+.pg-checks { list-style: none; display: grid; gap: 9px; margin-top: 16px; padding: 0; align-content: start; flex: 1 1 auto; }
+.pg-checks li { display: flex; gap: 9px; font-size: 12.5px; color: var(--t2); line-height: 1.45; }
+.pg-checks li::before { content: '\2713'; color: var(--red); font-weight: 800; flex: none; }
+.bill-up-row > span { display: flex; flex-direction: column; font-size: 12.5px; color: var(--t2); }
+.bill-up-row em { font-style: normal; font-size: 11px; color: var(--t3); margin-top: 2px; }
+.bill-up-fixed { font-family: var(--mono); font-size: 15px; font-weight: 600; color: var(--t1); }
+
+.bill-up-price { padding: 14px 0 12px; }
+.bill-up-price s { display: block; font-size: 12px; color: var(--t4); margin-bottom: 2px; }
+.bill-up-price strong { font-family: var(--mono); font-size: 22px; font-weight: 650; color: var(--t1); }
+.bill-up-price i { font-style: normal; font-size: 12px; color: var(--t3); font-family: var(--sans); margin-left: 2px; }
+.bill-up-price p { font-size: 11.5px; color: var(--t3); margin-top: 4px; }
+.bill-up-cta { width: 100%; justify-content: center; margin-top: 16px; }
+
+/* Steppers */
+.bill-step { display: inline-flex; align-items: center; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); overflow: hidden; }
+.bill-step button { width: 26px; height: 28px; border: none; background: none; cursor: pointer; color: var(--t2); display: grid; place-items: center; transition: all 0.13s var(--ease); }
+.bill-step button:hover:not(:disabled) { background: var(--hover); color: var(--t1); }
+.bill-step button:disabled { color: var(--t4); cursor: not-allowed; }
+.bill-step input { width: 46px; height: 28px; border: none; border-left: 1px solid var(--line); border-right: 1px solid var(--line); background: none; text-align: center; font-family: var(--mono); font-size: 12.5px; color: var(--t1); outline: none; }
+.bill-step input:focus { background: var(--hover); }
+
+@media (max-width: 900px) {
+  .bill-grid { grid-template-columns: 1fr; }
+  .bill-up-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 720px) {
+  .bill-row { grid-template-columns: 1.4fr 1fr 0.8fr; }
+  .bill-row > span:nth-child(n + 4) { display: none; }
+  .bill-row-head > span:nth-child(n + 4) { display: none; }
+}
 
 /* ---------- PARTNER PROGRAM ---------- */
 .partner-grid { display: grid; grid-template-columns: 1.5fr 1fr; gap: 16px; align-items: start; margin-top: 16px; }
