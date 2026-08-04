@@ -30,6 +30,7 @@ import { NoWorkspace } from './pages/NoWorkspace'
 import { AcceptInvite } from './pages/AcceptInvite'
 import { AuthCallback } from './pages/AuthCallback'
 import { AuthClient } from './pages/AuthClient'
+import { AuthCallbackDesktop } from './pages/AuthCallbackDesktop'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { useTheme } from './store/theme'
 // Importing the prefs store triggers its persist rehydrate → accent + density
@@ -100,6 +101,13 @@ function App(): React.ReactElement {
   // one; either way the gates below must not delay or swallow the redirect.
   if (pathname === '/auth-client') {
     return <AuthClient />
+  }
+
+  // Desktop Google-sign-in callback: Google/Supabase redirects here with a PKCE
+  // ?code, and this page deep-links it back to the desktop app (which owns the
+  // verifier). Handled before the auth gates for the same reason as /auth-client.
+  if (pathname === '/auth/callback-desktop') {
+    return <AuthCallbackDesktop />
   }
 
   if (!initialized) {
