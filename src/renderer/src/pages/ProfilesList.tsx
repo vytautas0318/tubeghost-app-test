@@ -1,5 +1,6 @@
 import * as React from 'react'
 import { useEffect, useMemo, useState } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { AlertCircle } from 'lucide-react'
 import { useWorkspace } from '@/store/workspace'
 import { useAuth } from '@/store/auth'
@@ -24,14 +25,21 @@ import { listProxies, type ProxyRow } from '@/lib/proxies'
 import { useHasPermission } from '@/lib/permissions'
 import { useWorkspaceTags } from '@/lib/useWorkspaceTags'
 import { ToastView, useToast } from '@/components/Toast'
+import { DesktopAppModal } from '@/components/DesktopAppModal'
 
 export function ProfilesList(): React.ReactElement {
   const workspace = useWorkspace((s) => s.current)
   const { user } = useAuth()
 
-  const { rows, loading, error, reload } = useProfilesListData(workspace?.workspace_id ?? null)
+  const { rows, loading, error, reload, patchRow } = useProfilesListData(
+    workspace?.workspace_id ?? null
+  )
   // Page-level toast surface shared by row actions.
   const { toast, show: showToast } = useToast()
+
+  // Name of the profile the user tried to open, or null. Drives the
+  // "desktop app required" modal — one instance for the whole table.
+  const [openPrompt, setOpenPrompt] = useState<string | null>(null)
 
   const [filters, setFilters] = useState<FilterState>(EMPTY_FILTERS)
   const [groupFilter, setGroupFilter] = useState<GroupFilter>('all')
@@ -57,6 +65,18 @@ export function ProfilesList(): React.ReactElement {
     }
     return { key: 'number', dir: 'asc' }
   })
+
+  // A page that navigated here can hand us one message to show (e.g. the
+  // editor reporting that auto proxy assignment found an empty pool). Consumed
+  // once — replace the history entry so a refresh doesn't re-toast it.
+  const location = useLocation()
+  const navigate = useNavigate()
+  const handoffToast = (location.state as { toast?: string } | null)?.toast
+  useEffect(() => {
+    if (!handoffToast) return
+    showToast('info', handoffToast)
+    navigate(location.pathname, { replace: true, state: null })
+  }, [handoffToast])
 
   useEffect(() => {
     try {
@@ -93,8 +113,15 @@ export function ProfilesList(): React.ReactElement {
     listProxies(workspace.workspace_id)
       .then((ps) => {
         if (cancelled) return
+        // Keyed BOTH by id and by host:port. proxy_id is the reliable link
+        // (and the only one that survives a proxy being re-hosted), but rows
+        // written before proxy_id was populated only have the denormalised
+        // host/port — so keep both and let the row prefer the id.
         const m = new Map<string, ProxyRow>()
-        for (const p of ps) m.set(`${p.host}:${p.port}`, p)
+        for (const p of ps) {
+          m.set(p.id, p)
+          m.set(`${p.host}:${p.port}`, p)
+        }
         setProxyMeta(m)
       })
       .catch(() => undefined)
@@ -152,6 +179,7 @@ export function ProfilesList(): React.ReactElement {
 
   const canEdit = useHasPermission('profiles.edit')
   const canDelete = useHasPermission('profiles.delete')
+  const canLaunch = useHasPermission('profiles.launch')
   const canManageGroups = useHasPermission('groups.create')
   const canEditGroups = useHasPermission('groups.edit')
   const canTagCreate = useHasPermission('tags.create')
@@ -290,7 +318,7 @@ export function ProfilesList(): React.ReactElement {
                       onClick={() => toggleSort('last_opened')}
                     />
                   </th>
-                  <th className="text-right px-3 py-3 w-[60px]"></th>
+                  <th className="text-right px-3 py-3 w-[130px]">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--line-2)]">
@@ -304,17 +332,20 @@ export function ProfilesList(): React.ReactElement {
                       raw={raw}
                       rowNumber={(safePage - 1) * pageSize + idx + 1}
                       proxyMeta={
-                        raw.proxy_host
+                        (raw.proxy_id ? proxyMeta.get(raw.proxy_id) : undefined) ??
+                        (raw.proxy_host
                           ? (proxyMeta.get(`${raw.proxy_host}:${raw.proxy_port}`) ?? null)
-                          : null
+                          : null)
                       }
-                      onChanged={reload}
+                      onChanged={(updated) => (updated ? patchRow(updated) : reload())}
                       selected={selected.has(p.id)}
                       onSelectChange={(c) => onToggleRow(p.id, c)}
                       allTags={allTags}
                       groups={groups}
                       workspaceId={workspace.workspace_id}
                       canEdit={canEdit}
+                      onOpen={() => setOpenPrompt(p.name)}
+                      canLaunch={canLaunch}
                     />
                   )
                 })}
@@ -349,6 +380,11 @@ export function ProfilesList(): React.ReactElement {
           />
         </div>
       </div>
+      {/* Launching runs the local engine, which the web build doesn't have —
+          the button stays visible and this explains the requirement. */}
+      {openPrompt !== null && (
+        <DesktopAppModal profileName={openPrompt} onClose={() => setOpenPrompt(null)} />
+      )}
       <ToastView toast={toast} />
     </div>
   )

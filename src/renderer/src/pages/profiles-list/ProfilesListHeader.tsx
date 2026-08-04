@@ -17,10 +17,10 @@ type ImportSource = ImportVendor | 'tubeghost' | 'cookies'
 
 const MIGRATIONS: { vendor: ImportVendor; name: string; sub: string }[] = [
   { vendor: 'multilogin', name: 'MultiLogin', sub: 'Profiles + cookies via export file (.json)' },
-  { vendor: 'adspower', name: 'AdsPower', sub: 'Bulk import via CSV export' },
+  { vendor: 'adspower', name: 'AdsPower', sub: 'Bulk import via CSV or Excel (.xlsx) export' },
   { vendor: 'gologin', name: 'GoLogin', sub: 'Profiles + proxies (.json)' },
   { vendor: 'dolphin', name: 'Dolphin{anty}', sub: 'Profiles + cookies (.json)' },
-  { vendor: 'incogniton', name: 'Incogniton', sub: 'Profiles via CSV' }
+  { vendor: 'incogniton', name: 'Incogniton', sub: 'Profiles via CSV or Excel (.xlsx)' }
 ]
 
 export function ProfilesListHeader({
@@ -163,8 +163,8 @@ export function ProfilesListHeader({
                 </div>
                 <div className="import-item" onClick={() => pickFile('csv')}>
                   <div className="import-id">
-                    <div className="import-name">CSV</div>
-                    <div className="import-sub">Columns auto-mapped to profile fields</div>
+                    <div className="import-name">CSV / Excel</div>
+                    <div className="import-sub">.csv or .xlsx — columns auto-mapped to profile fields</div>
                   </div>
                   <ChevronRight />
                 </div>

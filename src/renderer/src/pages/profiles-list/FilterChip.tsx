@@ -12,7 +12,8 @@ export function FilterChip({
   children
 }: {
   label: string
-  value: string | null
+  // ReactNode so callers can render a flag image alongside the text.
+  value: React.ReactNode | null
   children: (close: () => void) => React.ReactNode
 }): React.ReactElement {
   const [open, setOpen] = useState(false)
@@ -55,7 +56,7 @@ export function ChipMenu({
   current,
   onPick
 }: {
-  options: Array<{ value: string; label: string }>
+  options: Array<{ value: string; label: React.ReactNode }>
   current: string
   onPick: (v: string) => void
 }): React.ReactElement {

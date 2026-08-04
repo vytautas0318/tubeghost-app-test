@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { Check, X } from 'lucide-react'
 import { ToastView, useToast } from '@/components/Toast'
 import { PoweredByTubeProxies } from '@/components/PoweredByTubeProxies'
-import { flagEmoji } from './profiles-list/osFlag'
+import { Flag } from '@/components/Flag'
 
 type Tier = {
   id: string
@@ -50,8 +50,8 @@ export function BuyProxies(): React.ReactElement {
         </div>
 
         <div className="buy-typebar">
-          <span className="buy-flag" role="img" aria-label="United States">
-            {flagEmoji('US')}
+          <span className="buy-flag">
+            <Flag code="US" size={30} title="United States" />
           </span>
           <div>
             <div className="buy-typebar-n">United States · Static Residential</div>

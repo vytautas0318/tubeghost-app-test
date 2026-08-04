@@ -231,21 +231,66 @@ export async function countProfilesUsingProxy(proxyId: string): Promise<number> 
 // Single query for the whole workspace — cheaper than one-per-proxy.
 // Profiles without a number (rows created before migration 0009) are
 // skipped silently rather than rendered as "#null".
+// `proxies` is optional: pass the workspace's proxy rows to also resolve
+// LEGACY assignments (profiles saved before proxy_id started being written —
+// they only carry the denormalised proxy_host/proxy_port). Without it those
+// profiles look "unassigned" and their proxy reads as unused.
 export async function listProfileNumbersByProxy(
-  workspaceId: string
+  workspaceId: string,
+  proxies?: ProxyRow[]
 ): Promise<Record<string, number[]>> {
   const { data, error } = await client()
     .from('browser_profiles')
-    .select('proxy_id, profile_number')
+    .select('proxy_id, proxy_host, proxy_port, profile_number')
     .eq('workspace_id', workspaceId)
-    .not('proxy_id', 'is', null)
   if (error) throw error
+  const byHostPort = new Map<string, string>()
+  for (const p of proxies ?? []) byHostPort.set(`${p.host}:${p.port}`, p.id)
+
   const out: Record<string, number[]> = {}
-  for (const row of (data ?? []) as Array<{ proxy_id: string | null; profile_number: number | null }>) {
-    if (!row.proxy_id || row.profile_number == null) continue
-    if (!out[row.proxy_id]) out[row.proxy_id] = []
-    out[row.proxy_id].push(row.profile_number)
+  const rows = (data ?? []) as Array<{
+    proxy_id: string | null
+    proxy_host: string | null
+    proxy_port: number | null
+    profile_number: number | null
+  }>
+  for (const row of rows) {
+    const id =
+      row.proxy_id ??
+      (row.proxy_host && row.proxy_port != null
+        ? byHostPort.get(`${row.proxy_host}:${row.proxy_port}`)
+        : undefined)
+    if (!id || row.profile_number == null) continue
+    if (!out[id]) out[id] = []
+    out[id].push(row.profile_number)
   }
   for (const k of Object.keys(out)) out[k].sort((a, b) => a - b)
   return out
+}
+
+// Proxies in the workspace that no profile is using yet, best candidate
+// first — tested-OK before untested before failed, then by proxy number so
+// repeated auto-picks walk the pool in a predictable order.
+//
+// Powers the "auto-assign an unused proxy" mode of profile creation
+// (AdsPower parity). Only `active` proxies are eligible: expired / released
+// / errored ones would hand the new profile a dead egress.
+export async function listUnusedProxies(workspaceId: string): Promise<ProxyRow[]> {
+  const rows = await listProxies(workspaceId)
+  const usage = await listProfileNumbersByProxy(workspaceId, rows)
+  const score = (r: ProxyRow): number =>
+    r.last_test_ok === true ? 0 : r.last_test_ok === null ? 1 : 2
+  return rows
+    .filter((r) => r.status === 'active' && (usage[r.id]?.length ?? 0) === 0)
+    .sort((a, b) => {
+      const s = score(a) - score(b)
+      if (s !== 0) return s
+      return (a.proxy_number ?? Number.MAX_SAFE_INTEGER) - (b.proxy_number ?? Number.MAX_SAFE_INTEGER)
+    })
+}
+
+// Single best unused proxy, or null when the pool is exhausted. Callers
+// decide whether "no proxy available" is an error or a soft skip.
+export async function pickUnusedProxy(workspaceId: string): Promise<ProxyRow | null> {
+  return (await listUnusedProxies(workspaceId))[0] ?? null
 }

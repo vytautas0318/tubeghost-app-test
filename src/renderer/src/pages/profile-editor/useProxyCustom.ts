@@ -91,6 +91,9 @@ export function useProxyCustom(
         proxy_user: form.user.trim() || null,
         proxy_pass: form.pass || null,
         proxy_source: 'custom_inline',
+        // Inline credentials replace any pool assignment — release the FK
+        // so the previously-picked pool proxy counts as unused again.
+        proxy_id: null,
         tubeproxies_ip_id: null
       })
       setTestResult(null)

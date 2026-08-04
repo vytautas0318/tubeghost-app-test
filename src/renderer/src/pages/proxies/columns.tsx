@@ -7,8 +7,11 @@
 import * as React from 'react'
 import { StatusPill, type PillState } from '@/components/ui'
 import { NavIcon } from '@/components/sidebar/navIcons'
+import { Globe } from 'lucide-react'
 import { RevealPassword } from './RevealPassword'
-import { flagFor, shortCountry, type ViewProxy } from './types'
+import { Flag } from '@/components/Flag'
+import { hasFlag } from '@/lib/flags'
+import { shortCountry, type ViewProxy } from './types'
 import type { ProxyStatus } from '@/lib/proxies'
 
 // Real status → DS StatusPill (Live / Check / Idle look).
@@ -79,7 +82,11 @@ function renderCountry(p: ViewProxy): React.ReactNode {
   const name = p.country_name ? shortCountry(p.country_name) : full
   return (
     <div className="country-cell">
-      <span style={{ fontSize: '16px', lineHeight: 1 }}>{flagFor(p.country_code) || '🌐'}</span>
+      {hasFlag(p.country_code) ? (
+        <Flag code={p.country_code} size={18} />
+      ) : (
+        <Globe size={14} style={{ color: 'var(--t4)' }} />
+      )}
       <div style={{ minWidth: 0 }}>
         {/* title shows the full official name; the cell shows the compact form
             and truncates as a backstop for anything not in the short-name map. */}

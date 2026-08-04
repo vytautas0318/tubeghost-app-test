@@ -4,7 +4,7 @@
 import * as React from 'react'
 import { CheckCircle2, Globe } from 'lucide-react'
 import type { ProxyRow } from '@/lib/proxies'
-import { flagFor } from './flag'
+import { Flag } from '@/components/Flag'
 
 export function ProxyPickerRow({
   proxy: p,
@@ -57,7 +57,7 @@ export function ProxyPickerRow({
             {usage}× used
           </span>
         )}
-        <span>{flagFor(p.country_code)}</span>
+        <Flag code={p.country_code} />
         <span className="uppercase">{p.country_code ?? '—'}</span>
         <span className="uppercase">{p.proxy_type}</span>
       </div>

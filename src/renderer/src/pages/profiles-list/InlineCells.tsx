@@ -14,7 +14,8 @@ import {
 } from '@/lib/profiles'
 import { listProxies, type ProxyRow } from '@/lib/proxies'
 import { useAnchoredPopover } from './useAnchoredPopover'
-import { flagEmoji } from './osFlag'
+import { Flag } from '@/components/Flag'
+import { hasFlag } from '@/lib/flags'
 
 // TagsCell + GroupCell moved to their own files (shared-tag color support /
 // group search + inline edit). Re-exported here so existing imports from
@@ -38,7 +39,10 @@ export function ProxyCell({
   meta?: ProxyRow | null
   workspaceId: string
   canEdit: boolean
-  onChanged: () => void
+  // Pass the updated row so the page can patch it in place; calling with no
+  // argument falls back to a full refetch (for changes that affect more than
+  // this one row).
+  onChanged: (updated?: ProfileRowType) => void
 }): React.ReactElement {
   const [open, setOpen] = useState(false)
   const [proxies, setProxies] = useState<ProxyRow[] | null>(null)
@@ -86,13 +90,13 @@ export function ProxyCell({
         : null
   // Flag + "US · Phoenix · Astound"-style location line (from the matched
   // workspace proxy). Falls back to the source when no geo is known.
-  const flag = flagEmoji(meta?.country_code)
   const loc =
     [meta?.country_code?.toUpperCase(), meta?.city, source].filter(Boolean).join(' · ') ||
     source ||
     null
-  const leadIcon = flag ? (
-    <span className="text-[12.5px] leading-none shrink-0">{flag}</span>
+  // Real flag image when the proxy's country is known, globe otherwise.
+  const leadIcon = hasFlag(meta?.country_code) ? (
+    <Flag code={meta?.country_code} />
   ) : (
     <Globe className="w-3 h-3 text-[var(--red)] shrink-0" />
   )
@@ -101,7 +105,7 @@ export function ProxyCell({
     if (saving) return
     setSaving(true)
     try {
-      await assignProxyToProfile(raw.id, {
+      const updated = await assignProxyToProfile(raw.id, {
         id: p.id,
         proxy_type: p.proxy_type,
         host: p.host,
@@ -112,7 +116,7 @@ export function ProxyCell({
         tubeproxies_ip_id: p.tubeproxies_ip_id
       })
       setOpen(false)
-      onChanged()
+      onChanged(updated)
     } finally {
       setSaving(false)
     }
@@ -122,9 +126,9 @@ export function ProxyCell({
     if (saving) return
     setSaving(true)
     try {
-      await clearProfileProxy(raw.id)
+      const updated = await clearProfileProxy(raw.id)
       setOpen(false)
-      onChanged()
+      onChanged(updated)
     } finally {
       setSaving(false)
     }

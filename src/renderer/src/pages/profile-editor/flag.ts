@@ -1,20 +1,5 @@
-// Country code → flag emoji. Small enough to be a constant; lives in
-// its own file so component files can import it without breaking
-// react-refresh (fast-refresh requires component-only exports).
-
-const FLAG: Record<string, string> = {
-  US: '🇺🇸',
-  GB: '🇬🇧',
-  DE: '🇩🇪',
-  IN: '🇮🇳',
-  AU: '🇦🇺',
-  FR: '🇫🇷',
-  CA: '🇨🇦',
-  JP: '🇯🇵',
-  BR: '🇧🇷',
-  NL: '🇳🇱'
-}
-
-export function flagFor(cc: string | null): string {
-  return cc ? FLAG[cc.toUpperCase()] ?? '🌐' : ''
-}
+// Country flags moved to components/Flag.tsx (real SVG images).
+//
+// The emoji-based flagFor() that used to live here rendered as bare letters on
+// Windows, which has no country-flag glyphs. Use <Flag code={cc} /> instead.
+export {}

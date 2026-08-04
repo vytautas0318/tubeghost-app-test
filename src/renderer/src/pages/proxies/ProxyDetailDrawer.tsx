@@ -4,7 +4,7 @@ import { ChevronRight, Copy, Eye, EyeOff, Trash2, X } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
 import type { ProxyRow } from '@/lib/proxies'
 import { SourceBadge, StatusPill } from './badges'
-import { flagFor } from './types'
+import { Flag } from '@/components/Flag'
 import { DrawerSection, KV, KVCopy } from './drawer-parts'
 import { ProxyEditFields } from './ProxyEditFields'
 
@@ -151,7 +151,20 @@ function Geo({ proxy }: { proxy: ProxyRow }): React.ReactElement {
   return (
     <DrawerSection title="Geo">
       <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
-        <KV k="Country" v={proxy.country_code ? `${flagFor(proxy.country_code)} ${proxy.country_name ?? proxy.country_code}` : '—'} />
+        <KV
+          k="Country"
+          title={proxy.country_name ?? proxy.country_code ?? undefined}
+          v={
+            proxy.country_code ? (
+              <>
+                <Flag code={proxy.country_code} />
+                {proxy.country_name ?? proxy.country_code}
+              </>
+            ) : (
+              '—'
+            )
+          }
+        />
         <KV k="City" v={proxy.city ?? '—'} />
         <KV k="Region" v={proxy.region ?? '—'} />
         <KV k="Timezone" v={proxy.timezone ?? '—'} mono />

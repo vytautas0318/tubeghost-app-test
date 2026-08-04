@@ -27,7 +27,9 @@ export function GroupCell({
   raw: ProfileRowType
   groups: GroupRow[]
   canEdit: boolean
-  onChanged: () => void
+  // With an updated row → patched in place. Without → full refetch, which is
+  // what group rename/delete need (they change every row's group label).
+  onChanged: (updated?: ProfileRowType) => void
 }): React.ReactElement {
   const canGroupEdit = useHasPermission('groups.edit')
   const canGroupDelete = useHasPermission('groups.delete')
@@ -49,9 +51,9 @@ export function GroupCell({
     if (saving) return
     setSaving(true)
     try {
-      await updateProfile(raw.id, { group_id: groupId })
+      const updated = await updateProfile(raw.id, { group_id: groupId })
       setOpen(false)
-      onChanged()
+      onChanged(updated)
     } finally {
       setSaving(false)
     }

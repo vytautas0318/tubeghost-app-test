@@ -1,10 +1,18 @@
 // Orchestrates the Profiles → Import menu: parse the chosen file (vendor
-// export / CSV / cookie file) and create real workspace profiles via the
-// standard data layer, so every import gets the same safe-by-default
+// export / CSV / spreadsheet / cookie file) and create real workspace profiles
+// via the standard data layer, so every import gets the same safe-by-default
 // fingerprint + RLS treatment as a hand-created profile.
 
-import { createProfile, updateProfile, type ProfileRow } from '@/lib/profiles'
-import { parseForeignProfiles, type ParsedProfile, type ImportVendor } from './foreign'
+import { createProfile, importProfile, updateProfile, type ProfileRow } from '@/lib/profiles'
+import { createGroup, listGroups, PRESET_COLORS } from '@/lib/groups'
+import {
+  isTubeGhostExport,
+  parseForeignProfiles,
+  profilesFromRecords,
+  type ParsedProfile,
+  type ImportVendor
+} from './foreign'
+import { xlsxToObjects } from './xlsx'
 import { normalizeCookieFile } from './cookies'
 
 export type { ImportVendor } from './foreign'
@@ -15,23 +23,64 @@ export interface ImportSummary {
   errors: string[]
 }
 
-// File-picker accept filter per menu entry.
+// File-picker accept filter per menu entry. Spreadsheets are offered only where
+// they're actually readable (.xlsx — see importers/xlsx.ts); legacy .xls is a
+// different binary format and is NOT offered, so nobody picks a file we have to
+// reject afterwards.
 export const VENDOR_ACCEPT: Record<ImportVendor, string> = {
   multilogin: '.json,application/json',
-  adspower: '.csv,.txt,.xlsx,.xls',
+  adspower: '.csv,.txt,.xlsx',
   gologin: '.json,application/json',
   dolphin: '.json,application/json',
-  incogniton: '.csv,.txt',
-  csv: '.csv,.txt,.xlsx,.xls'
+  incogniton: '.csv,.txt,.xlsx',
+  csv: '.csv,.txt,.xlsx'
 }
 
-async function createFromParsed(p: ParsedProfile, workspaceId: string): Promise<ProfileRow> {
+// Resolve a vendor's group NAME to a workspace group id, creating the group on
+// first sight. Cached per import run so a 500-row file does one lookup per
+// distinct group rather than per row.
+class GroupResolver {
+  private byName = new Map<string, string>()
+  private loaded = false
+
+  constructor(private readonly workspaceId: string) {}
+
+  async resolve(name?: string | null): Promise<string | null> {
+    const clean = name?.trim()
+    if (!clean) return null
+    if (!this.loaded) {
+      const existing = await listGroups(this.workspaceId).catch(() => [])
+      for (const g of existing) this.byName.set(g.name.toLowerCase(), g.id)
+      this.loaded = true
+    }
+    const key = clean.toLowerCase()
+    const hit = this.byName.get(key)
+    if (hit) return hit
+    try {
+      const color = PRESET_COLORS[this.byName.size % PRESET_COLORS.length]
+      const g = await createGroup(this.workspaceId, clean.slice(0, 60), color)
+      this.byName.set(key, g.id)
+      return g.id
+    } catch {
+      // No groups.create permission (or a race) — import the profile ungrouped
+      // rather than failing the whole row over a label.
+      return null
+    }
+  }
+}
+
+async function createFromParsed(
+  p: ParsedProfile,
+  workspaceId: string,
+  groups: GroupResolver
+): Promise<ProfileRow> {
   const row = await createProfile({
     workspace_id: workspaceId,
     name: p.name.slice(0, 100),
     notes: p.notes ?? null,
     tags: p.tags ?? [],
-    platform: p.platform ?? null
+    platform: p.platform ?? null,
+    group_id: await groups.resolve(p.group)
   })
   const patch: Parameters<typeof updateProfile>[1] = {}
   if (p.proxy) {
@@ -47,16 +96,51 @@ async function createFromParsed(p: ParsedProfile, workspaceId: string): Promise<
   return row
 }
 
-// Vendor/CSV import: N parsed records → N new profiles. Sequential inserts so
-// the profile_number trigger and RLS evaluate row-by-row; per-row failures
-// don't abort the batch.
+// True for a ZIP container — every .xlsx is one. Checked on the BYTES rather
+// than the extension so a renamed file still routes correctly.
+function isZip(bytes: Uint8Array): boolean {
+  return bytes[0] === 0x50 && bytes[1] === 0x4b
+}
+
+// Vendor/CSV/spreadsheet import: N parsed records → N new profiles. Sequential
+// inserts so the profile_number trigger and RLS evaluate row-by-row; per-row
+// failures don't abort the batch.
 export async function importForeignFile(file: File, workspaceId: string): Promise<ImportSummary> {
-  const text = await file.text()
-  const parsed = parseForeignProfiles(file.name, text)
+  const base = file.name.replace(/\.[^.]+$/, '') || 'Imported profile'
+  const bytes = new Uint8Array(await file.arrayBuffer())
+
+  let parsed: ParsedProfile[]
+  if (isZip(bytes) || /\.xlsx$/i.test(file.name)) {
+    // Spreadsheet: read the first worksheet as a header grid and run it through
+    // the same field mapping as CSV.
+    parsed = profilesFromRecords(xlsxToObjects(bytes.buffer as ArrayBuffer), base)
+    if (parsed.length === 0) {
+      throw new Error('No rows found in the sheet — is the header row missing?')
+    }
+  } else {
+    const text = await file.text()
+
+    // A TubeGhost export dropped into the CSV / vendor entry: route it to the
+    // full-fidelity importer rather than the foreign mapper, which would keep
+    // only name+proxy+cookies (and, for our envelope shape, not even those).
+    // Users don't reliably distinguish "Profile file (.json)" from "CSV" — the
+    // file itself says what it is, so honour that.
+    if (isTubeGhostExport(text)) {
+      try {
+        await importProfile(text, workspaceId)
+        return { created: 1, failed: 0, errors: [] }
+      } catch (e) {
+        return { created: 0, failed: 1, errors: [(e as Error).message] }
+      }
+    }
+    parsed = parseForeignProfiles(file.name, text)
+  }
+
+  const groups = new GroupResolver(workspaceId)
   const summary: ImportSummary = { created: 0, failed: 0, errors: [] }
   for (const p of parsed) {
     try {
-      await createFromParsed(p, workspaceId)
+      await createFromParsed(p, workspaceId, groups)
       summary.created += 1
     } catch (e) {
       summary.failed += 1

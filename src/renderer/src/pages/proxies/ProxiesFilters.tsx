@@ -6,7 +6,7 @@ import * as React from 'react'
 import { Search, X } from 'lucide-react'
 import type { ProxySource, ProxyStatus } from '@/lib/proxies'
 import { FilterChip, ChipMenu } from '@/pages/profiles-list/FilterChip'
-import { flagFor } from './types'
+import { Flag } from '@/components/Flag'
 
 const SOURCE_LABELS: Record<'all' | ProxySource, string> = {
   all: 'All',
@@ -111,13 +111,28 @@ export function ProxiesFilters({
       {countries.length > 0 && (
         <FilterChip
           label="Country"
-          value={countryFilter === 'all' ? null : `${flagFor(countryFilter)} ${countryFilter}`}
+          value={
+            countryFilter === 'all' ? null : (
+              <span className="inline-flex items-center gap-1.5">
+                <Flag code={countryFilter} />
+                {countryFilter}
+              </span>
+            )
+          }
         >
           {(close) => (
             <ChipMenu
               options={[
                 { value: 'all', label: 'All countries' },
-                ...countries.map((c) => ({ value: c, label: `${flagFor(c)} ${c}` }))
+                ...countries.map((c) => ({
+                  value: c,
+                  label: (
+                    <span className="inline-flex items-center gap-1.5">
+                      <Flag code={c} />
+                      {c}
+                    </span>
+                  )
+                }))
               ]}
               current={countryFilter}
               onPick={(v) => {

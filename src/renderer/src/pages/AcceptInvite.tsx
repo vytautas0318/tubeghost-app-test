@@ -2,6 +2,7 @@ import * as React from 'react'
 import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { Loader2 } from 'lucide-react'
+import { DOWNLOAD_URL } from '@/lib/desktop-app'
 
 // Web landing page for the invitation email button
 // (https://app.tubeghost.com/invite/<token>). Its ONE job is to hand the token
@@ -15,7 +16,6 @@ const SHELL: React.CSSProperties = {
   background: 'radial-gradient(130% 90% at 50% -10%, #1F2128 0%, #131418 60%)',
   color: '#f2f3f5'
 }
-const DOWNLOAD_URL = 'https://tubeghost.com/download'
 
 export function AcceptInvite(): React.ReactElement {
   const { token = '' } = useParams()

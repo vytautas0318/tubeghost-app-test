@@ -27,6 +27,11 @@ export interface ProfileRow {
   proxy_user: string | null
   proxy_pass: string | null
   proxy_source: string
+  // FK to the workspace proxy this profile draws from (migration 0005).
+  // Null for custom-inline proxies and for "no proxy". The proxy_* columns
+  // above are the denormalised copy the launcher reads; this column is what
+  // "is this proxy already used?" is answered from.
+  proxy_id: string | null
   tubeproxies_ip_id: string | null
   notes: string | null
   tags: string[]
@@ -126,6 +131,20 @@ export async function getProfile(id: string): Promise<ProfileRow | null> {
   return (data as ProfileRow | null) ?? null
 }
 
+// The proxy half of a profile row. Written at creation time (single-step
+// profile setup) and by assignProxyToProfile() afterwards, so both paths
+// produce identical rows.
+export interface ProfileProxyFields {
+  proxy_id: string | null
+  proxy_type: string | null
+  proxy_host: string | null
+  proxy_port: number | null
+  proxy_user: string | null
+  proxy_pass: string | null
+  proxy_source: string
+  tubeproxies_ip_id: string | null
+}
+
 export interface NewProfileInput {
   workspace_id: string
   name: string
@@ -135,6 +154,9 @@ export interface NewProfileInput {
   // Optional target OS ('windows' | 'macos' | 'linux'). Used by the importers
   // so a migrated Windows profile gets a coherent Windows fingerprint preset.
   platform?: string | null
+  // Optional proxy assigned in the same step as creation. Omit / null to
+  // create the profile without a proxy (the pre-existing behaviour).
+  proxy?: ProfileProxyFields | null
 }
 
 export async function createProfile(input: NewProfileInput): Promise<ProfileRow> {
@@ -174,6 +196,9 @@ export async function createProfile(input: NewProfileInput): Promise<ProfileRow>
       group_id: input.group_id ?? null,
       notes: input.notes ?? null,
       tags: input.tags ?? [],
+      // Proxy, when the creator picked one in the same step. Spreading
+      // nothing leaves the DB defaults (no proxy) exactly as before.
+      ...(input.proxy ?? {}),
       // Coherent fingerprint preset
       fingerprint_seed: fp.fingerprint_seed,
       platform: fp.platform,
@@ -302,6 +327,7 @@ export async function updateProfile(
       | 'proxy_user'
       | 'proxy_pass'
       | 'proxy_source'
+      | 'proxy_id'
       | 'tubeproxies_ip_id'
     >
   >
@@ -340,6 +366,10 @@ export async function assignProxyToProfile(
   }
 ): Promise<ProfileRow> {
   return updateProfile(profileId, {
+    // proxy_id is the FK the "unused proxy" logic reads (picker filter,
+    // Proxies-page usage column, auto-assign at creation). It MUST be kept
+    // in sync with the denormalised copy below.
+    proxy_id: proxy.id,
     proxy_type: proxy.proxy_type,
     proxy_host: proxy.host,
     proxy_port: proxy.port,
@@ -352,6 +382,7 @@ export async function assignProxyToProfile(
 
 export async function clearProfileProxy(profileId: string): Promise<ProfileRow> {
   return updateProfile(profileId, {
+    proxy_id: null,
     proxy_type: null,
     proxy_host: null,
     proxy_port: null,
@@ -521,6 +552,7 @@ export async function duplicateProfile(id: string): Promise<ProfileRow> {
       proxy_user: src.proxy_user,
       proxy_pass: src.proxy_pass,
       proxy_source: src.proxy_source,
+      proxy_id: src.proxy_id,
       // Identity randomized — two profiles must look like distinct
       // devices even when fingerprint is otherwise the same
       device_name: null,
@@ -565,6 +597,8 @@ export async function exportProfile(
   delete exportable.last_known_egress_ip
   delete exportable.profile_number
   delete exportable.tubeproxies_ip_id
+  // Workspace-local FK — meaningless in the importing workspace.
+  delete exportable.proxy_id
   delete exportable.assigned_to
   if (!opts?.includeSecrets) delete exportable.proxy_pass
   return JSON.stringify(
@@ -584,7 +618,10 @@ export async function importProfile(json: string, workspaceId: string): Promise<
     throw new Error('Invalid JSON')
   }
   if (parsed._format !== 'tubeproxies-profile' || !parsed.profile) {
-    throw new Error('Not a TubeProxies profile export')
+    throw new Error(
+      'Not a TubeGhost profile export — for a CSV or another browser’s export, ' +
+        'use the matching entry in the Import menu'
+    )
   }
   const p = parsed.profile
   // Whitelist insertable columns to avoid any sneaky overrides.
@@ -639,6 +676,12 @@ export async function importProfile(json: string, workspaceId: string): Promise<
     'random_fingerprint_on_startup',
     'cookies_json',
     'webgpu_mode',
+    // Editor toggle state — without it a re-imported profile shows the
+    // "Google/YouTube Optimized" switch off despite carrying the preset.
+    'google_optimized',
+    // NOTE: group_id and enabled_extensions are deliberately NOT restored —
+    // both are workspace-local ids that would dangle (or point at a stranger's
+    // row) when the export lands in a different workspace.
     'port_scan_protection',
     'allowed_ports'
   ]

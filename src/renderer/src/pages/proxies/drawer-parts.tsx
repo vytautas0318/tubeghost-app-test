@@ -26,18 +26,25 @@ export function DrawerSection({
 export function KV({
   k,
   v,
+  // Optional tooltip — required when `v` is a node rather than a string, since
+  // the title attribute can't stringify an element.
+  title,
   mono = false
 }: {
   k: string
-  v: string
+  v: React.ReactNode
+  title?: string
   mono?: boolean
 }): React.ReactElement {
   return (
     <div className="flex items-baseline justify-between gap-2">
       <span className="text-[var(--t3)]">{k}</span>
       <span
-        className={cn('text-[var(--t1)] truncate text-right', mono && 'mono')}
-        title={v}
+        className={cn(
+          'text-[var(--t1)] truncate text-right inline-flex items-center gap-1.5 justify-end',
+          mono && 'mono'
+        )}
+        title={title ?? (typeof v === 'string' ? v : undefined)}
       >
         {v}
       </span>

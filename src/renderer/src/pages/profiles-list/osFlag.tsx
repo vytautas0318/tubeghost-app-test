@@ -40,13 +40,8 @@ export function OsMark({
   return <Monitor className={className} aria-label="OS" />
 }
 
-/**
- * flagEmoji — turn a 2-letter ISO country code into its regional-indicator flag
- * emoji (e.g. "US" → 🇺🇸). Returns null for missing/invalid codes.
- */
-export function flagEmoji(cc?: string | null): string | null {
-  if (!cc || cc.length !== 2 || !/^[a-zA-Z]{2}$/.test(cc)) return null
-  const base = 0x1f1e6
-  const up = cc.toUpperCase()
-  return String.fromCodePoint(base + up.charCodeAt(0) - 65, base + up.charCodeAt(1) - 65)
-}
+// NOTE: the old `flagEmoji()` helper lived here and is intentionally gone.
+// Regional-indicator emoji (🇺🇸) have NO glyphs in Windows' Segoe UI Emoji, so
+// they silently render as the bare letters "US" — a flag that looks broken on
+// the majority of desktops. Use <Flag code="US" /> from components/Flag.tsx,
+// which ships real SVGs. Same applies to any new country-flag rendering.

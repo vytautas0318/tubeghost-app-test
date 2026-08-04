@@ -742,6 +742,13 @@ html[data-platform='darwin'] .builder-top .editor-back { -webkit-app-region: no-
 .name-text:hover { background: var(--hover); box-shadow: inset 0 0 0 1px var(--line); }
 .name-edit-in { width: 100%; height: 28px; padding: 0 8px; border-radius: var(--r-sm); border: 1px solid var(--red); box-shadow: 0 0 0 3px var(--red-soft); background: var(--panel); font-family: var(--sans); font-size: 13.5px; font-weight: 550; color: var(--t1); outline: none; }
 
+/* row "Open" (launch) action — the primary per-row action, so it carries the
+   brand red the way the header's primary buttons do. Always visible (not
+   hover-revealed like the ⋮): users scan for it. */
+.row-open { display: inline-flex; align-items: center; gap: 5px; height: 28px; padding: 0 10px; border: none; border-radius: var(--r-sm); background: var(--red); color: #fff; font-family: var(--sans); font-size: 12px; font-weight: 600; cursor: pointer; transition: var(--t-control); box-shadow: var(--shadow-red); }
+.row-open:hover:not(:disabled) { background: var(--red-hover); }
+.row-open:disabled { opacity: 0.4; cursor: not-allowed; box-shadow: none; }
+
 /* inline proxy edit */
 .px-edit { cursor: pointer; padding: 4px 7px; margin: -4px -7px; border-radius: var(--r-sm); transition: background 0.12s var(--ease); }
 .px-edit:hover { background: var(--hover); }

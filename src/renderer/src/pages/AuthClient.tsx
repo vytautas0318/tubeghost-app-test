@@ -2,6 +2,7 @@ import * as React from 'react'
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import logo from '../assets/tubeghost-logo.png'
+import { DOWNLOAD_URL } from '@/lib/desktop-app'
 
 // Bridge page for the desktop OAuth handoff (see docs/desktop-oauth.md).
 //
@@ -19,8 +20,6 @@ const SHELL: React.CSSProperties = {
   background: 'radial-gradient(130% 90% at 50% -10%, #1F2128 0%, #131418 60%)',
   color: '#f2f3f5'
 }
-
-const DOWNLOAD_URL = 'https://tubeghost.com/download'
 
 /** Human-readable text for the error codes shared with the desktop app. */
 function errorMessage(code: string): string {

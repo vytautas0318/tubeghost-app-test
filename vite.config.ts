@@ -25,7 +25,14 @@ export default defineConfig({
   // Serve assets from the app root; SPA host rewrites all paths → index.html.
   base: '/',
   resolve: {
+    // ORDER MATTERS: Vite matches aliases by prefix in declaration order, so
+    // the more specific '@flags' / '@renderer' must come before the bare '@'
+    // (otherwise '@flags/…' is rewritten by the '@' rule and resolves nowhere).
     alias: {
+      // Country flag SVGs (components/Flag.tsx globs these). Aliased because
+      // `root` is src/renderer/, so a root-absolute '/node_modules/…' glob
+      // would resolve to src/renderer/node_modules and match nothing.
+      '@flags': resolve(__dirname, 'node_modules/country-flag-icons/3x2'),
       '@renderer': resolve(__dirname, 'src/renderer/src'),
       '@': resolve(__dirname, 'src/renderer/src')
     }
@@ -37,7 +44,15 @@ export default defineConfig({
   build: {
     // Emit into <repo>/dist rather than src/renderer/dist.
     outDir: resolve(__dirname, 'dist'),
-    emptyOutDir: true
+    emptyOutDir: true,
+    // Country flags are globbed as a whole set (~260 SVGs) but any one page
+    // shows a handful. Left to the default 4 KB rule they'd all be inlined as
+    // base64 into the main bundle (+230 kB) for flags nobody looks at. Forcing
+    // them to separate files keeps the bundle flat — the browser fetches only
+    // the flags actually rendered, and caches them. Everything else keeps the
+    // default behaviour.
+    assetsInlineLimit: (filePath: string) =>
+      filePath.includes('country-flag-icons') ? false : undefined
   },
   plugins: [react(), tailwindcss()]
 })

@@ -6,27 +6,14 @@ import { useWorkspace } from '@/store/workspace'
 import { useHasPermission } from '@/lib/permissions'
 import { Tab } from './profile-editor/parts'
 import { useProfileEditorData } from './profile-editor/useProfileEditorData'
+import { useNewProfileProxy } from './profile-editor/useNewProfileProxy'
 import { EditorHeader } from './profile-editor/EditorHeader'
-import { IdentityCard } from './profile-editor/IdentityCard'
-import { FingerprintCard } from './profile-editor/FingerprintCard'
 import { DangerZone } from './profile-editor/DangerZone'
-import { AdvancedCard } from './profile-editor/AdvancedCard'
-import { ProxyCard } from './profile-editor/ProxyCard'
-import { LinkedCredentials } from './profile-editor/LinkedCredentials'
-import { SaveToUnlockCard } from './profile-editor/SaveToUnlockCard'
+import { EditorPanels, type EditorTab } from './profile-editor/EditorPanels'
 import { OverviewSidebar, type OverviewState } from './profile-editor/OverviewSidebar'
 import { DirtyProvider, useDirtyGuard, useDirtyParent } from './profile-editor/DirtyContext'
 import { rowToForm } from './profile-editor/types'
 import { ToastView, useToast } from '@/components/Toast'
-
-type EditorTab = 'general' | 'proxy' | 'fingerprint' | 'advanced'
-
-// `hidden` (display:none) removes inactive tabs from layout so the
-// column-level `space-y-5` rhythm on the active tab is preserved.
-// space-y-5 inside the box stacks multiple cards (IdentityCard +
-// CookiesCard on General).
-const tabBoxCls = (active: boolean): string =>
-  active ? 'space-y-5' : 'hidden'
 
 export function ProfileEditor(): React.ReactElement {
   // Wrap in DirtyProvider so child cards can register their dirty
@@ -46,6 +33,9 @@ function ProfileEditorInner(): React.ReactElement {
 
   const data = useProfileEditorData(id, isNew)
   const { profile, form, setForm, loading, saving, error, save, remove } = data
+  // Creation-time proxy choice (auto / specific / custom / none). Held here
+  // so it survives tab switches and is visible from the General tab.
+  const proxyState = useNewProfileProxy(isNew)
 
   const canCreate = useHasPermission('profiles.create')
   const canEdit = useHasPermission('profiles.edit')
@@ -122,8 +112,13 @@ function ProfileEditorInner(): React.ReactElement {
         return
       }
     }
-    const r = await save(workspace.workspace_id, isNew, id)
-    if (r) navigate('/profiles')
+    // On create the proxy draft goes along with the INSERT — one step, no
+    // create-then-attach round trip.
+    const r = await save(workspace.workspace_id, isNew, id, isNew ? proxyState.draft : undefined)
+    if (!r) return
+    // The list page shows the note (e.g. "pool was empty") — this editor
+    // unmounts on navigate, so its own toast would never be seen.
+    navigate('/profiles', r.note ? { state: { toast: r.note } } : undefined)
   }
 
   const onDelete = async (): Promise<void> => {
@@ -185,88 +180,24 @@ function ProfileEditorInner(): React.ReactElement {
           }
         >
           <div className={showAside ? 'col-span-2 space-y-5' : 'space-y-5'}>
-            {/*
-              Each visited tab stays mounted (hidden via Tailwind `hidden`
-              when inactive) so the user's in-progress edits survive tab
-              switches and get flushed together by the top-right Save.
-              `display:none` keeps the card's saver registered AND keeps
-              its local form state intact.
-            */}
-            {visitedTabs.has('general') && (
-              <div className={tabBoxCls(activeTab === 'general')}>
-                <IdentityCard
-                  form={form}
-                  onChange={setForm}
-                  footer={
-                    !isNew && profile ? (
-                      <LinkedCredentials
-                        embedded
-                        proxyHost={profile.proxy_host}
-                        onManageProxy={() => setActiveTab('proxy')}
-                        onManageAuth={() => guardedNavigate('/authenticator')}
-                        onManagePhone={() => guardedNavigate('/phone')}
-                      />
-                    ) : null
-                  }
-                />
-              </div>
-            )}
-            {visitedTabs.has('proxy') && (
-              <div className={tabBoxCls(activeTab === 'proxy')}>
-                {!isNew && profile ? (
-                  <ProxyCard
-                    profile={profile}
-                    canEdit={canEdit}
-                    onSaved={(updated) => {
-                      data.setProfile(updated)
-                      void data.reload?.()
-                    }}
-                  />
-                ) : (
-                  <SaveToUnlockCard
-                    title="Proxy"
-                    body="Per-profile proxy assignment is stored on the profile row. Save now to enable it — your General-tab inputs are kept."
-                    saving={saving}
-                    canSave={canSave}
-                    onSave={onSave}
-                  />
-                )}
-              </div>
-            )}
-            {visitedTabs.has('fingerprint') && (
-              <div className={tabBoxCls(activeTab === 'fingerprint')}>
-                {!isNew && profile ? (
-                  <FingerprintCard
-                    profile={profile}
-                    onSaved={() => void data.reload?.()}
-                    onFormChange={(f) => setOverview(f)}
-                  />
-                ) : (
-                  <SaveToUnlockCard
-                    title="Fingerprint"
-                    body="Fingerprint values are seeded automatically when the profile is created. Save now to start editing them — your General-tab inputs are kept."
-                    saving={saving}
-                    canSave={canSave}
-                    onSave={onSave}
-                  />
-                )}
-              </div>
-            )}
-            {visitedTabs.has('advanced') && (
-              <div className={tabBoxCls(activeTab === 'advanced')}>
-                {!isNew && profile ? (
-                  <AdvancedCard profile={profile} onSaved={() => void data.reload?.()} />
-                ) : (
-                  <SaveToUnlockCard
-                    title="Advanced"
-                    body="Advanced settings (port-scan protection, custom launch args, locale overrides) are stored on the profile row. Save now to enable them — your General-tab inputs are kept."
-                    saving={saving}
-                    canSave={canSave}
-                    onSave={onSave}
-                  />
-                )}
-              </div>
-            )}
+            <EditorPanels
+              activeTab={activeTab}
+              visitedTabs={visitedTabs}
+              isNew={isNew}
+              profile={profile}
+              form={form}
+              setForm={setForm}
+              canEdit={canEdit}
+              canSave={canSave}
+              saving={saving}
+              proxyState={proxyState}
+              onSave={onSave}
+              onProfileSaved={(p) => data.setProfile(p)}
+              onReload={() => void data.reload?.()}
+              onOverviewChange={setOverview}
+              setActiveTab={setActiveTab}
+              navigateGuarded={guardedNavigate}
+            />
           </div>
           {showAside && profile && (
             <aside className="space-y-5 sticky top-0 self-start">
@@ -280,4 +211,3 @@ function ProfileEditorInner(): React.ReactElement {
     </div>
   )
 }
-

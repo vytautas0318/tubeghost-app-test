@@ -1,5 +1,6 @@
 import * as React from 'react'
 import { useState } from 'react'
+import { Play } from 'lucide-react'
 import { RowMenu } from './RowMenu'
 import { GroupCell, ProxyCell, TagsCell } from './InlineCells'
 import { OsMark } from './osFlag'
@@ -20,7 +21,9 @@ export function ProfileRow({
   groups,
   workspaceId,
   canEdit,
-  onToast
+  onToast,
+  onOpen,
+  canLaunch
 }: {
   profile: ViewProfile
   raw: ProfileRowType
@@ -30,7 +33,10 @@ export function ProfileRow({
   // The workspace proxy matching this profile's host:port, if any — supplies
   // the country flag + location shown in the Proxy cell.
   proxyMeta?: ProxyRow | null
-  onChanged: () => void
+  // Called after a mutation. Passing the updated row lets the page patch it in
+  // place (no refetch, no re-render of the whole table); omitting it forces a
+  // full reload, for changes that touch more than this row.
+  onChanged: (updated?: ProfileRowType) => void
   selected: boolean
   onSelectChange: (checked: boolean) => void
   allTags: string[]
@@ -39,6 +45,12 @@ export function ProfileRow({
   canEdit: boolean
   // Surfaces inline-edit failures (e.g. rename) as a page-level toast.
   onToast?: (kind: 'error' | 'info', text: string) => void
+  // Open (launch) this profile. On the web build the page answers with the
+  // "desktop app required" modal — see lib/desktop-app.ts.
+  onOpen: () => void
+  // 'profiles.launch'. Rendered disabled rather than hidden so the action's
+  // existence — and why it's unavailable — stays discoverable.
+  canLaunch: boolean
 }): React.ReactElement {
   const [editingName, setEditingName] = useState(false)
   const [nameVal, setNameVal] = useState(p.name)
@@ -54,8 +66,8 @@ export function ProfileRow({
     setEditingName(false)
     if (!v || v === p.name) return
     try {
-      await updateProfile(raw.id, { name: v })
-      onChanged()
+      const updated = await updateProfile(raw.id, { name: v })
+      onChanged(updated)
     } catch (err) {
       onToast?.('error', `Rename failed: ${(err as Error).message}`)
     }
@@ -131,8 +143,19 @@ export function ProfileRow({
         <TagsCell raw={raw} allTags={allTags} canEdit={canEdit} onChanged={onChanged} />
       </td>
       <td className="px-3 py-3 text-[12.5px] text-[var(--t2)]">{p.lastOpened}</td>
-      <td className="px-3 py-3 text-right" onClick={(e) => e.stopPropagation()}>
-        <RowMenu profile={raw} heldByOther={!!p.openByOther} onChange={onChanged} />
+      <td className="px-3 py-3 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+        <div className="inline-flex items-center gap-1.5 justify-end">
+          <button
+            onClick={onOpen}
+            disabled={!canLaunch}
+            className="row-open"
+            title={canLaunch ? `Open ${p.name}` : "You don't have permission to launch profiles"}
+          >
+            <Play className="w-3 h-3" fill="currentColor" />
+            Open
+          </button>
+          <RowMenu profile={raw} heldByOther={!!p.openByOther} onChange={onChanged} />
+        </div>
       </td>
     </tr>
   )

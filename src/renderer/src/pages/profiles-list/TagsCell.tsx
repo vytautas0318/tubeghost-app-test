@@ -28,7 +28,9 @@ export function TagsCell({
   // the workspace tag registry. Accepted but unused.
   allTags?: string[]
   canEdit: boolean
-  onChanged: () => void
+  // With an updated row → patched in place. Without → full refetch, needed
+  // for a registry-wide tag rename, which rewrites every profile's tags.
+  onChanged: (updated?: ProfileRowType) => void
 }): React.ReactElement {
   const workspaceId = useWorkspace((s) => s.current?.workspace_id ?? null)
   const canTagCreate = useHasPermission('tags.create')
@@ -76,9 +78,9 @@ export function TagsCell({
     if (!t || tags.includes(t) || saving) return
     setSaving(true)
     try {
-      await updateProfile(raw.id, { tags: [...tags, t] })
+      const updated = await updateProfile(raw.id, { tags: [...tags, t] })
       setInput('')
-      onChanged()
+      onChanged(updated)
     } finally {
       setSaving(false)
     }
@@ -97,8 +99,8 @@ export function TagsCell({
     if (saving) return
     setSaving(true)
     try {
-      await updateProfile(raw.id, { tags: tags.filter((x) => x !== t) })
-      onChanged()
+      const updated = await updateProfile(raw.id, { tags: tags.filter((x) => x !== t) })
+      onChanged(updated)
     } finally {
       setSaving(false)
     }

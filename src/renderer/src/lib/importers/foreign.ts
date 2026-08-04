@@ -27,6 +27,9 @@ export interface ParsedProfile {
   tags?: string[]
   proxy?: ParsedProxy | null
   cookiesJson?: string | null
+  // Group NAME as spelled by the vendor (ids are meaningless across tools).
+  // The importer resolves it to a workspace group, creating it if needed.
+  group?: string | null
 }
 
 type Rec = Record<string, unknown>
@@ -131,7 +134,10 @@ function mapJsonRecord(o: Rec, fallbackName: string): ParsedProfile {
   const proxy =
     parseProxyValue(pick(o, 'proxy', 'proxyConfig', 'proxy_config')) ??
     parseProxyValue((pick(o, 'network') as Rec | null)?.['proxy']) ??
-    parseProxyValue(pick(o, 'proxyString', 'proxy_str'))
+    parseProxyValue(pick(o, 'proxyString', 'proxy_str')) ??
+    // Last resort: flat proxy_host / proxy_port / proxy_type columns on the
+    // record itself (how our own export — and several vendors — spell it).
+    parseProxyValue(o)
   return {
     name: str(pick(o, 'name', 'profileName', 'profile_name', 'title')) ?? fallbackName,
     platform: normalizePlatform(
@@ -141,12 +147,15 @@ function mapJsonRecord(o: Rec, fallbackName: string): ParsedProfile {
     notes: str(pick(o, 'notes', 'note', 'remark', 'description', 'comment')),
     tags: parseTags(pick(o, 'tags', 'tag', 'labels')),
     proxy,
-    cookiesJson: normalizeEmbeddedCookies(pick(o, 'cookies', 'cookie'))
+    cookiesJson: normalizeEmbeddedCookies(pick(o, 'cookies', 'cookie')),
+    group: str(pick(o, 'group', 'groupName', 'group_name', 'folder', 'category'))
   }
 }
 
-// One CSV row (normalized headers, see csv.ts) → ParsedProfile.
-function mapCsvRow(o: Record<string, string>, fallbackName: string): ParsedProfile {
+// One grid row (normalized headers, see csv.ts / xlsx.ts) → ParsedProfile.
+// Shared by the CSV and .xlsx paths so a vendor's spreadsheet and its CSV
+// export map identically.
+export function mapGridRow(o: Record<string, string>, fallbackName: string): ParsedProfile {
   const r = o as Rec
   let proxy: ParsedProxy | null = null
   const host = str(pick(r, 'proxyhost', 'proxyip', 'proxyaddress', 'ip', 'host'))
@@ -169,15 +178,41 @@ function mapCsvRow(o: Record<string, string>, fallbackName: string): ParsedProfi
     notes: str(pick(r, 'remark', 'notes', 'note', 'description')),
     tags: parseTags(pick(r, 'tags', 'tag')),
     proxy,
-    cookiesJson: normalizeEmbeddedCookies(pick(r, 'cookie', 'cookies'))
+    cookiesJson: normalizeEmbeddedCookies(pick(r, 'cookie', 'cookies')),
+    group: str(pick(r, 'group', 'groupname', 'folder', 'category'))
   }
 }
 
+// Grid records → profiles, with the file name as the per-row name fallback.
+// Exported so the .xlsx path reuses the exact CSV mapping.
+export function profilesFromRecords(
+  records: Record<string, string>[],
+  baseName: string
+): ParsedProfile[] {
+  return records.map((r, i) => mapGridRow(r, `${baseName} ${i + 1}`))
+}
+
 // Entry point. Throws with a user-readable message on unusable files.
-export function parseForeignProfiles(fileName: string, text: string): ParsedProfile[] {
-  if (/\.xlsx?$/i.test(fileName) || text.startsWith('PK')) {
-    throw new Error('Excel files aren’t supported directly — save/export as CSV first')
+// TubeGhost's OWN export envelope: { _format: 'tubeproxies-profile', profile }.
+// Recognised here so a user who exports a profile and re-imports it through the
+// CSV / vendor menu entry (rather than "Profile file (.json)") still gets their
+// profile back, instead of a row named after the file with everything dropped.
+// Callers should prefer lib/profiles.importProfile() for these — it restores the
+// full fingerprint, which the foreign mapping deliberately does not.
+export function isTubeGhostExport(text: string): boolean {
+  const t = text.trim()
+  if (!t.startsWith('{')) return false
+  try {
+    const o = JSON.parse(t) as Rec
+    return o['_format'] === 'tubeproxies-profile' && !!o['profile']
+  } catch {
+    return false
   }
+}
+
+// Text-based files only (JSON / CSV). Spreadsheets are binary and are read by
+// importers/xlsx.ts — importForeignFile() routes by file type.
+export function parseForeignProfiles(fileName: string, text: string): ParsedProfile[] {
   const base = fileName.replace(/\.[^.]+$/, '') || 'Imported profile'
   const trimmed = text.trim()
   if (!trimmed) throw new Error('The file is empty')
@@ -189,11 +224,19 @@ export function parseForeignProfiles(fileName: string, text: string): ParsedProf
     } catch {
       throw new Error('Invalid JSON')
     }
+    // Unwrap the common container shapes. A single-object wrapper (`{profile:
+    // {...}}`, as our own export uses) must be unwrapped too — otherwise the
+    // WRAPPER gets mapped, which finds no `name`/`proxy` and silently produces
+    // a profile named after the file with nothing in it.
+    const rec = root as Rec
+    const arrayKey = ['profiles', 'data', 'items', 'list']
+      .map((k) => rec?.[k])
+      .find(Array.isArray) as unknown[] | undefined
+    const singleWrapped = !Array.isArray(root) && !arrayKey ? rec?.['profile'] : null
     const arr: unknown[] = Array.isArray(root)
       ? root
-      : ((['profiles', 'data', 'items', 'list'].map((k) => (root as Rec)[k]).find(Array.isArray) as
-          | unknown[]
-          | undefined) ?? [root])
+      : (arrayKey ??
+        (singleWrapped && typeof singleWrapped === 'object' ? [singleWrapped] : [root]))
     const out = arr
       .filter((x): x is Rec => !!x && typeof x === 'object')
       .map((x, i) => mapJsonRecord(x, arr.length > 1 ? `${base} ${i + 1}` : base))
@@ -201,8 +244,7 @@ export function parseForeignProfiles(fileName: string, text: string): ParsedProf
     return out
   }
 
-  const rows = csvToObjects(text)
-  const out = rows.map((r, i) => mapCsvRow(r, `${base} ${i + 1}`))
+  const out = profilesFromRecords(csvToObjects(text), base)
   if (out.length === 0) throw new Error('No rows found — is the CSV missing a header line?')
   return out
 }

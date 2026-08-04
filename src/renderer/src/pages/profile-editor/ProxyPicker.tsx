@@ -46,13 +46,16 @@ export function ProxyPicker({
     // updates immediately). On non-initial refetches we keep the
     // existing list rendered while the new data loads — no spinner
     // flash.
-    Promise.all([
-      listProxies(workspace.workspace_id),
-      listProfileNumbersByProxy(workspace.workspace_id).catch(
-        () => ({}) as Record<string, number[]>
-      )
-    ])
-      .then(([rows, usage]) => !cancelled && setState({ kind: 'ready', rows, usage }))
+    // Usage is resolved against the proxy rows so profiles saved before
+    // proxy_id was written (host:port only) still count as "used".
+    listProxies(workspace.workspace_id)
+      .then(async (rows) => {
+        const usage = await listProfileNumbersByProxy(workspace.workspace_id, rows).catch(
+          () => ({}) as Record<string, number[]>
+        )
+        return { rows, usage }
+      })
+      .then(({ rows, usage }) => !cancelled && setState({ kind: 'ready', rows, usage }))
       .catch((e: Error) => !cancelled && setState({ kind: 'error', message: e.message }))
     return () => {
       cancelled = true

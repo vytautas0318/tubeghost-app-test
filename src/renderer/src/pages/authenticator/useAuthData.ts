@@ -83,7 +83,12 @@ export function useAuthData(workspaceId: string | null, canView: boolean): UseAu
         },
         (payload) => {
           setTokens((prev) => {
-            if (payload.eventType === 'INSERT') return [...prev, payload.new as AuthTokenRow]
+            if (payload.eventType === 'INSERT') {
+              const next = payload.new as AuthTokenRow
+              // Deduped: a local add + refetch can beat this event to the row.
+              if (prev.some((t) => t.id === next.id)) return prev
+              return [...prev, next]
+            }
             if (payload.eventType === 'DELETE')
               return prev.filter((t) => t.id !== (payload.old as AuthTokenRow).id)
             if (payload.eventType === 'UPDATE') {

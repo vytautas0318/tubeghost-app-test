@@ -6,7 +6,7 @@ import { AlertCircle, Check, Loader2 } from 'lucide-react'
 import type { IpLookupResult } from '@/lib/edge'
 import type { ProxyTestResult } from '@/lib/proxy-test'
 import type { ParsedProxy } from '@/lib/proxies-parser'
-import { flagFor } from './types'
+import { Flag } from '@/components/Flag'
 
 export interface EnrichedProxy {
   status: 'idle' | 'testing' | 'enriched'
@@ -73,8 +73,9 @@ function GeoBadge({ enrichment }: { enrichment: EnrichedProxy | null }): React.R
     return <span className="text-[var(--t4)]">no geo</span>
   }
   return (
-    <span className="text-[var(--t1)]">
-      {flagFor(g.country_code)} {g.country_code}
+    <span className="text-[var(--t1)] inline-flex items-center gap-1.5">
+      <Flag code={g.country_code} />
+      {g.country_code}
     </span>
   )
 }

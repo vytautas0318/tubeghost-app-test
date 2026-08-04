@@ -57,7 +57,9 @@ export function useProxiesData(workspaceId: string | null, enabled: boolean): Us
         setError(null)
         // One workspace-wide query is cheaper than one-per-proxy.
         try {
-          const map = await listProfileNumbersByProxy(workspaceId)
+          // Pass the rows so legacy assignments (proxy_host/port with no
+          // proxy_id) are attributed to their proxy too.
+          const map = await listProfileNumbersByProxy(workspaceId, data)
           if (!cancelled) setProfileNumbers(map)
         } catch {
           if (!cancelled) setProfileNumbers({})
@@ -87,7 +89,14 @@ export function useProxiesData(workspaceId: string | null, enabled: boolean): Us
         },
         (payload) => {
           setRows((prev) => {
-            if (payload.eventType === 'INSERT') return [payload.new as ProxyRow, ...prev]
+            if (payload.eventType === 'INSERT') {
+              const next = payload.new as ProxyRow
+              // Guard against the row already being present — insertLocal()
+              // (add-proxy panel) and refresh()/sync both put it in the list
+              // before this event lands, which would otherwise render it twice.
+              if (prev.some((p) => p.id === next.id)) return prev
+              return [next, ...prev]
+            }
             if (payload.eventType === 'DELETE') {
               return prev.filter((p) => p.id !== (payload.old as ProxyRow).id)
             }
@@ -176,14 +185,16 @@ export function useProxiesData(workspaceId: string | null, enabled: boolean): Us
     const data = await listProxies(workspaceId)
     setRows(data)
     try {
-      setProfileNumbers(await listProfileNumbersByProxy(workspaceId))
+      setProfileNumbers(await listProfileNumbersByProxy(workspaceId, data))
     } catch {
       /* keep prior map */
     }
   }, [workspaceId, enabled])
 
   const insertLocal = (row: ProxyRow): void => {
-    setRows((prev) => [row, ...prev])
+    // Same guard as the realtime handler — whichever path arrives second is
+    // a no-op instead of a duplicate row.
+    setRows((prev) => (prev.some((p) => p.id === row.id) ? prev : [row, ...prev]))
     setProfileNumbers((prev) => ({ ...prev, [row.id]: [] }))
   }
 
