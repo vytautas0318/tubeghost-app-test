@@ -25,6 +25,7 @@ export function TubeproxiesToolbar({
   search,
   onSearch,
   onRefresh,
+  refreshing = false,
   onCheckAll,
   onToast
 }: {
@@ -33,6 +34,7 @@ export function TubeproxiesToolbar({
   search: string
   onSearch: (v: string) => void
   onRefresh: () => void
+  refreshing?: boolean
   onCheckAll: () => void
   onToast: (kind: 'success' | 'error' | 'info', text: string) => void
 }): React.ReactElement {
@@ -66,8 +68,13 @@ export function TubeproxiesToolbar({
       </div>
 
       <div className="tp-actions">
-        <Button variant="ghost" icon={<RefreshCw size={14} />} onClick={onRefresh}>
-          Refresh
+        <Button
+          variant="ghost"
+          icon={<RefreshCw size={14} className={refreshing ? 'spin' : undefined} />}
+          onClick={onRefresh}
+          disabled={refreshing}
+        >
+          {refreshing ? 'Refreshing…' : 'Refresh'}
         </Button>
         <div className="pop-search tp-search">
           <Search />

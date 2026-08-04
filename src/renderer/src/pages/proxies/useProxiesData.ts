@@ -43,6 +43,38 @@ export function useProxiesData(
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
+  // The single load path, shared by mount, Refresh, and realtime.
+  //
+  // `attach` matters: the live read is driven by the ATTACHMENT rows, so a
+  // proxy bought since the page opened has no attachment yet and cannot
+  // appear no matter how many times the list is re-read. Any user-initiated
+  // load must therefore attach first — that is what makes "I just bought a
+  // proxy, hit Refresh" work. Realtime passes attach:false, since it is
+  // reacting to a change in rows that are already attached.
+  //
+  // Attaching is idempotent (ON CONFLICT DO NOTHING) and non-fatal: if it
+  // fails, the list still loads.
+  const load = useCallback(
+    async (opts: { attach: boolean }): Promise<void> => {
+      if (!workspaceId || !enabled) return
+      if (opts.attach && canAttach) {
+        await attachMyPurchasedProxies(workspaceId).catch(() => 0)
+      }
+      const data = await listProxies(workspaceId)
+      setRows(data)
+      setError(null)
+      // One workspace-wide query is cheaper than one-per-proxy. Pass the rows
+      // so purchased assignments (tubeproxies_ip_id) and legacy ones
+      // (proxy_host/port with no proxy_id) are attributed to their proxy too.
+      try {
+        setProfileNumbers(await listProfileNumbersByProxy(workspaceId, data))
+      } catch {
+        /* keep the prior map rather than blanking the Profiles column */
+      }
+    },
+    [workspaceId, enabled, canAttach]
+  )
+
   // Initial load
   useEffect(() => {
     if (!workspaceId || !enabled) {
@@ -51,49 +83,17 @@ export function useProxiesData(
     }
     let cancelled = false
     setLoading(true)
-    // Attach first, then read: a proxy bought since the last visit shows up
-    // on this render rather than the next one. This is what the old
-    // auto-sync-on-open did. Non-fatal — a failure here must not blank the
-    // page, so the list still loads either way.
-    ;(canAttach
-      ? attachMyPurchasedProxies(workspaceId).catch(() => 0)
-      : Promise.resolve(0)
-    )
-      .then(() => listProxies(workspaceId))
-      .then(async (data) => {
-        if (cancelled) return
-        setRows(data)
-        setError(null)
-        // One workspace-wide query is cheaper than one-per-proxy.
-        try {
-          // Pass the rows so legacy assignments (proxy_host/port with no
-          // proxy_id) are attributed to their proxy too.
-          const map = await listProfileNumbersByProxy(workspaceId, data)
-          if (!cancelled) setProfileNumbers(map)
-        } catch {
-          if (!cancelled) setProfileNumbers({})
-        }
-      })
+    load({ attach: true })
       .catch((e: Error) => !cancelled && setError(e.message))
       .finally(() => !cancelled && setLoading(false))
     return () => {
       cancelled = true
     }
-  }, [workspaceId, enabled, canAttach])
+  }, [workspaceId, enabled, load])
 
-  // Manual re-fetch (the TubeProxies tab's "Refresh"). Realtime keeps the
-  // list fresh otherwise, so this is a user-triggered convenience, not the
-  // primary path.
-  const refresh = useCallback(async (): Promise<void> => {
-    if (!workspaceId || !enabled) return
-    const data = await listProxies(workspaceId)
-    setRows(data)
-    try {
-      setProfileNumbers(await listProfileNumbersByProxy(workspaceId, data))
-    } catch {
-      /* keep prior map */
-    }
-  }, [workspaceId, enabled])
+  // Manual re-fetch — the TubeProxies tab's "Refresh". Attaches first, so a
+  // newly bought proxy appears without reloading the page.
+  const refresh = useCallback((): Promise<void> => load({ attach: true }), [load])
 
   // Debounced re-fetch used by the purchased-side realtime subscription.
   // A public.proxies payload carries no joined inventory columns, so the row
@@ -103,9 +103,12 @@ export function useProxiesData(
   const scheduleRefresh = useCallback((): void => {
     if (refreshTimer.current) clearTimeout(refreshTimer.current)
     refreshTimer.current = setTimeout(() => {
-      void refresh()
+      // attach:false — this fires on every status change upstream, and the
+      // rows involved are already attached. Attaching here would add a write
+      // per event for no gain.
+      void load({ attach: false })
     }, 400)
-  }, [refresh])
+  }, [load])
 
   // Realtime — custom proxies. ghost.proxies events patch rows in place.
   useEffect(() => {

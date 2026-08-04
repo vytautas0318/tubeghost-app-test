@@ -114,15 +114,21 @@ export function Proxies(): React.ReactElement {
     filtered.forEach((p) => proxyTest.run(p, () => undefined, showToast))
   }
 
-  // Purchased proxies are read live from TubeProxies' tables and kept
-  // current by a realtime subscription, so there is no sync step to run.
-  // This is a plain re-fetch for users who want to force the issue.
+  // Purchased proxies are read live and kept current by a realtime
+  // subscription, so this is not a sync. It re-attaches (picking up anything
+  // bought since the page opened) and re-reads. The pending flag exists
+  // because without it a fast refresh looks like a dead button.
+  const [refreshing, setRefreshing] = useState(false)
   const onRefresh = async (): Promise<void> => {
+    if (refreshing) return
+    setRefreshing(true)
     try {
       await refresh()
       showToast('info', 'Proxies refreshed')
     } catch (e) {
       showToast('error', (e as Error).message)
+    } finally {
+      setRefreshing(false)
     }
   }
 
@@ -177,6 +183,7 @@ export function Proxies(): React.ReactElement {
             search={search}
             onSearch={setSearch}
             onRefresh={() => void onRefresh()}
+            refreshing={refreshing}
             onCheckAll={onCheckAll}
             onToast={showToast}
           />

@@ -141,6 +141,29 @@ function renderStatus(p: ViewProxy): React.ReactNode {
   return <StatusPill state={pill.state} label={pill.label} />
 }
 
+// Status for a PURCHASED proxy — in practice always "Live", because the read
+// function returns active rows only: an expired proxy disappears from
+// TubeGhost exactly as it disappears from TubeProxies (decision 2026-08-04,
+// migration 20260804b).
+//
+// The pill is kept for parity with the Custom tab and as an honest fallback
+// if a non-active row ever reaches this table. The real value here is the
+// sub-line: how long the subscription has left, which is the one thing this
+// tab could not show before.
+function renderPurchasedStatus(p: ViewProxy): React.ReactNode {
+  const live = p.status === 'active'
+  return (
+    <div style={{ minWidth: 0 }}>
+      <StatusPill state={live ? 'ready' : 'warn'} label={live ? 'Live' : 'Expired'} />
+      {p.expiresRelative && (
+        <div className="ctry-city" title={p.expires_at ?? undefined}>
+          expires {p.expiresRelative}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ---- TubeProxies tab -------------------------------------------------------
 // Mirrors tubeproxies.com column order (minus Score, which has no backing
 // column here) and adds Profiles — the reason this page exists in-app.
@@ -171,6 +194,12 @@ export const TUBEPROXIES_COLUMNS: ColumnConfig[] = [
     header: 'Type',
     width: 'minmax(0,0.6fr)',
     cell: (p) => <span className="px-type">{protoLabel(p)}</span>
+  },
+  {
+    key: 'status',
+    header: 'Status',
+    width: 'minmax(0,0.9fr)',
+    cell: (p) => renderPurchasedStatus(p)
   },
   { key: 'profiles', header: 'Profiles', width: 'minmax(0,0.7fr)', cell: (p) => renderProfiles(p) }
 ]

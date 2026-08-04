@@ -93,6 +93,11 @@ export async function attachMyPurchasedProxies(workspaceId: string): Promise<num
 // Scoped by ATTACHMENT, not by the caller's identity: this returns every
 // purchase attached to the workspace, whoever bought it.
 //
+// ACTIVE ONLY. An expired proxy vanishes from TubeGhost at the same moment
+// it vanishes from the TubeProxies dashboard — the two surfaces must agree
+// (decision 2026-08-04). Custom proxies in ghost.proxies can still carry
+// expired/released/error, so consumers must not assume every row is active.
+//
 // Row id is the TubeProxies assignment id (public.proxies.id). label /
 // notes / test telemetry come from ghost.proxy_annotations, joined in by
 // the RPC.

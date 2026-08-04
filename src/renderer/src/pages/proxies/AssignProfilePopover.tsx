@@ -54,6 +54,17 @@ export function AssignProfilePopover({
   }, [profiles, q])
 
   const assign = async (profile: ProfileRow): Promise<void> => {
+    // An expired proxy would hand the profile a dead egress. The other
+    // assignment paths filter these out of their lists; here the proxy is
+    // fixed (the user opened this from its row), so refuse instead.
+    if (proxy.status !== 'active') {
+      setError(
+        proxy.source === 'tubeproxies'
+          ? 'This proxy has expired. Renew it on tubeproxies.com before assigning it.'
+          : 'This proxy is not active, so it cannot be assigned.'
+      )
+      return
+    }
     setBusy(profile.id)
     setError(null)
     try {

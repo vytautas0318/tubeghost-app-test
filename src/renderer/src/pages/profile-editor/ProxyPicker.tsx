@@ -62,21 +62,32 @@ export function ProxyPicker({
     }
   }, [workspace?.workspace_id, currentProxyHost, currentProxyPort])
 
+  // Only ACTIVE proxies are assignable, or the picker would hand a new
+  // profile a dead egress. Purchased proxies are already filtered to active
+  // server-side, so in practice this catches CUSTOM proxies, whose status
+  // (expired / released / error) is set locally. Matches listUnusedProxies()
+  // and the profiles-list inline picker.
+  const selectable = useMemo<ProxyRow[]>(
+    () => (state.kind === 'ready' ? state.rows.filter((r) => r.status === 'active') : []),
+    [state]
+  )
+  const hiddenCount = state.kind === 'ready' ? state.rows.length - selectable.length : 0
+
   const counts = useMemo(() => {
     if (state.kind !== 'ready') return { all: 0, unused: 0, tested: 0 }
     const isUsed = (id: string): boolean => (state.usage[id]?.length ?? 0) > 0
     return {
-      all: state.rows.length,
-      unused: state.rows.filter((r) => !isUsed(r.id)).length,
-      tested: state.rows.filter((r) => r.last_test_ok === true).length
+      all: selectable.length,
+      unused: selectable.filter((r) => !isUsed(r.id)).length,
+      tested: selectable.filter((r) => r.last_test_ok === true).length
     }
-  }, [state])
+  }, [state, selectable])
 
   const filtered = useMemo<ProxyRow[]>(() => {
     if (state.kind !== 'ready') return []
     const isUsed = (id: string): boolean => (state.usage[id]?.length ?? 0) > 0
     const q = search.trim().toLowerCase()
-    let out = state.rows
+    let out = selectable
     if (filterMode === 'unused') out = out.filter((r) => !isUsed(r.id))
     if (filterMode === 'tested') out = out.filter((r) => r.last_test_ok === true)
     if (q) {
@@ -98,7 +109,7 @@ export function ProxyPicker({
       if (sa !== sb) return sa - sb
       return (a.label ?? a.host).localeCompare(b.label ?? b.host)
     })
-  }, [state, search, filterMode])
+  }, [state, selectable, search, filterMode])
 
   if (state.kind === 'loading') {
     return (
@@ -120,10 +131,22 @@ export function ProxyPicker({
   if (counts.all === 0) {
     return (
       <div className="px-3 py-4 bg-[var(--panel-2)] rounded-md text-xs text-[var(--t2)]">
-        No proxies in this workspace yet.{' '}
-        <Link to="/proxies" className="text-[var(--red)] hover:underline font-medium">
-          Add proxies →
-        </Link>
+        {hiddenCount > 0 ? (
+          <>
+            No usable proxies — {hiddenCount === 1 ? 'the only one' : `all ${hiddenCount}`} in this
+            workspace {hiddenCount === 1 ? 'has' : 'have'} expired.{' '}
+            <Link to="/proxies" className="text-[var(--red)] hover:underline font-medium">
+              Renew or add proxies →
+            </Link>
+          </>
+        ) : (
+          <>
+            No proxies in this workspace yet.{' '}
+            <Link to="/proxies" className="text-[var(--red)] hover:underline font-medium">
+              Add proxies →
+            </Link>
+          </>
+        )}
       </div>
     )
   }
@@ -165,6 +188,13 @@ export function ProxyPicker({
               onPick={() => onPick(p)}
             />
           ))}
+        </div>
+      )}
+
+      {hiddenCount > 0 && (
+        <div className="mt-2 text-[11px] text-[var(--t3)]">
+          {hiddenCount} expired {hiddenCount === 1 ? 'proxy is' : 'proxies are'} hidden — they
+          can&apos;t be assigned to a profile.
         </div>
       )}
     </>
