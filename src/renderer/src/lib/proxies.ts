@@ -46,7 +46,9 @@ function client(): GhostClient {
 
 const PROXY_PAGE_LIMIT = 1000
 
-export async function listProxies(workspaceId: string): Promise<ProxyRow[]> {
+// Custom (user-entered) proxies. Since the live-read cutover these are the
+// ONLY rows ghost.proxies holds — purchased proxies are never copied here.
+async function listCustomProxies(workspaceId: string): Promise<ProxyRow[]> {
   const { data, error, count } = await client()
     .from('proxies')
     .select('*', { count: 'estimated' })
@@ -64,9 +66,61 @@ export async function listProxies(workspaceId: string): Promise<ProxyRow[]> {
   return (data ?? []) as ProxyRow[]
 }
 
-// All proxies visible to the current user regardless of the active workspace.
-// RLS on ghost.proxies returns exactly the rows the caller is entitled to see
-// across their workspaces, so we omit the workspace_id filter here.
+// Attach the signed-in user's purchased proxies to this workspace's pool.
+//
+// A purchase becomes visible to a WORKSPACE (not just to its buyer) by
+// having an attachment row — that is what makes team sharing work, so an
+// invited admin sees the proxies the owner contributed. This replaces the
+// old sync's implicit contribution: its INSERT into ghost.proxies carried a
+// workspace_id, so whoever synced shared their purchases with that
+// workspace.
+//
+// Idempotent and cheap; returns how many were newly attached. Requires
+// proxies.create server-side, so a view-only member never contributes.
+export async function attachMyPurchasedProxies(workspaceId: string): Promise<number> {
+  const { data, error } = await client().rpc('attach_my_purchased_proxies', {
+    p_workspace_id: workspaceId
+  })
+  if (error) throw new Error(error.message)
+  return typeof data === 'number' ? data : 0
+}
+
+// The workspace's purchased proxies, read LIVE from TubeProxies' own tables
+// (public.proxies ⋈ public.proxy_inventory) through a SECURITY DEFINER RPC.
+// There is no copy and no sync step, so status and expiry are whatever
+// TubeProxies says at this moment.
+//
+// Scoped by ATTACHMENT, not by the caller's identity: this returns every
+// purchase attached to the workspace, whoever bought it.
+//
+// Row id is the TubeProxies assignment id (public.proxies.id). label /
+// notes / test telemetry come from ghost.proxy_annotations, joined in by
+// the RPC.
+export async function listPurchasedProxies(workspaceId: string): Promise<ProxyRow[]> {
+  const { data, error } = await client().rpc('list_my_purchased_proxies', {
+    p_workspace_id: workspaceId
+  })
+  if (error) throw new Error(error.message)
+  return (data ?? []) as ProxyRow[]
+}
+
+// The workspace's full proxy list: live purchased rows + custom rows, in one
+// shape. Every consumer (Proxies page, profile pickers, assistant) goes
+// through here, so neither source can be forgotten at a call site.
+export async function listProxies(workspaceId: string): Promise<ProxyRow[]> {
+  const [purchased, custom] = await Promise.all([
+    listPurchasedProxies(workspaceId),
+    listCustomProxies(workspaceId)
+  ])
+  return [...purchased, ...custom]
+}
+
+// All CUSTOM proxies visible to the current user regardless of the active
+// workspace. RLS on ghost.proxies returns exactly the rows the caller may
+// see across their workspaces, so the workspace_id filter is omitted.
+//
+// Purchased proxies are deliberately not included: the live read is
+// workspace-scoped (the RPC takes a workspace id and checks membership).
 export async function listMyProxies(): Promise<ProxyRow[]> {
   const { data, error } = await client()
     .from('proxies')
@@ -75,60 +129,6 @@ export async function listMyProxies(): Promise<ProxyRow[]> {
     .range(0, PROXY_PAGE_LIMIT - 1)
   if (error) throw error
   return (data ?? []) as ProxyRow[]
-}
-
-// Result of the on-demand pull. Lets the UI report a real outcome: how many
-// purchased proxies were found and how many were upserted locally.
-export interface SyncMyProxiesResult {
-  email_matched: boolean
-  found: number
-  upserted: number
-  skipped: Array<{ id: string; reason: string }>
-}
-
-// Pull the signed-in user's purchased proxies on demand.
-//
-// An IN-DATABASE RPC, not an edge function. TubeGhost and TubeProxies now
-// share one database, so `ghost.sync_my_purchased_proxies` reads
-// public.proxies ⋈ public.proxy_inventory directly and matches on auth.uid().
-// That removes the cross-project email bridge entirely — and with it the
-// duplicate-mirror-row ambiguity the old sync_outbox / sync-phone-number
-// bridge chased.
-export async function syncMyProxies(workspaceId: string): Promise<SyncMyProxiesResult> {
-  const { data, error } = await client().rpc('sync_my_purchased_proxies', {
-    p_workspace_id: workspaceId
-  })
-  if (error) throw new Error(error.message)
-  // The RPC returns the number of rows upserted. `email_matched` is retained
-  // for call-site compatibility and is always true: identity is auth.uid(),
-  // so there is no email match to fail.
-  const upserted = typeof data === 'number' ? data : 0
-  return { email_matched: true, found: upserted, upserted, skipped: [] }
-}
-
-// A purchased proxy that failed to sync from TubeProxies and is parked in
-// the server-side retry queue. Surfaced so "Sync now" can report a real
-// reason instead of silently showing 0 rows.
-export interface ProxySyncIssue {
-  entity_id: string
-  host: string | null
-  port: number | null
-  attempts: number
-  last_error: string | null
-  next_retry_at: string | null
-}
-
-// The caller's own stuck purchased-proxy syncs (scoped to auth.uid() inside
-// the RPC). Empty array = nothing pending. Never throws for the common
-// "function not deployed yet" case — returns [] so the UI degrades cleanly.
-export async function getProxySyncHealth(): Promise<ProxySyncIssue[]> {
-  const { data, error } = await client().rpc('get_proxy_sync_health')
-  if (error) {
-    // 404 (function absent) or a transient error shouldn't break Refresh.
-    console.warn('[getProxySyncHealth]', error.message)
-    return []
-  }
-  return (data ?? []) as ProxySyncIssue[]
 }
 
 // NOTE: proxy password reveal no longer goes through a server call. The value
@@ -152,8 +152,8 @@ export interface NewCustomProxyInput {
   notes?: string | null
 }
 
-// Insert a custom (non-TubeProxies) proxy. TubeProxies-sourced proxies
-// are created by the sync flow (Phase 3), not by this function.
+// Insert a custom (non-TubeProxies) proxy. Purchased proxies are never
+// inserted here — they are read live from TubeProxies' tables.
 export async function createCustomProxy(input: NewCustomProxyInput): Promise<ProxyRow> {
   const { data, error } = await client()
     .from('proxies')
@@ -181,24 +181,25 @@ export async function createCustomProxy(input: NewCustomProxyInput): Promise<Pro
   return data as ProxyRow
 }
 
-export async function updateProxy(
-  id: string,
-  patch: Partial<
-    Pick<
-      ProxyRow,
-      | 'label'
-      | 'notes'
-      | 'country_code'
-      | 'country_name'
-      | 'city'
-      | 'region'
-      | 'timezone'
-      | 'last_known_egress_ip'
-      | 'last_test_ok'
-      | 'last_tested_at'
-    >
+export type ProxyPatch = Partial<
+  Pick<
+    ProxyRow,
+    | 'label'
+    | 'notes'
+    | 'country_code'
+    | 'country_name'
+    | 'city'
+    | 'region'
+    | 'timezone'
+    | 'last_known_egress_ip'
+    | 'last_test_ok'
+    | 'last_tested_at'
   >
-): Promise<ProxyRow> {
+>
+
+// Update a CUSTOM proxy row in ghost.proxies. Purchased proxies no longer
+// live there — use updateProxyRow(), which routes by source.
+export async function updateProxy(id: string, patch: ProxyPatch): Promise<ProxyRow> {
   const { data, error } = await client()
     .from('proxies')
     .update(patch)
@@ -209,17 +210,70 @@ export async function updateProxy(
   return data as ProxyRow
 }
 
+// Ghost-side annotations for a purchased proxy. The connection data itself
+// (host, port, credentials, geo) is TubeProxies-owned and read-only here,
+// so only the ghost-owned fields are written.
+async function upsertProxyAnnotation(
+  workspaceId: string,
+  tubeproxiesProxyId: string,
+  patch: ProxyPatch
+): Promise<void> {
+  const { error } = await client()
+    .from('proxy_annotations')
+    .upsert(
+      {
+        workspace_id: workspaceId,
+        tubeproxies_proxy_id: tubeproxiesProxyId,
+        ...(patch.label !== undefined && { label: patch.label }),
+        ...(patch.notes !== undefined && { notes: patch.notes }),
+        ...(patch.last_known_egress_ip !== undefined && {
+          last_known_egress_ip: patch.last_known_egress_ip
+        }),
+        ...(patch.last_test_ok !== undefined && { last_test_ok: patch.last_test_ok }),
+        ...(patch.last_tested_at !== undefined && { last_tested_at: patch.last_tested_at }),
+        updated_at: new Date().toISOString()
+      },
+      { onConflict: 'workspace_id,tubeproxies_proxy_id' }
+    )
+  if (error) throw error
+}
+
+// Patch any proxy, routing by source: custom rows update ghost.proxies;
+// purchased rows write only their ghost-side annotation. Geo fields in the
+// patch are ignored for purchased rows — TubeProxies owns those.
+// Returns the row with the patch applied so callers can update local state.
+export async function updateProxyRow(row: ProxyRow, patch: ProxyPatch): Promise<ProxyRow> {
+  if (row.source === 'custom') return updateProxy(row.id, patch)
+  const { label, notes, last_known_egress_ip, last_test_ok, last_tested_at } = patch
+  await upsertProxyAnnotation(row.workspace_id, row.id, {
+    label,
+    notes,
+    last_known_egress_ip,
+    last_test_ok,
+    last_tested_at
+  })
+  return { ...row, ...patch }
+}
+
+// Delete a CUSTOM proxy. Purchased proxies cannot be deleted from here —
+// they belong to the user's TubeProxies subscription and are cancelled
+// there; nothing local exists to remove.
 export async function deleteProxy(id: string): Promise<void> {
   const { error } = await client().from('proxies').delete().eq('id', id)
   if (error) throw error
 }
 
 // Count of profiles using this proxy (for the table's "Profiles" column).
-export async function countProfilesUsingProxy(proxyId: string): Promise<number> {
-  const { count, error } = await client()
-    .from('browser_profiles')
-    .select('id', { count: 'exact', head: true })
-    .eq('proxy_id', proxyId)
+// Custom proxies are linked by browser_profiles.proxy_id; purchased ones by
+// tubeproxies_ip_id, since they have no ghost.proxies row to point at.
+export async function countProfilesUsingProxy(
+  proxyId: string,
+  tubeproxiesIpId?: string | null
+): Promise<number> {
+  const q = client().from('browser_profiles').select('id', { count: 'exact', head: true })
+  const { count, error } = await (tubeproxiesIpId
+    ? q.or(`proxy_id.eq.${proxyId},tubeproxies_ip_id.eq.${tubeproxiesIpId}`)
+    : q.eq('proxy_id', proxyId))
   if (error) throw error
   return count ?? 0
 }
@@ -231,25 +285,35 @@ export async function countProfilesUsingProxy(proxyId: string): Promise<number> 
 // Single query for the whole workspace — cheaper than one-per-proxy.
 // Profiles without a number (rows created before migration 0009) are
 // skipped silently rather than rendered as "#null".
-// `proxies` is optional: pass the workspace's proxy rows to also resolve
-// LEGACY assignments (profiles saved before proxy_id started being written —
-// they only carry the denormalised proxy_host/proxy_port). Without it those
-// profiles look "unassigned" and their proxy reads as unused.
+// `proxies` is optional but strongly recommended: pass the workspace's proxy
+// rows so assignments can be resolved by tubeproxies_ip_id and by
+// host:port too. Both matter now —
+//   * PURCHASED proxies have no ghost.proxies row, so profiles link to them
+//     via tubeproxies_ip_id, never proxy_id;
+//   * LEGACY assignments (saved before proxy_id was written) carry only the
+//     denormalised proxy_host/proxy_port.
+// Without the rows those profiles look unassigned and their proxy reads as
+// unused — which would let auto-assign hand the same proxy out twice.
 export async function listProfileNumbersByProxy(
   workspaceId: string,
   proxies?: ProxyRow[]
 ): Promise<Record<string, number[]>> {
   const { data, error } = await client()
     .from('browser_profiles')
-    .select('proxy_id, proxy_host, proxy_port, profile_number')
+    .select('proxy_id, tubeproxies_ip_id, proxy_host, proxy_port, profile_number')
     .eq('workspace_id', workspaceId)
   if (error) throw error
   const byHostPort = new Map<string, string>()
-  for (const p of proxies ?? []) byHostPort.set(`${p.host}:${p.port}`, p.id)
+  const byTubeproxiesIp = new Map<string, string>()
+  for (const p of proxies ?? []) {
+    byHostPort.set(`${p.host}:${p.port}`, p.id)
+    if (p.tubeproxies_ip_id) byTubeproxiesIp.set(p.tubeproxies_ip_id, p.id)
+  }
 
   const out: Record<string, number[]> = {}
   const rows = (data ?? []) as Array<{
     proxy_id: string | null
+    tubeproxies_ip_id: string | null
     proxy_host: string | null
     proxy_port: number | null
     profile_number: number | null
@@ -257,6 +321,7 @@ export async function listProfileNumbersByProxy(
   for (const row of rows) {
     const id =
       row.proxy_id ??
+      (row.tubeproxies_ip_id ? byTubeproxiesIp.get(row.tubeproxies_ip_id) : undefined) ??
       (row.proxy_host && row.proxy_port != null
         ? byHostPort.get(`${row.proxy_host}:${row.proxy_port}`)
         : undefined)

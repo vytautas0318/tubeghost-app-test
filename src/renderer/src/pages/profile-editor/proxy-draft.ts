@@ -40,7 +40,11 @@ export const initialProxyDraft = (): ProxyDraft => ({
 
 export function proxyFieldsFromRow(p: ProxyRow): ProfileProxyFields {
   return {
-    proxy_id: p.id,
+    // proxy_id is a FK to ghost.proxies, which holds CUSTOM proxies only.
+    // Purchased proxies are read live from TubeProxies and have no ghost row
+    // to reference — they link through tubeproxies_ip_id instead. Same rule
+    // as assignProxyToProfile().
+    proxy_id: p.source === 'custom' ? p.id : null,
     proxy_type: p.proxy_type,
     proxy_host: p.host,
     proxy_port: p.port,

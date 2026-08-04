@@ -62,6 +62,14 @@ interface TestResultErr {
 
 type TestResult = TestResultOk | TestResultErr
 
+// Describe a thrown value precisely. `e.message` alone (e.g. "fetch failed")
+// doesn't say which layer threw — include the class name and any `cause`.
+function describe(e: unknown): string {
+  const err = e as { name?: string; message?: string; cause?: unknown }
+  const cause = err?.cause ? ` (cause: ${String((err.cause as Error)?.message ?? err.cause)})` : ''
+  return `${err?.name ?? typeof e}: ${err?.message ?? String(e)}${cause}`
+}
+
 class StageError extends Error {
   constructor(
     public stage: TestResultErr['stage'],
@@ -135,7 +143,8 @@ async function httpConnectTunnel(req: TestRequest, timeoutMs: number): Promise<D
     timeoutMs,
     'connect'
   ).catch((e) => {
-    throw e instanceof StageError ? e : new StageError('connect', String(e?.message ?? e))
+    console.error('[proxy-test] Deno.connect failed', { host: req.host, port: req.port, detail: describe(e) })
+    throw e instanceof StageError ? e : new StageError('connect', describe(e))
   })
 
   const auth = req.username
@@ -174,7 +183,8 @@ async function socks5Tunnel(req: TestRequest, timeoutMs: number): Promise<Deno.T
     timeoutMs,
     'connect'
   ).catch((e) => {
-    throw e instanceof StageError ? e : new StageError('connect', String(e?.message ?? e))
+    console.error('[proxy-test] Deno.connect failed', { host: req.host, port: req.port, detail: describe(e) })
+    throw e instanceof StageError ? e : new StageError('connect', describe(e))
   })
 
   const reader = conn.readable.getReader()
@@ -353,7 +363,14 @@ async function testProxy(req: TestRequest): Promise<TestResult> {
     if (e instanceof StageError) {
       return { ok: false, stage: e.stage, error: e.message, elapsed_ms: Date.now() - start }
     }
-    return { ok: false, stage: 'connect', error: String((e as Error)?.message ?? e), elapsed_ms: Date.now() - start }
+    console.error('[proxy-test] unhandled failure', {
+      proxy_type: req.proxy_type,
+      host: req.host,
+      port: req.port,
+      detail: describe(e),
+      stack: (e as Error)?.stack
+    })
+    return { ok: false, stage: 'connect', error: describe(e), elapsed_ms: Date.now() - start }
   }
 }
 

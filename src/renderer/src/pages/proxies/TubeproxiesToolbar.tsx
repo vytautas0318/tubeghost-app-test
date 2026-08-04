@@ -1,11 +1,11 @@
-// Header for the TubeProxies tab: sync status + refresh, search (IP or tag),
+// Header for the TubeProxies tab: live-read status + refresh, search (IP or tag),
 // and the bulk actions ported from tubeproxies.com (Check All / Copy All /
 // Export) plus a Buy-more link back to tubeproxies.com. Rendered in
 // TubeGhost's dark DS — only the column/action semantics are ported, not the
 // reference's light styling.
 
 import * as React from 'react'
-import { CheckCheck, Copy, Download, ExternalLink, Search } from 'lucide-react'
+import { CheckCheck, Copy, Download, ExternalLink, RefreshCw, Search } from 'lucide-react'
 import { Button } from '@/components/ui'
 import type { ViewProxy } from './types'
 
@@ -24,7 +24,7 @@ export function TubeproxiesToolbar({
   selectedRows,
   search,
   onSearch,
-  syncedRelative,
+  onRefresh,
   onCheckAll,
   onToast
 }: {
@@ -32,7 +32,7 @@ export function TubeproxiesToolbar({
   selectedRows: ViewProxy[]
   search: string
   onSearch: (v: string) => void
-  syncedRelative: string | null
+  onRefresh: () => void
   onCheckAll: () => void
   onToast: (kind: 'success' | 'error' | 'info', text: string) => void
 }): React.ReactElement {
@@ -62,10 +62,13 @@ export function TubeproxiesToolbar({
   return (
     <div className="tp-toolbar">
       <div className="tp-sync">
-        <span>{syncedRelative ? <>Synced {syncedRelative}</> : 'Not synced yet'}</span>
+        <span>Live from TubeProxies — updates automatically</span>
       </div>
 
       <div className="tp-actions">
+        <Button variant="ghost" icon={<RefreshCw size={14} />} onClick={onRefresh}>
+          Refresh
+        </Button>
         <div className="pop-search tp-search">
           <Search />
           <input

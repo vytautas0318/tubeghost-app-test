@@ -366,10 +366,11 @@ export async function assignProxyToProfile(
   }
 ): Promise<ProfileRow> {
   return updateProfile(profileId, {
-    // proxy_id is the FK the "unused proxy" logic reads (picker filter,
-    // Proxies-page usage column, auto-assign at creation). It MUST be kept
-    // in sync with the denormalised copy below.
-    proxy_id: proxy.id,
+    // proxy_id is a FK to ghost.proxies, which holds CUSTOM proxies only —
+    // purchased proxies are read live from TubeProxies and have no ghost row
+    // to reference. Their linkage is tubeproxies_ip_id (set below), which the
+    // usage lookups key on alongside proxy_id.
+    proxy_id: proxy.source === 'custom' ? proxy.id : null,
     proxy_type: proxy.proxy_type,
     proxy_host: proxy.host,
     proxy_port: proxy.port,

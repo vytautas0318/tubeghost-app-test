@@ -74,8 +74,12 @@ export function Authenticator(): React.ReactElement {
     id ? (profiles.find((p) => p.id === id)?.name ?? null) : null
 
   const copy = (id: string, issuer: string): void => {
+    if (!canCopy) return
     const code = codes[id]
-    if (!code || !canCopy) return
+    if (!code) {
+      show('error', 'Code not loaded yet — retrying on the next refresh')
+      return
+    }
     try {
       navigator.clipboard?.writeText(code)
     } catch {

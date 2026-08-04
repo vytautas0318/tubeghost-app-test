@@ -1,18 +1,19 @@
 // Custom hook that owns Proxies-page data fetching: initial load,
-// realtime subscription, profile-count side queries, and basic mutations.
+// realtime subscriptions, profile-count side queries, and basic mutations.
 // Keeps the page component focused on layout/state orchestration.
+//
+// Purchased proxies are read LIVE from TubeProxies' tables — there is no
+// copy and no sync step. Custom proxies still live in ghost.proxies.
+// listProxies() merges both into one ProxyRow list.
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { formatDistanceToNow } from 'date-fns'
 import {
+  attachMyPurchasedProxies,
   deleteProxy,
-  getProxySyncHealth,
   listProfileNumbersByProxy,
   listProxies,
-  syncMyProxies,
-  type ProxyRow,
-  type ProxySyncIssue,
-  type SyncMyProxiesResult
+  type ProxyRow
 } from '@/lib/proxies'
 import { getSupabase } from '@/lib/supabase'
 import type { ViewProxy } from './types'
@@ -22,25 +23,25 @@ interface UseProxiesDataResult {
   view: ViewProxy[]
   countries: string[]
   counts: { total: number; active: number; expired: number }
-  lastSync: string | null
   loading: boolean
   error: string | null
-  syncIssues: ProxySyncIssue[]
   removeRow: (id: string) => Promise<void>
   insertLocal: (row: ProxyRow) => void
   refresh: () => Promise<void>
-  // Pull the user's purchased proxies from TubeProxies, re-fetch rows, then
-  // check the server-side retry queue. Returns the pull outcome plus any
-  // still-stuck syncs so the UI can report a real, specific result.
-  syncNow: () => Promise<{ pull: SyncMyProxiesResult | null; issues: ProxySyncIssue[] }>
 }
 
-export function useProxiesData(workspaceId: string | null, enabled: boolean): UseProxiesDataResult {
+export function useProxiesData(
+  workspaceId: string | null,
+  enabled: boolean,
+  // proxies.create — gates contributing your own purchases to this
+  // workspace's pool. Without it the page is read-only: you still see what
+  // the workspace already has, you just don't add to it.
+  canAttach: boolean
+): UseProxiesDataResult {
   const [rows, setRows] = useState<ProxyRow[]>([])
   const [profileNumbers, setProfileNumbers] = useState<Record<string, number[]>>({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [syncIssues, setSyncIssues] = useState<ProxySyncIssue[]>([])
 
   // Initial load
   useEffect(() => {
@@ -50,7 +51,15 @@ export function useProxiesData(workspaceId: string | null, enabled: boolean): Us
     }
     let cancelled = false
     setLoading(true)
-    listProxies(workspaceId)
+    // Attach first, then read: a proxy bought since the last visit shows up
+    // on this render rather than the next one. This is what the old
+    // auto-sync-on-open did. Non-fatal — a failure here must not blank the
+    // page, so the list still loads either way.
+    ;(canAttach
+      ? attachMyPurchasedProxies(workspaceId).catch(() => 0)
+      : Promise.resolve(0)
+    )
+      .then(() => listProxies(workspaceId))
       .then(async (data) => {
         if (cancelled) return
         setRows(data)
@@ -70,9 +79,35 @@ export function useProxiesData(workspaceId: string | null, enabled: boolean): Us
     return () => {
       cancelled = true
     }
+  }, [workspaceId, enabled, canAttach])
+
+  // Manual re-fetch (the TubeProxies tab's "Refresh"). Realtime keeps the
+  // list fresh otherwise, so this is a user-triggered convenience, not the
+  // primary path.
+  const refresh = useCallback(async (): Promise<void> => {
+    if (!workspaceId || !enabled) return
+    const data = await listProxies(workspaceId)
+    setRows(data)
+    try {
+      setProfileNumbers(await listProfileNumbersByProxy(workspaceId, data))
+    } catch {
+      /* keep prior map */
+    }
   }, [workspaceId, enabled])
 
-  // Realtime subscription
+  // Debounced re-fetch used by the purchased-side realtime subscription.
+  // A public.proxies payload carries no joined inventory columns, so the row
+  // can't be patched in place — re-pulling the merged list is the correct
+  // response. Debounced because a bulk swap fires many events at once.
+  const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const scheduleRefresh = useCallback((): void => {
+    if (refreshTimer.current) clearTimeout(refreshTimer.current)
+    refreshTimer.current = setTimeout(() => {
+      void refresh()
+    }, 400)
+  }, [refresh])
+
+  // Realtime — custom proxies. ghost.proxies events patch rows in place.
   useEffect(() => {
     if (!workspaceId || !enabled) return
     const supabase = getSupabase()
@@ -114,8 +149,41 @@ export function useProxiesData(workspaceId: string | null, enabled: boolean): Us
     }
   }, [workspaceId, enabled])
 
+  // Realtime — purchased proxies. These live in public.proxies, which
+  // TubeProxies owns: when expire-overdue-proxies or an admin swap flips a
+  // row there, re-fetch so the change renders without a manual refresh.
+  // This is what makes expiry propagate instantly instead of never.
+  //
+  // Requires public.proxies in the supabase_realtime publication (see the
+  // 20260804a migration) plus a SELECT policy for the subscriber. If either
+  // is absent the subscription is simply silent and Refresh still works.
+  useEffect(() => {
+    if (!workspaceId || !enabled) return
+    const supabase = getSupabase()
+    if (!supabase) return
+    let disposed = false
+    let channel: ReturnType<typeof supabase.channel> | null = null
+    void supabase.auth.getUser().then(({ data }) => {
+      const uid = data.user?.id
+      if (!uid || disposed) return
+      channel = supabase
+        .channel(`purchased-proxies:${uid}`)
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'proxies', filter: `user_id=eq.${uid}` },
+          () => scheduleRefresh()
+        )
+        .subscribe()
+    })
+    return () => {
+      disposed = true
+      if (refreshTimer.current) clearTimeout(refreshTimer.current)
+      if (channel) supabase.removeChannel(channel)
+    }
+  }, [workspaceId, enabled, scheduleRefresh])
+
   // host:port → set of distinct sources present, so we can flag the same
-  // endpoint appearing as BOTH a synced (tubeproxies) and a custom row.
+  // endpoint appearing as BOTH a purchased and a custom row.
   const sourcesByEndpoint = useMemo(() => {
     const m = new Map<string, Set<string>>()
     for (const r of rows) {
@@ -140,9 +208,8 @@ export function useProxiesData(workspaceId: string | null, enabled: boolean): Us
           expiresRelative: r.expires_at
             ? formatDistanceToNow(new Date(r.expires_at), { addSuffix: true })
             : null,
-          lastSyncedRelative: r.last_synced_at
-            ? formatDistanceToNow(new Date(r.last_synced_at), { addSuffix: true })
-            : null
+          // Nothing is synced any more — purchased rows are read live.
+          lastSyncedRelative: null
         }
       }),
     [rows, profileNumbers, sourcesByEndpoint]
@@ -165,31 +232,16 @@ export function useProxiesData(workspaceId: string | null, enabled: boolean): Us
     [rows]
   )
 
-  const lastSync = useMemo(() => {
-    const latest = rows
-      .map((r) => (r.last_synced_at ? new Date(r.last_synced_at).getTime() : 0))
-      .reduce((a, b) => Math.max(a, b), 0)
-    return latest > 0 ? formatDistanceToNow(new Date(latest), { addSuffix: true }) : null
-  }, [rows])
-
   const removeRow = async (id: string): Promise<void> => {
+    const row = rows.find((p) => p.id === id)
+    if (row && row.source !== 'custom') {
+      throw new Error(
+        'Purchased proxies are managed on tubeproxies.com — cancel or swap it there.'
+      )
+    }
     await deleteProxy(id)
     setRows((prev) => prev.filter((p) => p.id !== id))
   }
-
-  // Manual re-fetch (TubeProxies tab "Refresh"/"Sync now"). Re-pulls the
-  // workspace proxies + profile-number map; realtime keeps them fresh
-  // otherwise, so this is a user-triggered convenience, not the primary path.
-  const refresh = useCallback(async (): Promise<void> => {
-    if (!workspaceId || !enabled) return
-    const data = await listProxies(workspaceId)
-    setRows(data)
-    try {
-      setProfileNumbers(await listProfileNumbersByProxy(workspaceId, data))
-    } catch {
-      /* keep prior map */
-    }
-  }, [workspaceId, enabled])
 
   const insertLocal = (row: ProxyRow): void => {
     // Same guard as the realtime handler — whichever path arrives second is
@@ -198,41 +250,15 @@ export function useProxiesData(workspaceId: string | null, enabled: boolean): Us
     setProfileNumbers((prev) => ({ ...prev, [row.id]: [] }))
   }
 
-  // "Sync now": PULL the user's purchased proxies from TubeProxies (on-demand
-  // edge function), then refresh the table and check the retry queue. Returns
-  // both the pull outcome and any still-stuck syncs so the UI can report a
-  // specific result instead of silently claiming success. A pull failure is
-  // non-fatal here (still refresh + report) — the caller inspects `pull`.
-  const syncNow = useCallback(async (): Promise<{
-    pull: SyncMyProxiesResult | null
-    issues: ProxySyncIssue[]
-  }> => {
-    let pull: SyncMyProxiesResult | null = null
-    let pullError: Error | null = null
-    try {
-      if (workspaceId) pull = await syncMyProxies(workspaceId)
-    } catch (e) {
-      pullError = e as Error
-    }
-    await refresh()
-    const issues = await getProxySyncHealth()
-    setSyncIssues(issues)
-    if (pullError) throw pullError
-    return { pull, issues }
-  }, [refresh, workspaceId])
-
   return {
     rows,
     view,
     countries,
     counts,
-    lastSync,
     loading,
     error,
-    syncIssues,
     removeRow,
     insertLocal,
-    refresh,
-    syncNow
+    refresh
   }
 }

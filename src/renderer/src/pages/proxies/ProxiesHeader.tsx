@@ -2,11 +2,9 @@ import * as React from 'react'
 
 export function ProxiesHeader({
   counts,
-  lastSync,
   children
 }: {
   counts: { total: number; active: number; expired: number }
-  lastSync: string | null
   children?: React.ReactNode
 }): React.ReactElement {
   return (
@@ -18,7 +16,6 @@ export function ProxiesHeader({
         <p className="text-sm text-[var(--t3)] mt-1">
           {counts.active} active
           {counts.expired > 0 && <> · {counts.expired} expired</>} · {counts.total} total
-          {lastSync && <> · last sync {lastSync}</>}
         </p>
       </div>
       <div className="flex items-center gap-2.5">{children}</div>

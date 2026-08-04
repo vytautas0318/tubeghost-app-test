@@ -7,7 +7,7 @@
 // profiles get a fresh coherent TubeGhost fingerprint for the chosen platform,
 // which is strictly better than replaying another vendor's spoof values.
 
-import { csvToObjects } from './csv'
+import { csvToObjects, pickPrefix } from './csv'
 import { normalizeEmbeddedCookies } from './cookies'
 
 export type ImportVendor = 'multilogin' | 'adspower' | 'gologin' | 'dolphin' | 'incogniton' | 'csv'
@@ -176,7 +176,7 @@ export function mapGridRow(o: Record<string, string>, fallbackName: string): Par
     name: str(pick(r, 'name', 'profilename', 'profile', 'title')) ?? fallbackName,
     platform: normalizePlatform(pick(r, 'os', 'platform', 'system')),
     notes: str(pick(r, 'remark', 'notes', 'note', 'description')),
-    tags: parseTags(pick(r, 'tags', 'tag')),
+    tags: parseTags(pick(r, 'tags', 'tag', 'labels', 'label') ?? pickPrefix(r, 'tag', 'label')),
     proxy,
     cookiesJson: normalizeEmbeddedCookies(pick(r, 'cookie', 'cookies')),
     group: str(pick(r, 'group', 'groupname', 'folder', 'category'))

@@ -72,6 +72,24 @@ describe('parseForeignProfiles', () => {
     expect(out[0].tags).toEqual(['x', 'y'])
   })
 
+  // Vendor sheets spell the tag column half a dozen ways and often decorate it
+  // with a hint. All of them must land in profiles.tags.
+  it.each([
+    ['Tags', '"x;y"', ['x', 'y']],
+    ['Tag', 'solo', ['solo']],
+    ['Label', '"a,b"', ['a', 'b']],
+    ['Tags (separate with commas)', '"x, y"', ['x', 'y']],
+    ['Tag name', 'test', ['test']]
+  ])('maps the %s column to tags', (header, cell, expected) => {
+    const out = parseForeignProfiles('list.csv', `Name,${header}\nAlpha,${cell}`)
+    expect(out[0].tags).toEqual(expected)
+  })
+
+  it('does not mistake a proxy tag column for the profile tags', () => {
+    const out = parseForeignProfiles('list.csv', 'Name,Proxy tag\nAlpha,residential-us')
+    expect(out[0].tags).toBeUndefined()
+  })
+
   it('keeps mapping vendor arrays as before', () => {
     const json = JSON.stringify({ profiles: [{ name: 'One' }, { name: 'Two' }] })
     const out = parseForeignProfiles('vendor.json', json)

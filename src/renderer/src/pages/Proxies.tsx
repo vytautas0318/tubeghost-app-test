@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useWorkspace } from '@/store/workspace'
 import { useHasPermission } from '@/lib/permissions'
@@ -36,8 +36,8 @@ export function Proxies(): React.ReactElement {
   const canEdit = useHasPermission('proxies.edit')
   const canTest = useHasPermission('proxies.test')
 
-  const data = useProxiesData(ws?.workspace_id ?? null, canView)
-  const { view, counts, lastSync, loading, error, removeRow, insertLocal, syncNow } = data
+  const data = useProxiesData(ws?.workspace_id ?? null, canView, canCreate)
+  const { view, counts, loading, error, removeRow, insertLocal, refresh } = data
 
   const [showAddPanel, setShowAddPanel] = useState(false)
   const [selectedRow, setSelectedRow] = useState<ProxyRow | null>(null)
@@ -114,67 +114,29 @@ export function Proxies(): React.ReactElement {
     filtered.forEach((p) => proxyTest.run(p, () => undefined, showToast))
   }
 
-  // Pull the user's purchased proxies from TubeProxies, then report a real,
-  // specific outcome. A silent empty tab (email not matched to a workspace,
-  // no TubeProxies account, upsert rejected) becomes a visible message.
-  // `quiet` suppresses the "synced / up to date" success toast so the
-  // automatic on-open sync stays invisible unless something is actually
-  // wrong. Problems are always reported, automatic or not.
-  const onSyncNow = async (quiet = false): Promise<void> => {
+  // Purchased proxies are read live from TubeProxies' tables and kept
+  // current by a realtime subscription, so there is no sync step to run.
+  // This is a plain re-fetch for users who want to force the issue.
+  const onRefresh = async (): Promise<void> => {
     try {
-      const { pull, issues } = await syncNow()
-      if (issues.length > 0) {
-        const first = issues[0]
-        showToast(
-          'error',
-          `${issues.length} TubeProxies ${issues.length === 1 ? 'proxy' : 'proxies'} not synced` +
-            (first.last_error ? ` — ${first.last_error}` : '')
-        )
-      } else if (pull && !pull.email_matched) {
-        showToast('error', 'No TubeProxies account matches your email — nothing to sync.')
-      } else if (pull && pull.skipped.length > 0) {
-        showToast('error', `${pull.skipped.length} could not sync — ${pull.skipped[0].reason}`)
-      } else if (pull) {
-        // A real import is worth announcing even on the automatic sync.
-        if (pull.upserted > 0) {
-          showToast(
-            'success',
-            `Synced ${pull.upserted} ${pull.upserted === 1 ? 'proxy' : 'proxies'} from TubeProxies`
-          )
-        } else if (!quiet) {
-          showToast('success', 'Up to date — no new proxies')
-        }
-      } else if (!quiet) {
-        showToast('info', 'Proxies refreshed')
-      }
+      await refresh()
+      showToast('info', 'Proxies refreshed')
     } catch (e) {
       showToast('error', (e as Error).message)
     }
   }
-
-  // Sync automatically when the Proxies page is opened from the sidebar.
-  // The ref keeps it to one run per mount — switching tabs (which only
-  // changes the route param) must not re-trigger a pull.
-  const autoSynced = useRef(false)
-  useEffect(() => {
-    if (autoSynced.current) return
-    if (!ws || !canView) return
-    autoSynced.current = true
-    void onSyncNow(true)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ws?.workspace_id, canView])
 
   if (!ws) return <CenterMessage text="Loading workspace…" />
   if (!canView) return <NoPermissionState />
   if (loading) {
     return (
       <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
-        <ProxiesHeader counts={counts} lastSync={lastSync} />
+        <ProxiesHeader counts={counts} />
         <CenterMessage text="Loading proxies…" />
       </div>
     )
   }
-  if (error) return <ErrorState message={error} counts={counts} lastSync={lastSync} />
+  if (error) return <ErrorState message={error} counts={counts} />
 
   const columns = tab === 'tubeproxies' ? TUBEPROXIES_COLUMNS : CUSTOM_COLUMNS
   const tabEmpty = tabRows.length === 0 && !showAddPanel
@@ -214,7 +176,7 @@ export function Proxies(): React.ReactElement {
             selectedRows={selectedRows}
             search={search}
             onSearch={setSearch}
-            syncedRelative={lastSync}
+            onRefresh={() => void onRefresh()}
             onCheckAll={onCheckAll}
             onToast={showToast}
           />
@@ -225,7 +187,7 @@ export function Proxies(): React.ReactElement {
             tab={tab}
             canCreate={canCreate}
             onCreate={() => setShowAddPanel(true)}
-            onSync={() => void onSyncNow()}
+            onSync={() => void onRefresh()}
           />
         ) : (
           <>

@@ -1,9 +1,11 @@
 // Encapsulates the "Test connection" flow used by the detail drawer.
-// Calls the proxy-test Edge Function, then persists the result back to
-// the row (best-effort UPDATE — failures don't block the toast).
+// Calls the proxy-test Edge Function, then persists the result back
+// (best-effort — failures don't block the toast). updateProxyRow routes by
+// source: custom rows update ghost.proxies, purchased rows write their
+// ghost-side annotation instead.
 
 import { testProxy } from '@/lib/proxy-test'
-import { updateProxy, type ProxyRow } from '@/lib/proxies'
+import { updateProxyRow, type ProxyRow } from '@/lib/proxies'
 
 export interface ProxyTestRunner {
   run: (
@@ -39,7 +41,7 @@ export function useProxyTest(): ProxyTestRunner {
             `OK · egress ${r.egress_ip} · ${r.elapsed_ms}ms`
           )
           try {
-            const updated = await updateProxy(selected.id, {
+            const updated = await updateProxyRow(selected, {
               last_known_egress_ip: r.egress_ip,
               last_test_ok: true,
               last_tested_at: new Date().toISOString()
@@ -51,7 +53,7 @@ export function useProxyTest(): ProxyTestRunner {
         } else {
           showToast('error', `${r.stage}: ${r.error}`)
           try {
-            const updated = await updateProxy(selected.id, {
+            const updated = await updateProxyRow(selected, {
               last_test_ok: false,
               last_tested_at: new Date().toISOString()
             })

@@ -3,8 +3,8 @@ import { ExternalLink, Globe, Plus, RefreshCw } from 'lucide-react'
 
 const BUY_URL = 'https://tubeproxies.com'
 
-// Per-tab empty state. The TubeProxies tab points at buying + syncing;
-// the Custom tab points at adding your own proxy.
+// Per-tab empty state. The TubeProxies tab points at buying (purchases show
+// up here on their own); the Custom tab points at adding your own proxy.
 export function ProxiesEmptyState({
   tab,
   canCreate,
@@ -28,7 +28,7 @@ export function ProxiesEmptyState({
         </h2>
         <p className="text-sm text-[var(--t2)] mb-5">
           {isTube
-            ? 'Buy proxies at tubeproxies.com and sync them here, or switch to the Custom tab to add your own.'
+            ? 'Buy proxies at tubeproxies.com — they appear here automatically. Or switch to the Custom tab to add your own.'
             : 'Add a proxy from any provider — host, port, and credentials.'}
         </p>
         <div className="flex items-center gap-2 justify-center">
@@ -47,7 +47,7 @@ export function ProxiesEmptyState({
                   className="px-4 py-2 text-sm font-medium bg-[var(--panel-2)] border border-[var(--line)] text-[var(--t1)] rounded-lg hover:bg-[var(--hover)] flex items-center gap-2"
                 >
                   <RefreshCw className="w-4 h-4" />
-                  Sync now
+                  Refresh
                 </button>
               )}
             </>

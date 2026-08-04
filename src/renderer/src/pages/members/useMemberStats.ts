@@ -4,6 +4,7 @@
 
 import { useEffect, useState } from 'react'
 import { getSupabase } from '@/lib/supabase'
+import { listProxies } from '@/lib/proxies'
 
 export interface MemberStats {
   profileCounts: Map<string, number>
@@ -39,7 +40,9 @@ export function useMemberStats(workspaceId: string | null, plan: string | null):
 
     Promise.all([
       supabase.from('browser_profiles').select('created_by').eq('workspace_id', workspaceId),
-      supabase.from('proxies').select('created_by').eq('workspace_id', workspaceId),
+      // Merged list: custom rows from ghost.proxies plus purchased rows read
+      // live from TubeProxies (created_by = the buying user).
+      listProxies(workspaceId).then((rows) => ({ data: rows })),
       plan
         ? supabase.from('plans').select('member_seat_limit').eq('plan_key', plan).maybeSingle()
         : Promise.resolve({ data: null, error: null })

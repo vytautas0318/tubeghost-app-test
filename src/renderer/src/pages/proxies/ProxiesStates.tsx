@@ -17,7 +17,7 @@ export function CenterMessage({ text }: { text: string }): React.ReactElement {
 export function NoPermissionState(): React.ReactElement {
   return (
     <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
-      <ProxiesHeader counts={{ total: 0, active: 0, expired: 0 }} lastSync={null} />
+      <ProxiesHeader counts={{ total: 0, active: 0, expired: 0 }} />
       <div className="flex-1 flex items-center justify-center p-8">
         <div className="max-w-md text-center">
           <ShieldAlert className="w-8 h-8 mx-auto mb-3 text-[var(--t4)]" />
@@ -35,16 +35,14 @@ export function NoPermissionState(): React.ReactElement {
 
 export function ErrorState({
   message,
-  counts,
-  lastSync
+  counts
 }: {
   message: string
   counts: { total: number; active: number; expired: number }
-  lastSync: string | null
 }): React.ReactElement {
   return (
     <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
-      <ProxiesHeader counts={counts} lastSync={lastSync} />
+      <ProxiesHeader counts={counts} />
       <div className="flex-1 flex items-center justify-center p-8">
         <div className="max-w-md text-center">
           <AlertCircle className="w-8 h-8 mx-auto mb-3 text-[var(--red)]" />

@@ -4,7 +4,7 @@
 // down.
 
 import * as React from 'react'
-import { updateProxy, type ProxyRow } from '@/lib/proxies'
+import { updateProxyRow, type ProxyRow } from '@/lib/proxies'
 import type { ProfileRow } from '@/lib/profiles'
 import { ProxyDetailDrawer } from './ProxyDetailDrawer'
 import { AssignProfilePopover } from './AssignProfilePopover'
@@ -49,7 +49,7 @@ export function ProxiesOverlays({
           onTest={() => onTest(selectedRow as ViewProxy, setSelectedRow)}
           onPatch={async (patch) => {
             try {
-              const updated = await updateProxy(selectedRow.id, patch)
+              const updated = await updateProxyRow(selectedRow, patch)
               setSelectedRow(updated)
               onToast('success', 'Proxy updated')
             } catch (e) {

@@ -5,6 +5,7 @@
 
 import { createProfile, importProfile, updateProfile, type ProfileRow } from '@/lib/profiles'
 import { createGroup, listGroups, PRESET_COLORS } from '@/lib/groups'
+import { createTag, listTags, TAG_PRESET_COLORS } from '@/lib/tags'
 import {
   isTubeGhostExport,
   parseForeignProfiles,
@@ -69,11 +70,44 @@ class GroupResolver {
   }
 }
 
+// Register imported tag NAMES in the workspace tag registry (migration 0019).
+// profiles.tags stores names only, so writing the array is enough to render a
+// chip — but a name absent from the registry has no color row, never shows up
+// as a suggestion in the tag picker, and can't be renamed or recolored. Same
+// caching + fail-soft contract as GroupResolver.
+class TagResolver {
+  private seen = new Set<string>()
+  private loaded = false
+
+  constructor(private readonly workspaceId: string) {}
+
+  async register(names: string[]): Promise<void> {
+    if (names.length === 0) return
+    if (!this.loaded) {
+      const existing = await listTags(this.workspaceId).catch(() => [])
+      for (const t of existing) this.seen.add(t.name.trim().toLowerCase())
+      this.loaded = true
+    }
+    for (const raw of names) {
+      const name = raw.trim()
+      const key = name.toLowerCase()
+      if (!name || this.seen.has(key)) continue
+      this.seen.add(key)
+      const color = TAG_PRESET_COLORS[(this.seen.size - 1) % TAG_PRESET_COLORS.length]
+      // No tags.create permission (or a race) — keep the tag on the profile
+      // anyway; it just falls back to the legacy name-hash color.
+      await createTag(this.workspaceId, name.slice(0, 60), color).catch(() => undefined)
+    }
+  }
+}
+
 async function createFromParsed(
   p: ParsedProfile,
   workspaceId: string,
-  groups: GroupResolver
+  groups: GroupResolver,
+  tags: TagResolver
 ): Promise<ProfileRow> {
+  await tags.register(p.tags ?? [])
   const row = await createProfile({
     workspace_id: workspaceId,
     name: p.name.slice(0, 100),
@@ -137,10 +171,11 @@ export async function importForeignFile(file: File, workspaceId: string): Promis
   }
 
   const groups = new GroupResolver(workspaceId)
+  const tags = new TagResolver(workspaceId)
   const summary: ImportSummary = { created: 0, failed: 0, errors: [] }
   for (const p of parsed) {
     try {
-      await createFromParsed(p, workspaceId, groups)
+      await createFromParsed(p, workspaceId, groups, tags)
       summary.created += 1
     } catch (e) {
       summary.failed += 1
@@ -159,6 +194,7 @@ export async function importCookiesFile(
   const text = await file.text()
   const { json, count } = normalizeCookieFile(text)
   const name = (file.name.replace(/\.[^.]+$/, '') || 'Imported cookies').slice(0, 100)
+  await new TagResolver(workspaceId).register(['imported'])
   const row = await createProfile({ workspace_id: workspaceId, name, tags: ['imported'] })
   await updateProfile(row.id, { cookies_json: json })
   return { name, count }

@@ -140,7 +140,7 @@ function Connection({
       </div>
       {proxy.source === 'tubeproxies' && (
         <div className="mt-3 text-[11px] text-[var(--t3)] bg-[var(--panel-2)] border border-[var(--line)] rounded p-2">
-          Credentials come from your TubeProxies account and cannot be edited here. Refresh from inventory to update.
+          Credentials are read live from your TubeProxies account and cannot be edited here.
         </div>
       )}
     </DrawerSection>
@@ -192,7 +192,7 @@ function Operational({
         <KV k="Last tested" v={proxy.last_tested_at ? formatDistanceToNow(new Date(proxy.last_tested_at), { addSuffix: true }) : 'never'} />
         <KV k="Last test ok" v={proxy.last_test_ok === null ? '—' : proxy.last_test_ok ? 'yes' : 'no'} />
         {proxy.expires_at && <KV k="Expires" v={formatDistanceToNow(new Date(proxy.expires_at), { addSuffix: true })} />}
-        {proxy.last_synced_at && <KV k="Last synced" v={formatDistanceToNow(new Date(proxy.last_synced_at), { addSuffix: true })} />}
+        {proxy.source === 'tubeproxies' && <KV k="Source" v="Live from TubeProxies" />}
       </div>
       {canTest && (
         <button onClick={onTest} className="mt-3 px-3 py-1.5 text-xs font-medium border border-[var(--line)] rounded-lg text-[var(--t1)] hover:bg-white dark:hover:bg-night-raised flex items-center gap-1.5">
@@ -213,6 +213,18 @@ function Danger({
   profileCount: number
   onDelete: () => void
 }): React.ReactElement {
+  // Purchased proxies belong to the user's TubeProxies subscription and are
+  // read live — there is no local row to delete. Cancelling happens there.
+  if (proxy.source === 'tubeproxies') {
+    return (
+      <section className="bg-[var(--panel)] border border-[var(--line)] rounded-xl p-4">
+        <p className="text-xs text-[var(--t3)]">
+          This proxy comes from your TubeProxies subscription. To cancel or swap it, manage it
+          on tubeproxies.com — it updates here automatically.
+        </p>
+      </section>
+    )
+  }
   return (
     <section className="bg-[var(--panel)] border border-[var(--red)]/20 rounded-xl p-4">
       <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--red)] mb-2">
@@ -225,7 +237,6 @@ function Danger({
             <strong>{profileCount}</strong> profile{profileCount === 1 ? '' : 's'} using it will become proxyless.
           </span>
         )}
-        {proxy.source === 'tubeproxies' && ' This releases the IP back to your TubeProxies inventory.'}
       </p>
       <button onClick={onDelete} className="w-full px-3 py-2 text-xs font-medium border border-[var(--red)]/25 text-[var(--red)] rounded-lg hover:bg-[var(--red-soft)] flex items-center justify-center gap-1.5">
         <Trash2 className="w-3.5 h-3.5" />

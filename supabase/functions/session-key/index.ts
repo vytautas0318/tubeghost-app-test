@@ -21,7 +21,11 @@ function svcHeaders(): HeadersInit {
   return {
     apikey: SERVICE_ROLE_KEY ?? '',
     Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
-    'Content-Type': 'application/json'
+    'Content-Type': 'application/json',
+    // TubeGhost tables + RPCs live in the `ghost` schema of the shared
+    // project since the DB consolidation — PostgREST selects it by header.
+    'Accept-Profile': 'ghost',
+    'Content-Profile': 'ghost'
   }
 }
 

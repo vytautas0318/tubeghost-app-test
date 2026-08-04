@@ -43,7 +43,9 @@ async function fetchInvitation(id: string): Promise<InvitationRecord | null> {
     {
       headers: {
         apikey: SERVICE_ROLE_KEY ?? '',
-        Authorization: `Bearer ${SERVICE_ROLE_KEY}`
+        Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
+        // invitations/workspaces/app_roles live in the `ghost` schema
+        'Accept-Profile': 'ghost'
       }
     }
   )
@@ -61,7 +63,9 @@ async function callerCanInvite(userId: string, workspaceId: string): Promise<boo
     headers: {
       apikey: SERVICE_ROLE_KEY ?? '',
       Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
-      'Content-Type': 'application/json'
+      'Content-Type': 'application/json',
+      // check_user_permission lives in the `ghost` schema
+      'Content-Profile': 'ghost'
     },
     body: JSON.stringify({
       p_user_id: userId,
