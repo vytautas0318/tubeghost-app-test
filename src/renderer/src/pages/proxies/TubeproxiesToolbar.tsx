@@ -13,8 +13,16 @@ const BUY_URL = 'https://tubeproxies.com'
 
 // ip:port:username:password lines for the given proxies (matches the
 // reference's Copy All / Export format).
+//
+// EXPIRED proxies are skipped: the server withholds their credentials, so
+// they would emit "ip:port::" — a broken line the user would paste straight
+// into their tooling. Filtering here keeps the output usable.
+function usable(rows: ViewProxy[]): ViewProxy[] {
+  return rows.filter((p) => p.status === 'active')
+}
+
 function toLines(rows: ViewProxy[]): string {
-  return rows
+  return usable(rows)
     .map((p) => `${p.host}:${p.port}:${p.username ?? ''}:${p.password_encrypted ?? ''}`)
     .join('\n')
 }
@@ -41,10 +49,16 @@ export function TubeproxiesToolbar({
   const target = selectedRows.length > 0 ? selectedRows : rows
   const selCount = selectedRows.length
 
+  // Counts must describe what actually came out, not how many rows were on
+  // screen — expired proxies are dropped by toLines().
+  const out = usable(target)
+  const skipped = target.length - out.length
+  const skippedNote = skipped > 0 ? ` · ${skipped} expired skipped` : ''
+
   const copyAll = async (): Promise<void> => {
     try {
       await navigator.clipboard.writeText(toLines(target))
-      onToast('success', `Copied ${target.length} ${target.length === 1 ? 'proxy' : 'proxies'}`)
+      onToast('success', `Copied ${out.length} ${out.length === 1 ? 'proxy' : 'proxies'}${skippedNote}`)
     } catch (e) {
       onToast('error', (e as Error).message)
     }
@@ -58,7 +72,7 @@ export function TubeproxiesToolbar({
     a.download = 'proxies.txt'
     a.click()
     URL.revokeObjectURL(url)
-    onToast('success', `Exported ${target.length} ${target.length === 1 ? 'proxy' : 'proxies'}`)
+    onToast('success', `Exported ${out.length} ${out.length === 1 ? 'proxy' : 'proxies'}${skippedNote}`)
   }
 
   return (

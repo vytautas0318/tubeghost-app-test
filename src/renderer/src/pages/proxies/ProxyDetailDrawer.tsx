@@ -138,10 +138,20 @@ function Connection({
           </div>
         )}
       </div>
-      {proxy.source === 'tubeproxies' && (
-        <div className="mt-3 text-[11px] text-[var(--t3)] bg-[var(--panel-2)] border border-[var(--line)] rounded p-2">
-          Credentials are read live from your TubeProxies account and cannot be edited here.
+      {proxy.status === 'expired' ? (
+        // The username/password rows above render nothing here: the server
+        // withholds both once a proxy expires (migration 20260804d). Say so,
+        // otherwise the Connection section just looks broken.
+        <div className="mt-3 text-[11px] text-[var(--amber)] bg-[var(--panel-2)] border border-[var(--line)] rounded p-2">
+          This proxy has expired, so its username and password are no longer available. Renew it
+          on tubeproxies.com to restore access — the proxy is kept, not deleted.
         </div>
+      ) : (
+        proxy.source === 'tubeproxies' && (
+          <div className="mt-3 text-[11px] text-[var(--t3)] bg-[var(--panel-2)] border border-[var(--line)] rounded p-2">
+            Credentials are read live from your TubeProxies account and cannot be edited here.
+          </div>
+        )
       )}
     </DrawerSection>
   )

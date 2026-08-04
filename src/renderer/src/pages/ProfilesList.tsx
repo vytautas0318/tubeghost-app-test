@@ -26,6 +26,7 @@ import { useHasPermission } from '@/lib/permissions'
 import { useWorkspaceTags } from '@/lib/useWorkspaceTags'
 import { ToastView, useToast } from '@/components/Toast'
 import { DesktopAppModal } from '@/components/DesktopAppModal'
+import { ExpiredProxyModal } from '@/components/ExpiredProxyModal'
 
 export function ProfilesList(): React.ReactElement {
   const workspace = useWorkspace((s) => s.current)
@@ -40,6 +41,14 @@ export function ProfilesList(): React.ReactElement {
   // Name of the profile the user tried to open, or null. Drives the
   // "desktop app required" modal — one instance for the whole table.
   const [openPrompt, setOpenPrompt] = useState<string | null>(null)
+  // Set when the profile the user tried to open is bound to an EXPIRED
+  // proxy. Expired proxies stay assigned to their profile on purpose
+  // (decision 2026-08-04), so this modal is the only place the user finds
+  // out the profile can't connect — and the nudge to renew.
+  const [expiredPrompt, setExpiredPrompt] = useState<{
+    name: string
+    proxy: string | null
+  } | null>(null)
 
   const [filters, setFilters] = useState<FilterState>(EMPTY_FILTERS)
   const [groupFilter, setGroupFilter] = useState<GroupFilter>('all')
@@ -325,18 +334,18 @@ export function ProfilesList(): React.ReactElement {
                 {paged.map((p, idx) => {
                   const raw = rows.find((r) => r.id === p.id)
                   if (!raw) return null
+                  const meta =
+                    (raw.proxy_id ? proxyMeta.get(raw.proxy_id) : undefined) ??
+                    (raw.proxy_host
+                      ? (proxyMeta.get(`${raw.proxy_host}:${raw.proxy_port}`) ?? null)
+                      : null)
                   return (
                     <ProfileRow
                       key={p.id}
                       profile={p}
                       raw={raw}
                       rowNumber={(safePage - 1) * pageSize + idx + 1}
-                      proxyMeta={
-                        (raw.proxy_id ? proxyMeta.get(raw.proxy_id) : undefined) ??
-                        (raw.proxy_host
-                          ? (proxyMeta.get(`${raw.proxy_host}:${raw.proxy_port}`) ?? null)
-                          : null)
-                      }
+                      proxyMeta={meta}
                       onChanged={(updated) => (updated ? patchRow(updated) : reload())}
                       selected={selected.has(p.id)}
                       onSelectChange={(c) => onToggleRow(p.id, c)}
@@ -344,7 +353,14 @@ export function ProfilesList(): React.ReactElement {
                       groups={groups}
                       workspaceId={workspace.workspace_id}
                       canEdit={canEdit}
-                      onOpen={() => setOpenPrompt(p.name)}
+                      onOpen={() =>
+                        meta?.status === 'expired'
+                          ? setExpiredPrompt({
+                              name: p.name,
+                              proxy: `${meta.host}:${meta.port}`
+                            })
+                          : setOpenPrompt(p.name)
+                      }
                       canLaunch={canLaunch}
                     />
                   )
@@ -380,9 +396,24 @@ export function ProfilesList(): React.ReactElement {
           />
         </div>
       </div>
+      {/* Expired proxy takes precedence: it's the reason the profile would
+          fail to connect, and renewing is the useful action. "Open anyway"
+          falls through to the normal desktop-app flow. */}
+      {expiredPrompt !== null && (
+        <ExpiredProxyModal
+          profileName={expiredPrompt.name}
+          proxyLabel={expiredPrompt.proxy}
+          onClose={() => setExpiredPrompt(null)}
+          onContinue={() => {
+            const name = expiredPrompt.name
+            setExpiredPrompt(null)
+            setOpenPrompt(name)
+          }}
+        />
+      )}
       {/* Launching runs the local engine, which the web build doesn't have —
           the button stays visible and this explains the requirement. */}
-      {openPrompt !== null && (
+      {openPrompt !== null && expiredPrompt === null && (
         <DesktopAppModal profileName={openPrompt} onClose={() => setOpenPrompt(null)} />
       )}
       <ToastView toast={toast} />

@@ -63,10 +63,10 @@ export function ProxyPicker({
   }, [workspace?.workspace_id, currentProxyHost, currentProxyPort])
 
   // Only ACTIVE proxies are assignable, or the picker would hand a new
-  // profile a dead egress. Purchased proxies are already filtered to active
-  // server-side, so in practice this catches CUSTOM proxies, whose status
-  // (expired / released / error) is set locally. Matches listUnusedProxies()
-  // and the profiles-list inline picker.
+  // profile a dead egress. This matters because expired PURCHASED proxies
+  // are deliberately kept in the list (they are visible but unusable), and
+  // custom proxies can be expired/released/error too. Matches
+  // listUnusedProxies() and the profiles-list inline picker.
   const selectable = useMemo<ProxyRow[]>(
     () => (state.kind === 'ready' ? state.rows.filter((r) => r.status === 'active') : []),
     [state]

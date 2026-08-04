@@ -110,8 +110,12 @@ export function Proxies(): React.ReactElement {
     }
   }
 
+  // Expired proxies have no credentials to test with (withheld server-side),
+  // so testing them would just produce a row of failures.
   const onCheckAll = (): void => {
-    filtered.forEach((p) => proxyTest.run(p, () => undefined, showToast))
+    filtered
+      .filter((p) => p.status === 'active')
+      .forEach((p) => proxyTest.run(p, () => undefined, showToast))
   }
 
   // Purchased proxies are read live and kept current by a realtime

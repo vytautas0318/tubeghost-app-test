@@ -141,23 +141,23 @@ function renderStatus(p: ViewProxy): React.ReactNode {
   return <StatusPill state={pill.state} label={pill.label} />
 }
 
-// Status for a PURCHASED proxy — in practice always "Live", because the read
-// function returns active rows only: an expired proxy disappears from
-// TubeGhost exactly as it disappears from TubeProxies (decision 2026-08-04,
-// migration 20260804b).
+// Status for a PURCHASED proxy. Expired proxies are deliberately shown
+// rather than hidden (decision 2026-08-04): they are never deleted, so a
+// user who loses one must be able to see that it lapsed instead of watching
+// it silently disappear. This column is what makes that visible — without
+// it an expired proxy renders identically to a working one.
 //
-// The pill is kept for parity with the Custom tab and as an honest fallback
-// if a non-active row ever reaches this table. The real value here is the
-// sub-line: how long the subscription has left, which is the one thing this
-// tab could not show before.
+// Wording differs from the Custom tab's pill on purpose: for a purchased
+// proxy the state is a fact about the subscription ("Expired"), not a prompt
+// to investigate ("Check").
 function renderPurchasedStatus(p: ViewProxy): React.ReactNode {
-  const live = p.status === 'active'
+  const expired = p.status === 'expired'
   return (
     <div style={{ minWidth: 0 }}>
-      <StatusPill state={live ? 'ready' : 'warn'} label={live ? 'Live' : 'Expired'} />
+      <StatusPill state={expired ? 'warn' : 'ready'} label={expired ? 'Expired' : 'Live'} />
       {p.expiresRelative && (
         <div className="ctry-city" title={p.expires_at ?? undefined}>
-          expires {p.expiresRelative}
+          {expired ? `expired ${p.expiresRelative}` : `expires ${p.expiresRelative}`}
         </div>
       )}
     </div>
@@ -180,13 +180,24 @@ export const TUBEPROXIES_COLUMNS: ColumnConfig[] = [
     key: 'username',
     header: 'Username',
     width: 'minmax(0,0.9fr)',
-    cell: (p) => <span className="px-ro">{p.username || '—'}</span>
+    // Expired proxies come back with credentials stripped server-side, so
+    // say why the value is gone instead of rendering a bare dash.
+    cell: (p) =>
+      p.status === 'expired' ? (
+        <span className="px-ro" style={{ color: 'var(--t4)' }}>
+          Unavailable
+        </span>
+      ) : (
+        <span className="px-ro">{p.username || '—'}</span>
+      )
   },
   {
     key: 'password',
     header: 'Password',
     width: 'minmax(0,0.9fr)',
-    cell: (p) => <RevealPassword password={p.password_encrypted} />
+    cell: (p) => (
+      <RevealPassword password={p.password_encrypted} blocked={p.status === 'expired'} />
+    )
   },
   { key: 'location', header: 'Location', width: 'minmax(0,0.8fr)', cell: (p) => renderCountry(p) },
   {

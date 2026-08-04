@@ -16,7 +16,17 @@ import { Check, Copy, Eye, EyeOff } from 'lucide-react'
 const REVEAL_MS = 10_000
 const COPIED_MS = 1200
 
-export function RevealPassword({ password }: { password: string | null }): React.ReactElement {
+export function RevealPassword({
+  password,
+  // When the proxy has expired the server withholds the credentials
+  // entirely (migration 20260804d), so `password` arrives null. Without
+  // this flag the cell would render a bare "—", which reads as "this proxy
+  // never had a password" rather than "you no longer have access".
+  blocked = false
+}: {
+  password: string | null
+  blocked?: boolean
+}): React.ReactElement {
   const [shown, setShown] = useState(false)
   const [copied, setCopied] = useState(false)
   const revealTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -37,7 +47,20 @@ export function RevealPassword({ password }: { password: string | null }): React
     }
   }, [])
 
-  // No password on this row (custom proxy without one, or not synced yet).
+  // Expired: credentials are withheld server-side, not merely hidden here.
+  if (blocked) {
+    return (
+      <span
+        className="pw-val"
+        style={{ color: 'var(--t4)' }}
+        title="This proxy has expired. Renew it on tubeproxies.com to use it again."
+      >
+        Unavailable
+      </span>
+    )
+  }
+
+  // No password on this row (custom proxy without one).
   if (!password) {
     return <span className="pw-val">—</span>
   }

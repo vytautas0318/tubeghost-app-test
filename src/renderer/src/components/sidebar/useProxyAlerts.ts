@@ -5,11 +5,12 @@ import { listProxies } from '@/lib/proxies'
  * Count of proxies in the workspace that need attention (expired or errored) —
  * shown as the amber badge on the sidebar Proxies item. Display only.
  *
- * Counts CUSTOM proxies in practice. Purchased proxies are read live and
- * filtered to active only — an expired one leaves TubeGhost entirely rather
- * than lingering as an alert, matching the TubeProxies dashboard
- * (decision 2026-08-04). Still routed through listProxies() so that if that
- * rule is ever relaxed, the badge reflects it without another change here.
+ * Goes through listProxies() so PURCHASED proxies count too. They are read
+ * live from TubeProxies, so an expiry set by the expire-overdue-proxies cron
+ * raises this badge immediately — which is the point: expired proxies are
+ * kept rather than deleted, so this badge is how the user finds out one
+ * lapsed. Under the old copy-based sync it could never fire for them,
+ * because their local copy stayed 'active' forever.
  */
 export function useProxyAlerts(workspaceId: string | null): number {
   const [count, setCount] = useState(0)

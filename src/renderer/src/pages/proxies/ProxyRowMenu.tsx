@@ -94,7 +94,11 @@ export function ProxyRowMenu({
               }}
             />
           )}
-          {canDelete && (
+          {/* Delete applies to CUSTOM proxies only. Purchased proxies are
+              never removed — they stay in the database after expiry and are
+              managed on TubeProxies (decision 2026-08-04), so offering the
+              action here would be a dead control that only ever errors. */}
+          {canDelete && proxy.source === 'custom' && (
             <>
               <div className="my-1 border-t border-[var(--line)]" />
               <Item
