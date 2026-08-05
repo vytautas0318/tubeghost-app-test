@@ -4,8 +4,8 @@
 // query wrappers the renderer calls.
 //
 // The `extensions` row is the cross-device source of truth for metadata +
-// assignment. (Local file import/unpacking was a desktop-only capability and
-// has been removed for the web app.)
+// assignment. The desktop build unpacked .crx files to disk; the web app
+// parses them in-browser (lib/crx.ts) and persists metadata only.
 
 import { getSupabase, type GhostClient } from '@/lib/supabase'
 
@@ -112,7 +112,9 @@ export async function createExtension(input: NewExtensionInput): Promise<Extensi
         ? `https://chromewebstore.google.com/detail/${input.web_store_id}`
         : null,
       web_store_id: input.web_store_id,
-      // storage_path == id: the local <userData>/extensions/<id>/ folder.
+      // storage_path == id. The desktop build used it as the local
+      // <userData>/extensions/<id>/ folder name; the web app stores no bytes
+      // yet, so it's reserved for a future Supabase Storage object key.
       storage_path: input.id,
       icon_data_url: input.icon_data_url,
       category: input.category,
