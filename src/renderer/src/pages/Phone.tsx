@@ -47,9 +47,16 @@ function rowToPhoneNum(r: PhoneNumberRow): PhoneNum {
 // Map a received SMS to the inbox view model. `parsed_code` is withheld
 // (locked) when the phone subscription is past due — show a placeholder
 // rather than an empty cell so the reason is visible.
-function smsToView(m: PhoneSmsRow): Sms {
+//
+// `numberById` resolves phone_number_id to the recipient number so the card
+// can say WHICH of your numbers got the code — with several numbers on one
+// subscription the sender shortcode alone doesn't tell you. A miss means the
+// number was released or expired (the overview only returns active ones)
+// while its messages are still inside the 30-day window.
+function smsToView(m: PhoneSmsRow, numberById: Map<string, string>): Sms {
   return {
     id: m.id,
+    to: numberById.get(m.phone_number_id) ?? 'Released number',
     from: m.from_number ?? 'Unknown',
     body: m.body,
     code: m.locked ? '•••••' : (m.parsed_code ?? ''),
@@ -96,7 +103,12 @@ export function Phone(): React.ReactElement {
   const active = nums.filter((n) => n.profile !== 'Unassigned').length
   const teamGap = Math.max(0, 5 - nums.length)
   const sub = overview?.subscription ?? null
-  const inbox = (overview?.sms ?? []).map(smsToView)
+  const numberById = new Map(
+    (overview?.phone_numbers ?? [])
+      .filter((r) => r.phone_number)
+      .map((r) => [r.id, r.phone_number as string])
+  )
+  const inbox = (overview?.sms ?? []).map((m) => smsToView(m, numberById))
   const renewal = sub?.current_period_end
     ? new Date(sub.current_period_end).toLocaleDateString()
     : 'No subscription'

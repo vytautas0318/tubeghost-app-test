@@ -522,7 +522,8 @@ html[data-platform='darwin'] .builder-top .editor-back { -webkit-app-region: no-
 .sms { border: 1px solid var(--line); border-radius: var(--r); padding: 12px 13px; background: var(--panel-2); }
 .sms-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .sms-from { display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; font-weight: 600; }
-.sms-time { font-size: 11px; color: var(--t3); }
+.sms-time { display: inline-flex; align-items: center; gap: 8px; font-size: 11px; color: var(--t3); white-space: nowrap; }
+.sms-sender { color: var(--t3); opacity: .8; }
 .sms-body { font-size: 12.5px; color: var(--t2); line-height: 1.45; margin-top: 8px; }
 .sms-code { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); cursor: pointer; }
 .sms-code-n { font-family: var(--mono); font-size: 18px; font-weight: 700; letter-spacing: 2px; color: var(--t1); }
@@ -899,7 +900,11 @@ html[data-platform='darwin'] .builder-top .editor-back { -webkit-app-region: no-
    the corners now that the parent no longer clips them. */
 .mtable > :first-child { border-top-left-radius: calc(var(--r-lg) - 1px); border-top-right-radius: calc(var(--r-lg) - 1px); }
 .mtable > :last-child { border-bottom-left-radius: calc(var(--r-lg) - 1px); border-bottom-right-radius: calc(var(--r-lg) - 1px); }
-.mhead, .mrow { display: grid; grid-template-columns: 2fr 1.1fr 1fr 1fr 90px 44px; align-items: center; gap: 14px; padding: 0 18px; }
+/* Last column is `max-content`, not a fixed 44px: pending-invite rows put
+   labelled Copy link / Resend / Revoke buttons there and a 44px track wrapped
+   every label onto two lines. `.mseen` gets a real minimum for the same reason
+   ("less than a minute ago" wrapped inside 90px). */
+.mhead, .mrow { display: grid; grid-template-columns: minmax(0,2fr) minmax(0,1.1fr) minmax(0,1fr) minmax(0,1fr) minmax(96px,0.8fr) max-content; align-items: center; gap: 14px; padding: 0 18px; }
 .mhead { height: 42px; border-bottom: 1px solid var(--line); background: var(--panel-2); }
 .mrow { height: 64px; border-bottom: 1px solid var(--line-2); transition: background 0.12s var(--ease); }
 .mrow:last-child { border-bottom: none; }
@@ -919,7 +924,7 @@ html[data-platform='darwin'] .builder-top .editor-back { -webkit-app-region: no-
 .role.pending { background: var(--amber-soft); color: var(--amber); }
 .mstat { font-family: var(--mono); font-size: 13px; font-weight: 500; }
 .mstat small { color: var(--t3); font-family: var(--sans); font-size: 11px; }
-.mseen { font-size: 12.5px; color: var(--t2); }
+.mseen { font-size: 12.5px; color: var(--t2); line-height: 1.35; }
 
 /* ---------- ROLES ---------- */
 .roles-grid { display: grid; grid-template-columns: 260px 1fr; gap: 18px; align-items: start; }
@@ -936,15 +941,18 @@ html[data-platform='darwin'] .builder-top .editor-back { -webkit-app-region: no-
 .mm-danger:hover { background: var(--red-soft); }
 /* Pending-invite row (rendered inside the members table) */
 .invite-avatar { width: 36px; height: 36px; border-radius: 10px; flex-shrink: 0; display: grid; place-items: center; font-size: 15px; font-weight: 700; color: var(--t4); background: var(--panel-2); border: 1px dashed var(--line-2); }
-/* Always-visible "Copy link" action on a pending invite row (the email-less
-   fallback for getting an invitee in). Neutral button, clearly visible — unlike
-   the hover-only .kebab it replaced. */
-.invite-copy { display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; font-weight: 550; color: var(--t2); background: var(--hover); border: 1px solid var(--line); padding: 4px 10px; border-radius: var(--r-sm); cursor: pointer; transition: all 0.12s var(--ease); }
-.invite-copy:hover { color: var(--t1); border-color: var(--line-2); }
-.invite-copy svg { width: 14px; height: 14px; }
-.invite-revoke { font-size: 12.5px; font-weight: 550; color: var(--red); padding: 4px 8px; border-radius: var(--r-sm); cursor: pointer; transition: background 0.12s var(--ease); }
-.invite-revoke:hover { background: var(--red-soft); }
-.invite-revoke:disabled { opacity: 0.5; cursor: default; }
+/* Always-visible actions on a pending invite row (Copy link / Resend / Revoke).
+   These are the reliable way to get an invitee in when the email is delayed or
+   filtered, so they are labelled buttons rather than the hover-only .kebab they
+   replaced. `nowrap` + a fixed height keeps all three on one line at equal size
+   — labels used to wrap mid-word inside the old 44px action column. */
+.invite-actions { display: flex; align-items: center; justify-content: flex-end; gap: 6px; }
+.invite-btn { display: inline-flex; align-items: center; gap: 5px; height: 28px; padding: 0 10px; white-space: nowrap; font-size: 12.5px; font-weight: 550; color: var(--t2); background: var(--hover); border: 1px solid var(--line); border-radius: var(--r-sm); cursor: pointer; transition: color 0.12s var(--ease), border-color 0.12s var(--ease), background 0.12s var(--ease); }
+.invite-btn:hover:not(:disabled) { color: var(--t1); border-color: var(--line-2); }
+.invite-btn:disabled { opacity: 0.5; cursor: default; }
+.invite-btn svg { width: 14px; height: 14px; flex-shrink: 0; }
+.invite-btn.danger { color: var(--red); background: transparent; border-color: transparent; }
+.invite-btn.danger:hover:not(:disabled) { color: var(--red); background: var(--red-soft); border-color: transparent; }
 /* "Pending N" header pill next to Invite member */
 .pending-pill { display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px; border-radius: var(--r-pill); background: var(--amber-soft); color: var(--amber); font-size: 12.5px; font-weight: 600; border: 1px solid transparent; }
 .pending-pill b { font-weight: 700; margin-left: 1px; }

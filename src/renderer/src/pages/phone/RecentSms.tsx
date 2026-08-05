@@ -52,11 +52,17 @@ export function RecentSms({
         {inbox.map((m) => (
           <div key={m.id} className="sms">
             <div className="sms-top">
+              {/* The receiving number leads — with several numbers on one
+                  subscription it's the only way to tell the inboxes apart.
+                  The sender shortcode stays, demoted. */}
               <span className="sms-from">
                 <PlatformIcon platform={m.pl} size={22} />
-                {m.from}
+                {m.to}
               </span>
-              <span className="sms-time">{m.time}</span>
+              <span className="sms-time">
+                <span className="sms-sender">from {m.from}</span>
+                {m.time}
+              </span>
             </div>
             <div className="sms-body">{m.body}</div>
             <div className="sms-code" onClick={() => copy(m.code, m.id)}>

@@ -18,6 +18,9 @@ export type PhoneNum = {
 
 export type Sms = {
   id: string
+  // The number of YOURS that received this message — what you need to know to
+  // tell one inbox from another. `from` is the sender's shortcode (e.g. 22000).
+  to: string
   from: string
   body: string
   code: string

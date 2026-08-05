@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { Loader2 } from 'lucide-react'
 import { DOWNLOAD_URL } from '@/lib/desktop-app'
+import { invitationDeepLink } from '@/lib/invitations'
 
 // Web landing page for the invitation email button
 // (https://app.tubeghost.com/invite/<token>). Its ONE job is to hand the token
@@ -21,8 +22,9 @@ export function AcceptInvite(): React.ReactElement {
   const { token = '' } = useParams()
   const [showDownload, setShowDownload] = useState(false)
 
-  // Same URL the desktop "Copy link" button produces.
-  const deepLink = token ? `tubeghost://invite/${token}` : null
+  // The custom-scheme hand-off to the installed desktop app. (The link that is
+  // emailed/copied is the https URL for THIS page — see invitationLink.)
+  const deepLink = token ? invitationDeepLink(token) : null
 
   // Keep this transient redirect page out of search results.
   useEffect(() => {
