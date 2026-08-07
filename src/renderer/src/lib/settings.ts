@@ -23,7 +23,7 @@ export type ProxySource = 'pool' | 'custom' | 'none'
 
 export interface FingerprintDefaults {
   os: string // 'win' | 'mac' — a preset key, expanded to a platform at creation
-  browser_core: string // e.g. '142'
+  browser_core: string // e.g. '150'
   webrtc_mode: WebrtcMode
   canvas_noise: boolean
   auto_rotate: boolean // regenerate a fresh fingerprint on each launch
@@ -113,7 +113,7 @@ export interface WorkspaceSettings {
 
 export const RECOMMENDED_FINGERPRINT: FingerprintDefaults = {
   os: 'win',
-  browser_core: '142',
+  browser_core: '150',
   webrtc_mode: 'forward',
   canvas_noise: true,
   auto_rotate: false

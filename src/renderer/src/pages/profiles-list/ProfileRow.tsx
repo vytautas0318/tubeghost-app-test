@@ -149,10 +149,10 @@ export function ProfileRow({
             onClick={onOpen}
             disabled={!canLaunch}
             className="row-open"
-            title={canLaunch ? `Open ${p.name}` : "You don't have permission to launch profiles"}
+            title={canLaunch ? `Launch ${p.name}` : "You don't have permission to launch profiles"}
           >
             <Play className="w-3 h-3" fill="currentColor" />
-            Open
+            Launch
           </button>
           <RowMenu profile={raw} heldByOther={!!p.openByOther} onChange={onChanged} />
         </div>
