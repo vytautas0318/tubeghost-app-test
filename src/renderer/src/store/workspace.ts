@@ -118,9 +118,23 @@ export const useWorkspace = create<WorkspaceState>()(
           return
         }
 
+        // Scope to the CALLER's own membership rows. The SELECT policy on
+        // workspace_members deliberately exposes every member of every
+        // workspace you belong to (the Members page needs that), so an
+        // unfiltered read returns one row per co-member and a workspace with
+        // N members would appear N times in the switcher.
+        const {
+          data: { user }
+        } = await supabase.auth.getUser()
+        if (!user) {
+          set({ error: 'Not signed in', loading: false })
+          return
+        }
+
         const { data: members, error: memErr } = await supabase
           .from('workspace_members')
           .select('workspace_id, workspaces (id, name, plan)')
+          .eq('user_id', user.id)
           .order('joined_at', { ascending: true })
 
         if (memErr) {

@@ -34,8 +34,7 @@ const PAGES: { label: string; to: string; icon: string; keywords?: string }[] = 
   { label: 'Members', to: '/team/members', icon: 'members', keywords: 'team invite' },
   { label: 'Roles & access', to: '/team/roles', icon: 'roles', keywords: 'permissions' },
   { label: 'Settings', to: '/settings', icon: 'settings' },
-  { label: 'Billing', to: '/billing', icon: 'billing', keywords: 'plan invoices subscription' },
-  { label: 'Partner program', to: '/partner', icon: 'partner', keywords: 'affiliate' }
+  { label: 'Billing', to: '/billing', icon: 'billing', keywords: 'plan invoices subscription' }
 ]
 
 export function CommandPalette(): React.ReactElement | null {
