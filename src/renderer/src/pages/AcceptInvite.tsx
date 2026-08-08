@@ -3,12 +3,13 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { Loader2 } from 'lucide-react'
 import { DOWNLOAD_URL } from '@/lib/desktop-app'
+import { invitationDeepLink } from '@/lib/invitations'
 
 // Web landing page for the invitation email button
 // (https://app.tubeghost.com/invite/<token>). Its ONE job is to hand the token
-// to the desktop app via the tubeghost://invite/<token> deep link — the exact
-// same target as the app's "Copy link" button — so clicking the email button
-// opens TubeGhost on the invitee's machine. Mirrors AuthClient.tsx (the Google
+// to the desktop app via the tubeghost://invite/<token> deep link. This page IS
+// the target of the app's "Copy link" button and the email button (both share
+// invitationLink()), so either one opens TubeGhost on the invitee's machine. Mirrors AuthClient.tsx (the Google
 // sign-in bridge): fire the deep link on load, offer a manual retry + download
 // fallback if the app isn't installed. No in-browser accept flow anymore.
 
@@ -21,8 +22,8 @@ export function AcceptInvite(): React.ReactElement {
   const { token = '' } = useParams()
   const [showDownload, setShowDownload] = useState(false)
 
-  // Same URL the desktop "Copy link" button produces.
-  const deepLink = token ? `tubeghost://invite/${token}` : null
+  // Where the desktop "Copy link" button's https URL ultimately lands.
+  const deepLink = token ? invitationDeepLink(token) : null
 
   // Keep this transient redirect page out of search results.
   useEffect(() => {

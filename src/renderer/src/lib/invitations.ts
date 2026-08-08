@@ -297,8 +297,22 @@ export async function resendInvitation(invitationId: string): Promise<ResendInvi
 
 // ── Invitation link ──────────────────────────────────────────────────────────
 
-// Deep link the owner copies/shares. Uses the app's custom scheme so opening it
-// routes into the in-app accept flow (see App router `/invite/:token`).
+// Web origin that hosts the invite bridge page (AcceptInvite.tsx). That page's
+// only job is to hand the token to the desktop app via `tubeghost://invite/...`.
+const WEB_ORIGIN = 'https://app.tubeghost.com'
+
+// Link the owner copies/shares, and the target of the invitation email button.
+// Deliberately an https:// URL, NOT the raw `tubeghost://` deep link: custom
+// schemes aren't clickable in most mail/chat clients (Gmail strips them, Slack
+// renders them as plain text), so a copied link was unusable for the invitee.
+// The https page redirects to the deep link, so the end result is identical —
+// and it degrades to a download prompt when the app isn't installed.
 export function invitationLink(token: string): string {
+  return `${WEB_ORIGIN}/invite/${token}`
+}
+
+// The raw deep link, for callers already running inside a browser page that
+// want to hand off to the desktop app directly (see AcceptInvite.tsx).
+export function invitationDeepLink(token: string): string {
   return `tubeghost://invite/${token}`
 }

@@ -32,14 +32,16 @@ interface InvitationRecord {
   status: string
   created_by: string | null
   workspaces?: { name: string } | null
-  app_roles?: { name: string } | null
+  app_roles?: { name: string; description: string | null } | null
 }
 
 // Minimal service-role read: fetch the invitation + workspace + role names.
+// The role's `description` is pulled too so the email can explain what the
+// invitee is actually being granted (mirrors the TubeProxies invite email).
 async function fetchInvitation(id: string): Promise<InvitationRecord | null> {
   const res = await fetch(
     `${SUPABASE_URL}/rest/v1/invitations?id=eq.${id}` +
-      `&select=id,workspace_id,email,status,created_by,workspaces(name),app_roles(name)`,
+      `&select=id,workspace_id,email,status,created_by,workspaces(name),app_roles(name,description)`,
     {
       headers: {
         apikey: SERVICE_ROLE_KEY ?? '',
@@ -52,6 +54,37 @@ async function fetchInvitation(id: string): Promise<InvitationRecord | null> {
   if (!res.ok) return null
   const rows = (await res.json()) as InvitationRecord[]
   return rows[0] ?? null
+}
+
+// Display name of whoever sent the invite, for the "X has invited you" line.
+// Best-effort: falls back to a neutral phrasing when the lookup fails or the
+// user never set a name, so a missing name never blocks delivery.
+// Read through the Admin API rather than a table: there is no `user_details`
+// table (get_workspace_user_details is an RPC that derives the name from
+// auth.users), and auth.users is not exposed over PostgREST. Mirrors that
+// RPC's fallback order: full_name → name → the email's local part.
+async function fetchInviterName(userId: string | null): Promise<string | null> {
+  if (!userId) return null
+  try {
+    const res = await fetch(`${SUPABASE_URL}/auth/v1/admin/users/${userId}`, {
+      headers: {
+        apikey: SERVICE_ROLE_KEY ?? '',
+        Authorization: `Bearer ${SERVICE_ROLE_KEY}`
+      }
+    })
+    if (!res.ok) return null
+    const u = (await res.json()) as {
+      email?: string
+      user_metadata?: { full_name?: string; name?: string }
+    }
+    const name =
+      u.user_metadata?.full_name?.trim() ||
+      u.user_metadata?.name?.trim() ||
+      (u.email ? u.email.split('@')[0] : '')
+    return name ? name : null
+  } catch {
+    return null
+  }
 }
 
 // Confirm the caller may invite in this workspace (defense in depth — the
@@ -75,6 +108,145 @@ async function callerCanInvite(userId: string, workspaceId: string): Promise<boo
   })
   if (!res.ok) return false
   return (await res.json()) === true
+}
+
+// ── Email template ──────────────────────────────────────────────────────────
+// Ported from the TubeProxies invite email (dashboard: src/lib/email/
+// templates.ts → baseTemplate + teamInviteTemplate) so both products look like
+// one family. Kept as inline-CSS-in-<style> exactly like the original: real
+// mail clients need it, and diverging would make the two drift apart.
+
+const BRAND_COLOR = '#EF0039'
+// Must be a publicly reachable absolute URL — mail clients can't read bundled
+// assets. This is the live marketing-site logo (200, image/png, no redirect on
+// the apex domain; www. 307s, so don't use it).
+const LOGO_URL = 'https://tubeghost.com/assets/logo.png'
+
+// Escape anything interpolated into the HTML. The workspace name, role name
+// and inviter name are all user-supplied, so without this a member could name a
+// workspace `<script>…` (or just break the layout with a stray `<`) and have it
+// rendered in someone else's inbox.
+function esc(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
+function baseTemplate(content: string): string {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TubeGhost</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      line-height: 1.6;
+      color: #1e293b;
+      margin: 0;
+      padding: 0;
+      background-color: #f8fafc;
+    }
+    .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+    .card {
+      background: #ffffff;
+      border-radius: 16px;
+      padding: 32px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    /* The TubeGhost mark is a SQUARE icon (256x256), not a wide wordmark like
+       TubeProxies' — so it's sized as a 56px icon and paired with a text
+       wordmark below it. Rendering it in the 180px slot the original template
+       used would blow it up into an oversized block. */
+    .logo { text-align: center; margin-bottom: 24px; }
+    .logo img { width: 56px; height: 56px; display: block; margin: 0 auto 8px; }
+    .logo-text {
+      font-size: 20px;
+      font-weight: 700;
+      color: #1e293b;
+      letter-spacing: -0.01em;
+    }
+    h2 { color: #1e293b; margin-top: 0; margin-bottom: 16px; }
+    p { margin: 0 0 16px; }
+    .button {
+      display: inline-block;
+      background: ${BRAND_COLOR};
+      color: #ffffff !important;
+      padding: 12px 24px;
+      border-radius: 8px;
+      text-decoration: none;
+      font-weight: 600;
+      margin: 16px 0;
+    }
+    .info-box { background: #f8fafc; border-radius: 8px; padding: 16px; margin: 16px 0; }
+    .label {
+      color: #64748b;
+      font-size: 12px;
+      text-transform: uppercase;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+    .footer { text-align: center; margin-top: 32px; color: #64748b; font-size: 14px; }
+    .footer a { color: #64748b; }
+    .muted { color: #64748b; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="card">
+      <div class="logo">
+        <img src="${LOGO_URL}" width="56" height="56" alt="TubeGhost" />
+        <div class="logo-text">TubeGhost</div>
+      </div>
+      ${content}
+    </div>
+    <div class="footer">
+      <p>TubeGhost - Antidetect Browser for YouTube</p>
+      <p>You received this email because someone invited you to a TubeGhost workspace.</p>
+    </div>
+  </div>
+</body>
+</html>`
+}
+
+function invitationTemplate(o: {
+  workspaceName: string
+  roleName: string
+  roleDescription: string | null
+  inviterName: string | null
+  acceptUrl: string
+}): string {
+  // "Vytautas B. has invited you…" when we know who sent it, otherwise an
+  // impersonal phrasing rather than a dangling name.
+  const intro = o.inviterName
+    ? `<strong>${esc(o.inviterName)}</strong> has invited you to join <strong>${esc(o.workspaceName)}</strong> on TubeGhost.`
+    : `You've been invited to join <strong>${esc(o.workspaceName)}</strong> on TubeGhost.`
+
+  return baseTemplate(`
+    <h2>You've Been Invited to Join a Workspace</h2>
+    <p>Hi there,</p>
+    <p>${intro}</p>
+
+    <div class="info-box">
+      <div class="label">Your Role</div>
+      <h3 style="margin: 8px 0 4px;">${esc(o.roleName)}</h3>
+      ${
+        o.roleDescription
+          ? `<p class="muted" style="margin: 0;">${esc(o.roleDescription)}</p>`
+          : ''
+      }
+    </div>
+
+    <p>Click the button below to accept the invitation and join the workspace.</p>
+
+    <a href="${esc(o.acceptUrl)}" class="button">Accept Invitation</a>
+
+    <p class="muted">This invitation expires in 7 days. If you don't have a TubeGhost account, you'll be asked to create one first.</p>
+  `)
 }
 
 async function sendEmail(to: string, subject: string, html: string): Promise<boolean> {
@@ -135,13 +307,16 @@ Deno.serve(async (req: Request): Promise<Response> => {
   }
 
   const wsName = inv.workspaces?.name ?? 'a workspace'
-  const roleName = inv.app_roles?.name ?? 'member'
+  const roleName = inv.app_roles?.name ?? 'Member'
+  const inviterName = await fetchInviterName(inv.created_by)
   const subject = `You're invited to join ${wsName} on TubeGhost`
-  const html = `
-    <p>You've been invited to join <strong>${wsName}</strong> as <strong>${roleName}</strong>.</p>
-    <p><a href="${body.accept_url}">Accept your invitation</a></p>
-    <p>If you didn't expect this, you can ignore this email.</p>
-  `
+  const html = invitationTemplate({
+    workspaceName: wsName,
+    roleName,
+    roleDescription: inv.app_roles?.description ?? null,
+    inviterName,
+    acceptUrl: body.accept_url
+  })
 
   const delivered = await sendEmail(inv.email, subject, html)
   return jsonResponse({ ok: true, delivered })
