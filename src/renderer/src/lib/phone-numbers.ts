@@ -96,9 +96,6 @@ export async function getPhoneOverview(): Promise<PhoneOverview> {
 
 // Commerce lives on the TubeProxies dashboard. Deep-link rather than
 // reimplementing Stripe here — see the desktop repo's
-// docs/architecture-decision.md (decision A).
-const TUBEPROXIES_PHONE_URL = 'https://dash.tubeproxies.com/phone-numbers'
-
-export function openPhonePurchase(): void {
-  window.open(TUBEPROXIES_PHONE_URL, '_blank', 'noopener,noreferrer')
-}
+// docs/architecture-decision.md (decision A). The URLs themselves live in
+// lib/tubeproxies-checkout.ts alongside the proxy hand-off.
+export { openPhoneCheckout as openPhonePurchase } from './tubeproxies-checkout'

@@ -178,6 +178,15 @@
 
 /* tier cards */
 .tpp-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; align-items: stretch; }
+/* Phone numbers ship 4 tiers, not 5 — same cards, wider columns. */
+.tpp-grid.cols-4 { grid-template-columns: repeat(4, 1fr); }
+/* Phone price ladder. `compact` is the buy-more block under an existing
+   numbers table; the full-page variant needs no extra spacing. */
+.phone-pricing.compact { margin-top: 26px; padding-top: 24px; border-top: 1px solid var(--line); }
+.phone-pricing.compact .tpp-card { padding: 20px 16px; }
+.pp-more-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 16px; }
+.pp-more-head h2 { font-size: 16px; font-weight: 700; letter-spacing: -0.3px; }
+.pp-more-head p { font-size: 12.5px; color: var(--t3); }
 .tpp-card { position: relative; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-lg); box-shadow: var(--shadow); padding: 24px 18px; display: flex; flex-direction: column; align-items: center; text-align: center; }
 .tpp-card.feat { background: #16181D; border: 2px solid var(--red); box-shadow: var(--shadow-lg); }
 .tpp-best { position: absolute; top: -12px; left: 50%; transform: translateX(-50%); background: var(--red); color: #fff; font-size: 11px; font-weight: 650; padding: 4px 13px; border-radius: var(--r-pill); white-space: nowrap; }

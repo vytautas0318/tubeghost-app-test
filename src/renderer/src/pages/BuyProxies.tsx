@@ -4,10 +4,15 @@ import { Check, X } from 'lucide-react'
 import { ToastView, useToast } from '@/components/Toast'
 import { PoweredByTubeProxies } from '@/components/PoweredByTubeProxies'
 import { Flag } from '@/components/Flag'
+import {
+  openProxyCheckout,
+  PROXY_SALES_URL,
+  type ProxyPlanName
+} from '@/lib/tubeproxies-checkout'
 
 type Tier = {
   id: string
-  name: string
+  name: ProxyPlanName
   desc: string
   ips: number
   perIp: number
@@ -15,9 +20,14 @@ type Tier = {
   members?: number
 }
 
-// Monthly per-IP rate; quarterly applies a 10% discount (mult 0.9).
+// Mirrors the dashboard's PRICING_PLANS (tubeproxies-dash/src/lib/plans.ts) —
+// `name` and `ips` are the checkout lookup keys, so both must match it
+// exactly. `perIp` is the monthly list price divided by ips, shown for
+// comparison only; the amount actually charged comes from Stripe.
+// Quarterly applies a 10% discount (mult 0.9).
 const TIERS: Tier[] = [
   { id: 'starter', name: 'Starter', desc: 'Perfect for testing', ips: 1, perIp: 8.0 },
+  { id: 'hobby', name: 'Hobby', desc: 'For solo operators', ips: 5, perIp: 7.8 },
   { id: 'small', name: 'Small Team', desc: 'Great for small teams', ips: 10, perIp: 7.5 },
   { id: 'growth', name: 'Growth', desc: 'Scale your operations', ips: 25, perIp: 7.0, feat: true },
   { id: 'scale', name: 'Scale', desc: 'For teams at scale', ips: 50, perIp: 6.5, members: 2 },
@@ -33,7 +43,7 @@ const TIERS: Tier[] = [
 
 export function BuyProxies(): React.ReactElement {
   const [term, setTerm] = useState<'quarterly' | 'monthly'>('quarterly')
-  const { toast, show } = useToast()
+  const { toast } = useToast()
   const mult = term === 'quarterly' ? 0.9 : 1
   const fmt = (n: number): string =>
     n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -100,7 +110,7 @@ export function BuyProxies(): React.ReactElement {
                 </div>
                 <button
                   className={'tpp-buy' + (t.feat ? ' red' : '')}
-                  onClick={() => window.open('https://dash.tubeproxies.com/billing', '_blank')}
+                  onClick={() => openProxyCheckout(t.name, t.ips)}
                 >
                   Buy now
                 </button>
@@ -135,7 +145,10 @@ export function BuyProxies(): React.ReactElement {
           </div>
           <div className="buy-foot-help">
             Need more than 100 IPs?{' '}
-            <span className="bs-link" onClick={() => show('info', 'Contacting TubeProxies sales')}>
+            <span
+              className="bs-link"
+              onClick={() => window.open(PROXY_SALES_URL, '_blank', 'noopener,noreferrer')}
+            >
               Talk to TubeProxies sales
             </span>
           </div>

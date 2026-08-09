@@ -132,13 +132,27 @@ function SidebarNav({
             onClick={go('/authenticator')}
           />
         )}
-        <NavItem
-          icon={<NavIcon name="phone" />}
-          label="Phone numbers"
-          badge="New"
-          active={active('/phone')}
-          onClick={go('/phone')}
-        />
+        <div className="nav-buy-row">
+          <NavItem
+            icon={<NavIcon name="phone" />}
+            label="Phone numbers"
+            badge="New"
+            active={active('/phone')}
+            onClick={go('/phone')}
+            style={{ flex: 1 }}
+          />
+          {/* Mirrors the Proxies buy shortcut. Pricing lives on the phone
+              page itself rather than a separate route, so this navigates
+              there with ?buy — the page scrolls to the price ladder, which
+              is what distinguishes it from clicking the label. */}
+          <button
+            className="nav-buy"
+            title="Buy phone numbers — TubeProxies"
+            onClick={go('/phone?buy=1')}
+          >
+            <NavIcon name="briefcase" size={16} />
+          </button>
+        </div>
         {canViewExtensions && (
           <NavItem
             icon={<NavIcon name="extensions" />}
