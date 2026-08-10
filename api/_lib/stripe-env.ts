@@ -81,3 +81,26 @@ export function missingPriceVars(plan: GhostPlanKey, cycle: Cycle): string[] {
 export function stripeConfigured(): boolean {
   return Boolean(STRIPE_SECRET_KEY)
 }
+
+/** True when the configured key is a Stripe test-mode key. */
+export function isTestMode(): boolean {
+  return STRIPE_SECRET_KEY.startsWith('sk_test_')
+}
+
+/**
+ * Whether Checkout should compute tax automatically.
+ *
+ * Defaults to ON, and can only be turned off in TEST mode. Stripe Tax needs
+ * an origin address configured per mode; an unconfigured test account rejects
+ * checkout with "The customer's location isn't recognized", which blocks
+ * end-to-end testing for a reason that has nothing to do with our code.
+ *
+ * Production must never skip this — we sell into the EU/UK where VAT is a
+ * legal requirement, and TubeProxies' live checkout already collects it. The
+ * live-key guard makes "disabled in prod" unreachable even if the env var is
+ * set there by mistake.
+ */
+export function automaticTaxEnabled(): boolean {
+  const optedOut = process.env.TG_DISABLE_AUTOMATIC_TAX === 'true'
+  return !(optedOut && isTestMode())
+}

@@ -9,7 +9,7 @@
 // the bracket flattening in `form()`.
 
 import { createHmac, timingSafeEqual } from 'node:crypto'
-import { STRIPE_SECRET_KEY } from './stripe-env.js'
+import { automaticTaxEnabled, STRIPE_SECRET_KEY } from './stripe-env.js'
 
 const API = 'https://api.stripe.com/v1'
 
@@ -130,6 +130,9 @@ export async function createCheckoutSession(params: {
   cancelUrl: string
   metadata: Record<string, string>
 }): Promise<CheckoutSession> {
+  // Off only when explicitly opted out AND on a test key — see
+  // automaticTaxEnabled(). Production always collects tax.
+  const withTax = automaticTaxEnabled()
   return await call<CheckoutSession>('/checkout/sessions', {
     customer: params.customer,
     mode: 'subscription',
@@ -138,9 +141,12 @@ export async function createCheckoutSession(params: {
     cancel_url: params.cancelUrl,
     allow_promotion_codes: true,
     billing_address_collection: 'required',
-    tax_id_collection: { enabled: true },
-    automatic_tax: { enabled: true },
-    customer_update: { address: 'auto', name: 'auto' },
+    tax_id_collection: { enabled: withTax },
+    automatic_tax: { enabled: withTax },
+    // `address: 'auto'` writes the entered address back to the customer, which
+    // Stripe REQUIRES when automatic tax is on. With tax off there is nothing
+    // to compute from, so only sync the name.
+    customer_update: withTax ? { address: 'auto', name: 'auto' } : { name: 'auto' },
     metadata: params.metadata,
     // Mirrored onto the subscription so the webhook can read it on renewal
     // events, which carry the subscription but not the session.
