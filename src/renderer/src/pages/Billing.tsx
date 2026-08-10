@@ -11,6 +11,7 @@ import { PhoneTab, ProxiesTab } from './billing/AddonTabs'
 import { InvoicesTab } from './billing/InvoicesTab'
 import { UpgradeModal } from './billing/UpgradeModal'
 import { openBillingPortal } from '@/lib/billing-api'
+import { money } from '@shared/pricing'
 
 const TABS: [string, string][] = [
   ['overview', 'Overview'],
@@ -71,7 +72,9 @@ export function Billing(): React.ReactElement {
   // A workspace with no TubeGhost subscription has nothing for the Stripe
   // portal to manage — it needs the plan chooser. Once subscribed, plan
   // changes and cancellation belong in the portal, which handles proration.
-  const hasPlan = workspace?.plan != null && workspace.plan !== 'free'
+  // Read from the live query, not the workspace store — the store is
+  // populated at sign-in and won't reflect a plan bought this session.
+  const hasPlan = data.subscribed
   const onUpgradeClick = (): void => {
     if (hasPlan) manageBilling()
     else setUpgrading(true)
@@ -112,7 +115,7 @@ export function Billing(): React.ReactElement {
               <MetricCard
                 icon={card}
                 tone="red"
-                value={data.planPrice != null ? `$${data.planPrice}` : '$0'}
+                value={data.planPrice != null ? money(data.planPrice) : '$0'}
                 unit="/mo"
                 label={`${data.planName} plan`}
               />
@@ -144,13 +147,14 @@ export function Billing(): React.ReactElement {
                     <div className="plan-card-name">{data.planName}</div>
                     <div className="plan-card-sub">
                       {data.profileLimit != null && data.seatLimit != null
-                        ? `${data.profileLimit} profiles · ${data.seatLimit} seats`
+                        ? `${data.profileLimit} profiles · ${data.seatLimit} seats` +
+                          (data.cycle ? ` · billed ${data.cycle}` : '')
                         : 'Plan limits'}
                     </div>
                   </div>
                   <div style={{ textAlign: 'right' }}>
                     <div className="plan-card-price">
-                      ${data.planPrice ?? 0}
+                      {data.planPrice != null ? money(data.planPrice) : '$0'}
                       <small>/mo</small>
                     </div>
                   </div>
