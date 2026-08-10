@@ -23,17 +23,10 @@ import {
 } from '../../stripe-env.js'
 import { PUBLIC_BASE_URL } from '../../env.js'
 import {
-<<<<<<< HEAD
   billableSeats,
   isCycle,
   isGhostPlanKey,
   PLANS,
-=======
-  isCycle,
-  isGhostPlanKey,
-  STARTER_PROFILES,
-  STARTER_SEATS,
->>>>>>> 72d9daa29100b218f45148bf6f574bf7a3a70b9f
   validateTeamConfig,
   type Cycle,
   type GhostPlanKey
@@ -97,11 +90,7 @@ export default async function checkout(req: VercelRequest, res: VercelResponse):
     res.status(403).json({ error: 'not_workspace_owner' })
     return
   }
-<<<<<<< HEAD
   if (workspace.stripe_subscription_id) {
-=======
-  if (workspace.tubeghost_subscription_id) {
->>>>>>> 72d9daa29100b218f45148bf6f574bf7a3a70b9f
     // Changing an existing plan is the billing portal's job — creating a
     // second subscription would double-charge and leave two quotas racing.
     res.status(409).json({ error: 'subscription_exists' })
@@ -174,19 +163,13 @@ function buildLineItems(plan: GhostPlanKey, cycle: Cycle, body: Body): BuiltItem
   if (plan === 'starter') {
     return {
       lineItems: [{ price: priceId('starter', cycle), quantity: 1 }],
-<<<<<<< HEAD
       profiles: PLANS.starter.profiles,
       // Starter sells no extra seats; its single seat comes from the plan row.
       seats: 0
-=======
-      profiles: STARTER_PROFILES,
-      seats: STARTER_SEATS
->>>>>>> 72d9daa29100b218f45148bf6f574bf7a3a70b9f
     }
   }
 
   const profiles = Number(body.profiles)
-<<<<<<< HEAD
   // `seats` is the TOTAL member count the user configured, matching the
   // marketing page's stepper (which floors at the included count).
   const members = Number(body.seats ?? PLANS.team.seatsIncluded)
@@ -202,15 +185,4 @@ function buildLineItems(plan: GhostPlanKey, cycle: Cycle, body: Body): BuiltItem
   if (extraSeats > 0) lineItems.push({ price: priceId('seat', cycle), quantity: extraSeats })
 
   return { lineItems, profiles, seats: extraSeats }
-=======
-  const seats = Number(body.seats ?? 0)
-  const invalid = validateTeamConfig(profiles, seats)
-  if (invalid) return { error: invalid }
-
-  const lineItems: LineItem[] = [{ price: priceId('profiles', cycle), quantity: profiles }]
-  if (seats > 0) lineItems.push({ price: priceId('seat', cycle), quantity: seats })
-
-  // Team includes the owner's own seat on top of any purchased seats.
-  return { lineItems, profiles, seats: seats + 1 }
->>>>>>> 72d9daa29100b218f45148bf6f574bf7a3a70b9f
 }

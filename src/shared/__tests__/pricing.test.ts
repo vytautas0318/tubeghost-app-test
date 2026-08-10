@@ -1,21 +1,15 @@
 import { describe, expect, it } from 'vitest'
 import {
   applyCycle,
-<<<<<<< HEAD
   billableSeats,
-=======
->>>>>>> 72d9daa29100b218f45148bf6f574bf7a3a70b9f
   billedTotal,
   money,
   perProfileRate,
   pfPrice,
   PF_MAX,
   PF_MIN,
-<<<<<<< HEAD
   PLANS,
   planList,
-=======
->>>>>>> 72d9daa29100b218f45148bf6f574bf7a3a70b9f
   SEAT_RATE,
   STARTER_BASE,
   teamList,
@@ -77,7 +71,6 @@ describe('seats + team totals', () => {
   })
 })
 
-<<<<<<< HEAD
 describe('included seats', () => {
   // The bug this guards: ghost.workspace_seat_limit computes
   // plans.member_seat_limit + workspaces.extra_seats. Storing the TOTAL
@@ -119,8 +112,6 @@ describe('included seats', () => {
   })
 })
 
-=======
->>>>>>> 72d9daa29100b218f45148bf6f574bf7a3a70b9f
 describe('billing cycles', () => {
   it('quarterly takes 10% off the monthly rate', () => {
     expect(applyCycle(100, 'quarterly')).toBeCloseTo(90, 2)
