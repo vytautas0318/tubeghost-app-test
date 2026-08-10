@@ -2,9 +2,17 @@ import * as React from 'react'
 import { useEffect, useRef, useState } from 'react'
 import { Check, X } from 'lucide-react'
 import { Button } from '@/components/ui'
-import { money, PLANS, type Cycle, type GhostPlanKey } from '@shared/pricing'
-import { startCheckout } from '@/lib/billing-api'
+import {
+  ADDONS_IN_CHECKOUT_ENABLED,
+  money,
+  PLANS,
+  type Cycle,
+  type GhostPlanKey
+} from '@shared/pricing'
+import { runOrder } from '@/lib/order-runner'
 import { CountStepper, ProfileStepper } from './Steppers'
+import { BundlePicker } from './BundlePicker'
+import { PHONE_BUNDLES, PROXY_BUNDLES } from '@shared/addons'
 import { SEAT_RATE, useUpgradeConfig, type UpgradeUsage } from './useUpgradeConfig'
 
 const CYCLES: [Cycle, string, string | null][] = [
@@ -77,16 +85,22 @@ export function UpgradeModal({
     setError(null)
     setBusy(plan)
     try {
-      await startCheckout({
+      // One order, run as a sequence of Checkouts — the plan first, then any
+      // TubeProxies add-ons. Each needs its own subscription, so they cannot
+      // share a session.
+      await runOrder({
         workspaceId,
         plan,
         cycle: cfg.cycle,
         // Ignored for Starter, which has fixed allowances.
         profiles: cfg.team.profiles,
-        seats: cfg.team.seats
+        seats: cfg.team.seats,
+        // Zero when none selected, or when the cycle disallows them.
+        proxies: cfg.addOns.proxies,
+        numbers: cfg.addOns.numbers
       })
-      // startCheckout navigates to Stripe on success; reaching here means it
-      // resolved without redirecting, so release the button.
+      // runOrder navigates to Stripe on success; reaching here means the
+      // order had nothing left to do, so release the button.
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not start checkout.')
     } finally {
@@ -127,7 +141,10 @@ export function UpgradeModal({
     )
   }
 
-  const priceBlock = (q: { listMonthly: number; monthly: number; billed: number }): React.ReactElement => (
+  const priceBlock = (
+    q: { listMonthly: number; monthly: number; billed: number },
+    addOnList: number
+  ): React.ReactElement => (
     <div className="bill-up-price">
       {cfg.cycle !== 'monthly' && <s>{money(q.listMonthly)}/mo</s>}
       <strong>
@@ -141,6 +158,9 @@ export function UpgradeModal({
             ? `${money(q.billed)} billed quarterly`
             : 'billed monthly'}
       </p>
+      {/* Make it explicit that the headline figure already includes the
+          add-ons, so the Stripe total is never a surprise. */}
+      {addOnList > 0 && <p className="bill-up-incl">includes add-ons</p>}
     </div>
   )
 
@@ -179,6 +199,52 @@ export function UpgradeModal({
 
         {error && <div className="bill-up-err">{error}</div>}
 
+        {/* Add-ons apply to whichever plan is chosen below, so they sit
+            outside the plan cards. Hidden on annual — TubeProxies sells no
+            annual price and one Checkout session can't mix intervals. */}
+        {cfg.addOns.available ? (
+          <div className="bill-up-addons">
+            <div className="bill-up-addons-h">
+              Add proxies &amp; numbers
+              <em>From TubeProxies · billed together with your plan</em>
+            </div>
+            <div className="bill-up-row">
+              <span>
+                Proxies<em>US static residential</em>
+              </span>
+              <BundlePicker
+                value={cfg.addOns.proxies}
+                onChange={cfg.addOns.setProxies}
+                options={PROXY_BUNDLES.map((b) => ({
+                  value: b.proxies,
+                  label: `${b.proxies} IP${b.proxies > 1 ? 's' : ''} — ${money(b.monthly)}/mo`
+                }))}
+                label="Proxies"
+              />
+            </div>
+            <div className="bill-up-row">
+              <span>
+                Phone numbers<em>US non-VoIP, for 2FA</em>
+              </span>
+              <BundlePicker
+                value={cfg.addOns.numbers}
+                onChange={cfg.addOns.setNumbers}
+                options={PHONE_BUNDLES.map((b) => ({
+                  value: b.numbers,
+                  label: `${b.numbers} number${b.numbers > 1 ? 's' : ''} — ${money(b.monthly)}/mo`
+                }))}
+                label="Phone numbers"
+              />
+            </div>
+          </div>
+        ) : ADDONS_IN_CHECKOUT_ENABLED ? (
+          // Switch is on, so this is the annual-cycle exclusion.
+          <div className="bill-up-addons muted">
+            Proxies and phone numbers aren&apos;t available on annual billing — choose monthly or
+            quarterly to add them, or buy them separately any time.
+          </div>
+        ) : null}
+
         <div className="bill-up-grid">
           {/* STARTER — fixed allowances, nothing to configure. */}
           <div className={'bill-up-card' + (currentPlan === 'starter' ? ' current' : '')}>
@@ -193,7 +259,7 @@ export function UpgradeModal({
               </span>
               <span className="bill-up-fixed">10</span>
             </div>
-            {priceBlock(cfg.starter.quote)}
+            {priceBlock(cfg.total('starter'), cfg.addOns.list)}
             {planCta('starter', 'Choose Starter')}
             <ul className="bill-up-feats">
               {STARTER_FEATURES.map((f) => (
@@ -240,7 +306,7 @@ export function UpgradeModal({
                 min={PLANS.team.seatsIncluded}
               />
             </div>
-            {priceBlock(cfg.team.quote)}
+            {priceBlock(cfg.total('team'), cfg.addOns.list)}
             {planCta('team', 'Choose Team')}
             <ul className="bill-up-feats">
               {TEAM_FEATURES.map((f) => (

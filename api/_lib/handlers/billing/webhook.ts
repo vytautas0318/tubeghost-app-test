@@ -18,7 +18,12 @@ import {
   getWorkspaceBySubscription,
   setWorkspaceSubscription
 } from '../../billing-db.js'
-import { getSubscription, verifyWebhookSignature, type StripeSubscription } from '../../stripe.js'
+import {
+  getSubscription,
+  subscriptionPeriodEnd,
+  verifyWebhookSignature,
+  type StripeSubscription
+} from '../../stripe.js'
 import { PRODUCT_TAG, STRIPE_WEBHOOK_SECRET } from '../../stripe-env.js'
 
 interface StripeEvent {
@@ -154,9 +159,10 @@ async function applySubscription(
     extraSeats: intOrNull(meta.seat_quota) ?? 0,
     stripeCustomerId: sub.customer,
     stripeSubscriptionId: sub.id,
-    currentPeriodEnd: sub.current_period_end
-      ? new Date(sub.current_period_end * 1000).toISOString()
-      : null,
+    currentPeriodEnd: (() => {
+      const end = subscriptionPeriodEnd(sub)
+      return end ? new Date(end * 1000).toISOString() : null
+    })(),
     cancelAtPeriodEnd: sub.cancel_at_period_end ?? false
   })
 }

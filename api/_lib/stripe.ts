@@ -171,6 +171,13 @@ export async function createPortalSession(
 export interface StripeSubscriptionItem {
   price: { id: string }
   quantity?: number
+  /**
+   * Billing period. Lives on the ITEM, not the subscription, since Stripe
+   * API 2025-xx (SDK v20+) — reading sub.current_period_end returns
+   * undefined and silently stores a null renewal date.
+   */
+  current_period_start?: number
+  current_period_end?: number
 }
 
 export interface StripeSubscription {
@@ -178,9 +185,21 @@ export interface StripeSubscription {
   status: string
   customer: string
   cancel_at_period_end?: boolean
+  /** Legacy top-level field — undefined on current API versions. Use
+   *  subscriptionPeriodEnd() rather than reading this directly. */
   current_period_end?: number
   items: { data: StripeSubscriptionItem[] }
   metadata: Record<string, string>
+}
+
+/**
+ * The subscription's period end as a unix timestamp, or null.
+ *
+ * Reads the first item's period (where Stripe now keeps it) and falls back to
+ * the legacy top-level field so older API versions still work.
+ */
+export function subscriptionPeriodEnd(sub: StripeSubscription): number | null {
+  return sub.items?.data?.[0]?.current_period_end ?? sub.current_period_end ?? null
 }
 
 export async function getSubscription(id: string): Promise<StripeSubscription> {

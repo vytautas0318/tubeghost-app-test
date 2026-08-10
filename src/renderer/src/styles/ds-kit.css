@@ -1046,6 +1046,12 @@ html[data-platform='darwin'] .builder-top .editor-back { -webkit-app-region: no-
 .plan-card-sub { font-size: 12.5px; color: var(--t3); margin-top: 5px; }
 .plan-card-price { font-family: var(--mono); font-size: 20px; font-weight: 600; }
 .plan-card-price small { font-size: 12px; color: var(--t3); font-weight: 500; font-family: var(--sans); }
+/* Amount actually charged per billing event, under the monthly figure. */
+.plan-card-billed { font-size: 11.5px; color: var(--t3); margin-top: 3px; }
+/* Multi-step order progress / resume banner. */
+.bill-order-note { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 18px; padding: 13px 16px; border: 1px solid var(--line); border-radius: var(--r); background: var(--panel-2); font-size: 13px; color: var(--t2); }
+.bill-order-note.warn { border-color: var(--red); background: var(--red-soft, rgba(230,0,0,0.08)); color: var(--t1); }
+.bill-order-actions { display: flex; gap: 8px; flex-shrink: 0; }
 .usage-row { margin-bottom: 15px; }
 .usage-row:last-child { margin-bottom: 0; }
 .usage-top { display: flex; align-items: baseline; justify-content: space-between; font-size: 13px; margin-bottom: 7px; }
@@ -1377,6 +1383,13 @@ html[data-platform='darwin'] .builder-top .editor-back { -webkit-app-region: no-
 .bill-up-feats li { display: flex; align-items: flex-start; gap: 8px; font-size: 12.5px; color: var(--t2); }
 .bill-up-feats li svg { flex-shrink: 0; margin-top: 1px; color: var(--green); }
 .bill-up-foot { margin-top: 16px; font-size: 12px; color: var(--t3); text-align: center; }
+/* Add-on selectors, shared across the plan cards. */
+.bill-up-addons { margin: 4px 0 18px; padding: 14px 16px; border: 1px solid var(--line); border-radius: var(--r); background: var(--panel-2); }
+.bill-up-addons.muted { font-size: 12.5px; color: var(--t3); line-height: 1.5; }
+.bill-up-addons-h { display: flex; flex-direction: column; font-size: 13px; font-weight: 650; color: var(--t1); margin-bottom: 8px; }
+.bill-up-addons-h em { font-style: normal; font-size: 11.5px; font-weight: 400; color: var(--t3); margin-top: 2px; }
+.bill-up-select { min-width: 210px; height: 32px; padding: 0 9px; border: 1px solid var(--line); border-radius: var(--r-sm, 7px); background: var(--panel); color: var(--t1); font-family: var(--sans); font-size: 12.5px; cursor: pointer; }
+.bill-up-incl { font-size: 11px; color: var(--green); margin-top: 2px; }
 /* The plan the workspace is already on. */
 .bill-up-card.current { border-color: var(--green); box-shadow: 0 0 0 1px var(--green) inset; }
 .bill-up-now { margin-left: 8px; font-family: var(--mono); font-size: 9.5px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--green); background: var(--green-soft); padding: 3px 7px; border-radius: 5px; vertical-align: middle; }

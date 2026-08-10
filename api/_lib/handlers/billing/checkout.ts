@@ -38,6 +38,9 @@ interface Body {
   cycle?: unknown
   profiles?: unknown
   seats?: unknown
+  /** TubeProxies add-ons bundled into this checkout. 0 = not buying any. */
+  proxies?: unknown
+  numbers?: unknown
 }
 
 export default async function checkout(req: VercelRequest, res: VercelResponse): Promise<void> {
@@ -111,6 +114,18 @@ export default async function checkout(req: VercelRequest, res: VercelResponse):
     return
   }
 
+  // NOTE: add-ons are NOT bundled into this session.
+  //
+  // One Checkout session in subscription mode creates exactly ONE
+  // subscription — Stripe rejects per-line-item `subscription_data`
+  // ("Received unknown parameter"), verified against the live API. But
+  // ghost.workspaces, public.subscriptions and public.phone_subscriptions
+  // each require a UNIQUE stripe_subscription_id, so one id cannot satisfy
+  // all three; the second and third inserts would violate the constraint.
+  //
+  // Proxies and numbers therefore get their own sessions, run back-to-back
+  // after this one — see /api/billing/order.
+
   try {
     const customer = await findOrCreateCustomer(session.email, session.userId)
     const checkoutSession = await createCheckoutSession({
@@ -128,7 +143,12 @@ export default async function checkout(req: VercelRequest, res: VercelResponse):
         plan_key: plan,
         cycle,
         profile_quota: String(built.profiles),
-        seat_quota: String(built.seats)
+        seat_quota: String(built.seats),
+        // Add-on quantities, for the TubeProxies handler that provisions
+        // them. Only present when something was actually bought, so their
+        // dispatcher can branch on presence.
+        ...(Number(body.proxies) ? { tubeghost_proxies: String(Number(body.proxies)) } : {}),
+        ...(Number(body.numbers) ? { tubeghost_numbers: String(Number(body.numbers)) } : {})
       }
     })
 
@@ -151,6 +171,7 @@ export default async function checkout(req: VercelRequest, res: VercelResponse):
 type BuiltItems =
   | { lineItems: LineItem[]; profiles: number; seats: number }
   | { error: string }
+
 
 /**
  * Translate a plan request into Stripe line items.

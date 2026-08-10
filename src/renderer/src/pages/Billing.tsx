@@ -1,6 +1,6 @@
 import * as React from 'react'
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '@/store/auth'
 import { useWorkspace } from '@/store/workspace'
 import { Button, Badge, MetricCard } from '@/components/ui'
@@ -11,7 +11,9 @@ import { PhoneTab, ProxiesTab } from './billing/AddonTabs'
 import { InvoicesTab } from './billing/InvoicesTab'
 import { UpgradeModal } from './billing/UpgradeModal'
 import { openBillingPortal } from '@/lib/billing-api'
+import { clearPendingOrder, pendingOrder, resumeOrder } from '@/lib/order-runner'
 import { money } from '@shared/pricing'
+import type { OrderStepKind } from '@shared/order'
 
 const TABS: [string, string][] = [
   ['overview', 'Overview'],
@@ -55,6 +57,7 @@ export function Billing(): React.ReactElement {
   // claimed "No active subscriptions" even for paying customers.
   const subs = useSubscriptions(userId)
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const { toast, show } = useToast()
 
   /**
@@ -68,6 +71,26 @@ export function Billing(): React.ReactElement {
   }
 
   const [upgrading, setUpgrading] = useState(false)
+
+  // Returning from a Stripe step. `done` lists the steps whose payment has
+  // succeeded — read from the URL rather than assumed, so a refresh cannot
+  // double-count a step and skip a purchase the user is owed.
+  const orderParam = searchParams.get('order')
+  const doneParam = searchParams.get('done')
+
+  useEffect(() => {
+    if (orderParam !== 'continue') return
+    const done = (doneParam ?? '').split(',').filter(Boolean) as OrderStepKind[]
+    // Strip the params FIRST so a refresh mid-redirect cannot re-trigger the
+    // same step. Losing a resume is recoverable (the banner offers it again);
+    // repeating one risks a duplicate charge.
+    setSearchParams({}, { replace: true })
+    void resumeOrder(done).catch((e: Error) => show('error', e.message))
+  }, [orderParam, doneParam, setSearchParams, show])
+
+  // A cancelled step leaves the rest of the order unbought. Surface it rather
+  // than silently dropping what they configured.
+  const stalled = orderParam === 'canceled' ? pendingOrder() : null
 
   // A workspace with no TubeGhost subscription has nothing for the Stripe
   // portal to manage — it needs the plan chooser. Once subscribed, plan
@@ -100,6 +123,36 @@ export function Billing(): React.ReactElement {
             </Button>
           </div>
         </div>
+
+        {orderParam === 'continue' && (
+          <div className="bill-order-note">Opening the next step of your order…</div>
+        )}
+
+        {stalled && (
+          <div className="bill-order-note warn">
+            <div>
+              <strong>Your order isn&apos;t finished.</strong> The plan is paid for, but{' '}
+              {stalled.order.proxies && !stalled.completed.includes('proxies')
+                ? 'proxies'
+                : 'phone numbers'}{' '}
+              still need checkout.
+            </div>
+            <div className="bill-order-actions">
+              <Button
+                size="sm"
+                variant="primary"
+                onClick={() =>
+                  resumeOrder(stalled.completed).catch((e: Error) => show('error', e.message))
+                }
+              >
+                Continue
+              </Button>
+              <Button size="sm" onClick={clearPendingOrder}>
+                Discard
+              </Button>
+            </div>
+          </div>
+        )}
 
         <div className="ext-tabs" style={{ marginBottom: '22px' }}>
           {TABS.map(([k, label]) => (
@@ -157,6 +210,13 @@ export function Billing(): React.ReactElement {
                       {data.planPrice != null ? money(data.planPrice) : '$0'}
                       <small>/mo</small>
                     </div>
+                    {/* On a discounted cycle, show what it would cost monthly
+                        and the real amount charged per billing event. */}
+                    {data.billedTotal > 0 && (
+                      <div className="plan-card-billed">
+                        {money(data.billedTotal)} billed {data.cycle === 'annual' ? 'yearly' : 'quarterly'}
+                      </div>
+                    )}
                   </div>
                 </div>
                 <div className="usage-block">

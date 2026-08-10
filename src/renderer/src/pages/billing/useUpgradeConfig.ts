@@ -12,6 +12,7 @@
 
 import { useMemo, useState } from 'react'
 import {
+  addOnsAvailable,
   applyCycle,
   billedTotal,
   perProfileRate,
@@ -20,8 +21,10 @@ import {
   PLANS,
   planList,
   SEAT_RATE,
-  type Cycle
+  type Cycle,
+  type GhostPlanKey
 } from '@shared/pricing'
+import { addOnsList } from '@shared/addons'
 
 export interface Quote {
   listMonthly: number
@@ -48,6 +51,21 @@ export interface UpgradeConfig {
     atMax: boolean
     quote: Quote
   }
+  /**
+   * TubeProxies add-ons bought in the same checkout. Unavailable on annual —
+   * they have no annual price, and one Checkout session cannot mix intervals.
+   */
+  addOns: {
+    available: boolean
+    proxies: number
+    setProxies: (n: number) => void
+    numbers: number
+    setNumbers: (n: number) => void
+    /** Monthly list price of the selected add-ons, before the cycle discount. */
+    list: number
+  }
+  /** Plan + add-ons, the figure the Buy button commits to. */
+  total: (plan: GhostPlanKey) => Quote
 }
 
 /** The marketing page's opening configuration, so quotes match tubeghost.com. */
@@ -75,7 +93,31 @@ export function useUpgradeConfig(usage: UpgradeUsage): UpgradeConfig {
     Math.max(PLANS.team.seatsIncluded, usage.seatsUsed)
   )
 
+  // Add-ons start empty — they are things you choose to buy here, not a
+  // reflection of what the workspace already holds on TubeProxies.
+  const [proxies, setProxies] = useState(0)
+  const [numbers, setNumbers] = useState(0)
+
+  const addOnsOk = addOnsAvailable(cycle)
+  // Selections are ignored (not just hidden) on annual, so a stale value can
+  // never reach checkout and create a line item with no annual price.
+  const addOnList = addOnsOk ? addOnsList(proxies, numbers) : 0
+
+  /**
+   * Switching to annual drops any configured add-ons. Keeping them would
+   * quote a total the checkout cannot produce — proxies and numbers have no
+   * annual price.
+   */
+  const changeCycle = (c: Cycle): void => {
+    setCycle(c)
+    if (!addOnsAvailable(c)) {
+      setProxies(0)
+      setNumbers(0)
+    }
+  }
+
   const starterQuote = useMemo(() => quote(planList(PLANS.starter), cycle), [cycle])
+  const teamListPrice = planList(PLANS.team, seats, profiles)
   const teamQuote = useMemo(
     () => quote(planList(PLANS.team, seats, profiles), cycle),
     [profiles, seats, cycle]
@@ -83,7 +125,7 @@ export function useUpgradeConfig(usage: UpgradeUsage): UpgradeConfig {
 
   return {
     cycle,
-    setCycle,
+    setCycle: changeCycle,
     starter: { quote: starterQuote },
     team: {
       profiles,
@@ -93,7 +135,17 @@ export function useUpgradeConfig(usage: UpgradeUsage): UpgradeConfig {
       perProfile: perProfileRate(profiles),
       atMax: profiles >= PF_MAX,
       quote: teamQuote
-    }
+    },
+    addOns: {
+      available: addOnsOk,
+      proxies,
+      setProxies,
+      numbers,
+      setNumbers,
+      list: addOnList
+    },
+    total: (plan) =>
+      quote((plan === 'starter' ? planList(PLANS.starter) : teamListPrice) + addOnList, cycle)
   }
 }
 

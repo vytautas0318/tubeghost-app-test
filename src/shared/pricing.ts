@@ -118,8 +118,54 @@ export function isCycle(v: unknown): v is Cycle {
   return v === 'monthly' || v === 'quarterly' || v === 'annual'
 }
 
+/**
+ * Narrow a raw `workspaces.plan_cycle` value to a Cycle, defaulting to
+ * monthly. Used wherever the DB column is read — a bare
+ * `x === 'quarterly' ? … : 'monthly'` silently mis-prices annual
+ * subscriptions as monthly, which is exactly the bug this prevents.
+ */
+export function readCycle(v: unknown): Cycle {
+  return isCycle(v) ? v : 'monthly'
+}
+
 export function isGhostPlanKey(v: unknown): v is GhostPlanKey {
   return v === 'starter' || v === 'team'
+}
+
+/**
+ * MASTER SWITCH for bundling TubeProxies products into a TubeGhost checkout.
+ *
+ * OFF until tubeproxies-dash can provision a bundled purchase. TubeGhost can
+ * already CHARGE for proxies and numbers in one session, but their webhook
+ * dispatcher branches on its own metadata shape (`type: 'phone_number'`,
+ * `proxy_count`, …) and does not recognise the `tubeghost_proxies` /
+ * `tubeghost_numbers` keys this app sends. A bundled purchase today would
+ * take the customer's money and deliver nothing, silently.
+ *
+ * Flip to true only after:
+ *   1. tubeproxies-dash handles the tubeghost_* metadata, AND
+ *   2. a test-mode bundle purchase is confirmed to actually provision, AND
+ *   3. TubeProxies' price IDs are set in this app's environment.
+ *
+ * Everything behind it is written and tested; this gate is about the OTHER
+ * side of the integration being ready, not about this code.
+ */
+export const ADDONS_IN_CHECKOUT_ENABLED = false
+
+/**
+ * Can proxies and phone numbers be bought in the same checkout as the plan?
+ *
+ * Two independent conditions:
+ *
+ *  1. The master switch above — is the provisioning side ready at all?
+ *  2. The cycle. Every line item in one Stripe Checkout session must share a
+ *     billing interval, and TubeProxies sells proxies/numbers on MONTHLY and
+ *     QUARTERLY only. So an annual plan can never bundle them, even once the
+ *     switch is on (client decision, 2026-08-10) — an annual customer buys
+ *     them separately from the Buy proxies / Phone pages, which work today.
+ */
+export function addOnsAvailable(cycle: Cycle): boolean {
+  return ADDONS_IN_CHECKOUT_ENABLED && cycle !== 'annual'
 }
 
 export interface PlanDef {

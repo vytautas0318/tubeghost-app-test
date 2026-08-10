@@ -53,6 +53,44 @@ const PRICE_ENV = {
 
 export type PriceKind = keyof typeof PRICE_ENV
 
+/**
+ * TubeProxies' OWN price IDs, for bundling their products into a TubeGhost
+ * checkout. They live in the same Stripe account, so one session can charge
+ * for both products' items.
+ *
+ * Keyed by bundle size. Monthly and quarterly only — TubeProxies sells no
+ * annual proxy or phone price, which is why addOnsAvailable() blocks annual.
+ */
+const PROXY_PRICE_ENV: Record<number, { monthly: string; quarterly: string }> = {
+  1: { monthly: 'NEXT_PUBLIC_PRICE_STARTER_MONTHLY', quarterly: 'NEXT_PUBLIC_PRICE_STARTER_QUARTERLY' },
+  5: { monthly: 'NEXT_PUBLIC_PRICE_HOBBY_MONTHLY', quarterly: 'NEXT_PUBLIC_PRICE_HOBBY_QUARTERLY' },
+  10: { monthly: 'NEXT_PUBLIC_PRICE_SMALL_TEAM_MONTHLY', quarterly: 'NEXT_PUBLIC_PRICE_SMALL_TEAM_QUARTERLY' },
+  25: { monthly: 'NEXT_PUBLIC_PRICE_GROWTH_MONTHLY', quarterly: 'NEXT_PUBLIC_PRICE_GROWTH_QUARTERLY' },
+  50: { monthly: 'NEXT_PUBLIC_PRICE_SCALE_MONTHLY', quarterly: 'NEXT_PUBLIC_PRICE_SCALE_QUARTERLY' },
+  100: { monthly: 'NEXT_PUBLIC_PRICE_ENTERPRISE_MONTHLY', quarterly: 'NEXT_PUBLIC_PRICE_ENTERPRISE_QUARTERLY' }
+}
+
+const PHONE_PRICE_ENV: Record<number, { monthly: string; quarterly: string }> = {
+  1: { monthly: 'NEXT_PUBLIC_PRICE_PHONE_QTY_1', quarterly: 'NEXT_PUBLIC_PRICE_PHONE_QTY_1_QUARTERLY' },
+  3: { monthly: 'NEXT_PUBLIC_PRICE_PHONE_QTY_3', quarterly: 'NEXT_PUBLIC_PRICE_PHONE_QTY_3_QUARTERLY' },
+  7: { monthly: 'NEXT_PUBLIC_PRICE_PHONE_QTY_7', quarterly: 'NEXT_PUBLIC_PRICE_PHONE_QTY_7_QUARTERLY' },
+  15: { monthly: 'NEXT_PUBLIC_PRICE_PHONE_QTY_15', quarterly: 'NEXT_PUBLIC_PRICE_PHONE_QTY_15_QUARTERLY' }
+}
+
+/** Proxy bundle price id, or '' when unavailable for that size/cycle. */
+export function proxyPriceId(proxies: number, cycle: Cycle): string {
+  if (cycle === 'annual') return ''
+  const row = PROXY_PRICE_ENV[proxies]
+  return row ? (process.env[row[cycle]] ?? '') : ''
+}
+
+/** Phone bundle price id, or '' when unavailable for that size/cycle. */
+export function phonePriceId(numbers: number, cycle: Cycle): string {
+  if (cycle === 'annual') return ''
+  const row = PHONE_PRICE_ENV[numbers]
+  return row ? (process.env[row[cycle]] ?? '') : ''
+}
+
 export function priceId(kind: PriceKind, cycle: Cycle): string {
   return process.env[PRICE_ENV[kind][cycle]] ?? ''
 }

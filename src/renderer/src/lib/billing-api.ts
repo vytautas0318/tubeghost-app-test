@@ -61,6 +61,10 @@ export interface CheckoutRequest {
   profiles?: number
   /** Additional seats beyond the owner's. Team only. */
   seats?: number
+  /** TubeProxies proxy bundle size, 0 for none. Monthly/quarterly only. */
+  proxies?: number
+  /** TubeProxies phone bundle size, 0 for none. Monthly/quarterly only. */
+  numbers?: number
 }
 
 /**
