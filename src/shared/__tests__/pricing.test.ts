@@ -1,12 +1,15 @@
 import { describe, expect, it } from 'vitest'
 import {
   applyCycle,
+  billableSeats,
   billedTotal,
   money,
   perProfileRate,
   pfPrice,
   PF_MAX,
   PF_MIN,
+  PLANS,
+  planList,
   SEAT_RATE,
   STARTER_BASE,
   teamList,
@@ -65,6 +68,47 @@ describe('seats + team totals', () => {
 
   it('team with no seats is just the profile cost', () => {
     expect(teamList(25, 0)).toBeCloseTo(40, 2)
+  })
+})
+
+describe('included seats', () => {
+  // The bug this guards: ghost.workspace_seat_limit computes
+  // plans.member_seat_limit + workspaces.extra_seats. Storing the TOTAL
+  // member count in extra_seats would grant the 3 included seats twice.
+  it('bills nothing for the included members', () => {
+    expect(billableSeats(PLANS.team, PLANS.team.seatsIncluded)).toBe(0)
+    expect(billableSeats(PLANS.team, 0)).toBe(0)
+    expect(billableSeats(PLANS.team, 1)).toBe(0)
+  })
+
+  it('bills only members beyond the included three', () => {
+    expect(billableSeats(PLANS.team, 4)).toBe(1)
+    expect(billableSeats(PLANS.team, 10)).toBe(7)
+  })
+
+  it('never bills seats on Starter, which sells none', () => {
+    expect(billableSeats(PLANS.starter, 5)).toBe(0)
+  })
+
+  it('quotes 100 profiles with the included members at the anchor price', () => {
+    // $89 is profiles alone — the 3 members must add nothing.
+    expect(planList(PLANS.team, PLANS.team.seatsIncluded, 100)).toBeCloseTo(89, 2)
+  })
+
+  it('adds SEAT_RATE per member beyond the included three', () => {
+    expect(planList(PLANS.team, 5, 100)).toBeCloseTo(89 + 2 * SEAT_RATE, 2)
+  })
+
+  it('Starter is its flat base regardless of members asked for', () => {
+    expect(planList(PLANS.starter, 3)).toBeCloseTo(STARTER_BASE, 2)
+  })
+
+  it('matches ghost.plans, which is what the DB triggers enforce', () => {
+    // starter: profile_limit 10 / member_seat_limit 1
+    expect(PLANS.starter.profiles).toBe(10)
+    expect(PLANS.starter.seatsIncluded).toBe(1)
+    // team: member_seat_limit 3
+    expect(PLANS.team.seatsIncluded).toBe(3)
   })
 })
 

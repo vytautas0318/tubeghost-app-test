@@ -17,9 +17,9 @@ import {
   perProfileRate,
   PF_MAX,
   PF_MIN,
+  PLANS,
+  planList,
   SEAT_RATE,
-  STARTER_BASE,
-  teamList,
   type Cycle
 } from '@shared/pricing'
 
@@ -68,13 +68,16 @@ export function useUpgradeConfig(usage: UpgradeUsage): UpgradeConfig {
   const [profiles, setProfiles] = useState(
     Math.min(PF_MAX, Math.max(PF_MIN, SITE_DEFAULT_PROFILES, usage.profilesUsed))
   )
-  // Starter includes one seat; only ADDITIONAL seats are billed on Team, so
-  // a workspace with 1 member configures 0 extra seats.
-  const [seats, setSeats] = useState(Math.max(0, usage.seatsUsed - 1))
+  // TOTAL member count, matching the marketing stepper — it floors at the
+  // plan's included seats and only bills beyond them. Seeded from live usage
+  // so an existing team of 5 opens at 5, not at the 3 included.
+  const [seats, setSeats] = useState(
+    Math.max(PLANS.team.seatsIncluded, usage.seatsUsed)
+  )
 
-  const starterQuote = useMemo(() => quote(STARTER_BASE, cycle), [cycle])
+  const starterQuote = useMemo(() => quote(planList(PLANS.starter), cycle), [cycle])
   const teamQuote = useMemo(
-    () => quote(teamList(profiles, seats), cycle),
+    () => quote(planList(PLANS.team, seats, profiles), cycle),
     [profiles, seats, cycle]
   )
 

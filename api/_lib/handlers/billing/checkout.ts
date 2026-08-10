@@ -23,10 +23,10 @@ import {
 } from '../../stripe-env.js'
 import { PUBLIC_BASE_URL } from '../../env.js'
 import {
+  billableSeats,
   isCycle,
   isGhostPlanKey,
-  STARTER_PROFILES,
-  STARTER_SEATS,
+  PLANS,
   validateTeamConfig,
   type Cycle,
   type GhostPlanKey
@@ -90,7 +90,7 @@ export default async function checkout(req: VercelRequest, res: VercelResponse):
     res.status(403).json({ error: 'not_workspace_owner' })
     return
   }
-  if (workspace.tubeghost_subscription_id) {
+  if (workspace.stripe_subscription_id) {
     // Changing an existing plan is the billing portal's job — creating a
     // second subscription would double-charge and leave two quotas racing.
     res.status(409).json({ error: 'subscription_exists' })
@@ -163,19 +163,26 @@ function buildLineItems(plan: GhostPlanKey, cycle: Cycle, body: Body): BuiltItem
   if (plan === 'starter') {
     return {
       lineItems: [{ price: priceId('starter', cycle), quantity: 1 }],
-      profiles: STARTER_PROFILES,
-      seats: STARTER_SEATS
+      profiles: PLANS.starter.profiles,
+      // Starter sells no extra seats; its single seat comes from the plan row.
+      seats: 0
     }
   }
 
   const profiles = Number(body.profiles)
-  const seats = Number(body.seats ?? 0)
-  const invalid = validateTeamConfig(profiles, seats)
+  // `seats` is the TOTAL member count the user configured, matching the
+  // marketing page's stepper (which floors at the included count).
+  const members = Number(body.seats ?? PLANS.team.seatsIncluded)
+  const invalid = validateTeamConfig(profiles, members)
   if (invalid) return { error: invalid }
 
-  const lineItems: LineItem[] = [{ price: priceId('profiles', cycle), quantity: profiles }]
-  if (seats > 0) lineItems.push({ price: priceId('seat', cycle), quantity: seats })
+  // Bill — and store — only the seats BEYOND the plan's included three.
+  // ghost.workspace_seat_limit adds extra_seats to plans.member_seat_limit,
+  // so sending the total here would grant the included seats twice.
+  const extraSeats = billableSeats(PLANS.team, members)
 
-  // Team includes the owner's own seat on top of any purchased seats.
-  return { lineItems, profiles, seats: seats + 1 }
+  const lineItems: LineItem[] = [{ price: priceId('profiles', cycle), quantity: profiles }]
+  if (extraSeats > 0) lineItems.push({ price: priceId('seat', cycle), quantity: extraSeats })
+
+  return { lineItems, profiles, seats: extraSeats }
 }

@@ -122,6 +122,81 @@ export function isGhostPlanKey(v: unknown): v is GhostPlanKey {
   return v === 'starter' || v === 'team'
 }
 
+export interface PlanDef {
+  key: GhostPlanKey
+  name: string
+  /** Fixed base price. Team is null — its profiles are graduated. */
+  base: number | null
+  /** Profiles included. On Team this is the configurator's FLOOR (PF_MIN). */
+  profiles: number
+  /** True when the buyer picks their own profile count (Team only). */
+  configurableProfiles: boolean
+  /** Members included in the price. Extra seats bill at SEAT_RATE. */
+  seatsIncluded: number
+  /** Whether seats beyond `seatsIncluded` can be bought at all. */
+  extraSeats: boolean
+}
+
+/**
+ * The plans TubeGhost sells — mirrors TubeGhostMarketing/app/lib/pricing.ts
+ * so the app and the site can never quote different prices, and matches
+ * ghost.plans (which is what the DB triggers actually enforce).
+ *
+ * Team bundles 3 members per the client's 2026-08-07 decision — only members
+ * beyond those three bill at SEAT_RATE. Starter is solo and sells no seats.
+ * Enterprise is sales-led and has no entry.
+ */
+export const PLANS: Record<GhostPlanKey, PlanDef> = {
+  starter: {
+    key: 'starter',
+    name: 'Starter',
+    base: STARTER_BASE,
+    profiles: 10,
+    configurableProfiles: false,
+    seatsIncluded: 1,
+    extraSeats: false
+  },
+  team: {
+    key: 'team',
+    name: 'Team',
+    base: null, // graduated — see pfPrice()
+    profiles: PF_MIN,
+    configurableProfiles: true,
+    seatsIncluded: 3,
+    extraSeats: true
+  }
+}
+
+/**
+ * Seats billed on top of the price at this member count.
+ *
+ * CRITICAL for checkout: ghost.workspace_seat_limit computes
+ * `plans.member_seat_limit + workspaces.extra_seats`, so the webhook must
+ * store the BILLABLE extras — not the total member count, which would grant
+ * the included seats twice.
+ */
+export function billableSeats(plan: PlanDef, members: number): number {
+  if (!plan.extraSeats) return 0
+  return Math.max(0, members - plan.seatsIncluded)
+}
+
+/**
+ * Monthly list price for a plan, before the cycle discount.
+ *
+ * Team walks the graduated profile bands for the configured count; the fixed
+ * plans use their base. Seats beyond those included are added at SEAT_RATE.
+ * Proxies and numbers are NOT folded in — they are bought per unit from
+ * TubeProxies and billed on their own subscription.
+ */
+export function planList(
+  plan: PlanDef,
+  members = plan.seatsIncluded,
+  profiles = plan.profiles
+): number {
+  const profileCost = plan.configurableProfiles ? pfPrice(profiles) : (plan.base ?? 0)
+  return profileCost + billableSeats(plan, members) * SEAT_RATE
+}
+
 /**
  * Validate a requested Team configuration. Returns an error string, or null
  * when acceptable. Shared by the UI (to disable the button) and the checkout

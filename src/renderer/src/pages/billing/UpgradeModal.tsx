@@ -2,7 +2,7 @@ import * as React from 'react'
 import { useEffect, useRef, useState } from 'react'
 import { Check, X } from 'lucide-react'
 import { Button } from '@/components/ui'
-import { money, PF_MAX, type Cycle, type GhostPlanKey } from '@shared/pricing'
+import { money, PLANS, type Cycle, type GhostPlanKey } from '@shared/pricing'
 import { startCheckout } from '@/lib/billing-api'
 import { CountStepper, ProfileStepper } from './Steppers'
 import { SEAT_RATE, useUpgradeConfig, type UpgradeUsage } from './useUpgradeConfig'
@@ -13,17 +13,24 @@ const CYCLES: [Cycle, string, string | null][] = [
   ['annual', 'Annual', '2 months free']
 ]
 
+// Copy mirrors TubeGhostMarketing/app/components/PricingTable.tsx so the app
+// and the site describe the same plans. Update both together.
 const STARTER_FEATURES = [
   '10 anti-detect profiles',
-  'Built-in 2FA authenticator',
-  'Add proxies & numbers separately'
+  'Built-in 2FA authenticator (replaces Google Authenticator)',
+  'Add proxies & numbers'
 ]
 const TEAM_FEATURES = [
   'Profiles that scale with you',
-  'Team members, roles & access',
+  `${PLANS.team.seatsIncluded} team members included, add more anytime`,
+  'Roles & access control',
   'Shared proxies, numbers & authenticators',
   'Automation & API'
 ]
+const ENTERPRISE_FEATURES = ['Unlimited profiles', 'SSO & audit log', 'Dedicated manager']
+
+/** Where "Talk to sales" goes. Enterprise is quoted manually, not self-serve. */
+const SALES_URL = 'https://tubeghost.com/#pricing'
 
 /**
  * Plan chooser + checkout hand-off.
@@ -137,14 +144,12 @@ export function UpgradeModal({
           {/* STARTER — fixed allowances, nothing to configure. */}
           <div className="bill-up-card">
             <h3>Starter</h3>
-            <p className="bill-up-tag">One operator, ten clean channels.</p>
-            <div className="bill-up-fixed">
-              <span>Profiles</span>
-              <strong>10</strong>
-            </div>
-            <div className="bill-up-fixed">
-              <span>Team seats</span>
-              <strong>1</strong>
+            <p className="bill-up-tag">To get going. One operator, ten clean channels.</p>
+            <div className="bill-up-row">
+              <span>
+                Profiles<em>1 seat · solo</em>
+              </span>
+              <span className="bill-up-fixed">10</span>
             </div>
             {priceBlock(cfg.starter.quote)}
             <Button
@@ -167,28 +172,32 @@ export function UpgradeModal({
 
           {/* TEAM — configurable profiles + seats. */}
           <div className="bill-up-card featured">
+            <span className="pg-sticker">★ CROWD FAVOURITE</span>
             <h3>Team</h3>
-            <p className="bill-up-tag">For growing creators &amp; teams.</p>
+            <p className="bill-up-tag">For growing creators &amp; teams. Profiles that scale.</p>
             <div className="bill-up-row">
               <span>
                 Profiles
                 <em>
                   {cfg.team.atMax
                     ? 'Need more? Talk to sales'
-                    : `${money(cfg.team.perProfile)}/profile`}
+                    : `${money(cfg.team.perProfile)}/profile · scales with volume`}
                 </em>
               </span>
               <ProfileStepper value={cfg.team.profiles} onChange={cfg.team.setProfiles} />
             </div>
             <div className="bill-up-row">
               <span>
-                Extra team members
-                <em>{money(SEAT_RATE)}/ea · owner included</em>
+                Team members
+                <em>
+                  {PLANS.team.seatsIncluded} included · {money(SEAT_RATE)}/ea after
+                </em>
               </span>
               <CountStepper
                 value={cfg.team.seats}
                 onChange={cfg.team.setSeats}
                 label="Team members"
+                min={PLANS.team.seatsIncluded}
               />
             </div>
             {priceBlock(cfg.team.quote)}
@@ -209,10 +218,42 @@ export function UpgradeModal({
               ))}
             </ul>
           </div>
+
+          {/* ENTERPRISE — above PF_MAX there is no self-serve price, so this
+              card quotes nothing and hands off to sales. */}
+          <div className="bill-up-card">
+            <h3>Enterprise</h3>
+            <p className="bill-up-tag">For agencies &amp; networks running fleets.</p>
+            <div className="bill-up-row">
+              <span>
+                Profiles<em>Custom seats &amp; volume pricing</em>
+              </span>
+              <span className="bill-up-fixed">1,000+</span>
+            </div>
+            <div className="bill-up-price">
+              <strong>Let&apos;s talk</strong>
+              <p>Tailored to your volume.</p>
+            </div>
+            <Button
+              style={{ width: '100%', justifyContent: 'center', marginTop: '16px' }}
+              onClick={() => window.open(SALES_URL, '_blank', 'noopener,noreferrer')}
+            >
+              Talk to sales
+            </Button>
+            <ul className="bill-up-feats">
+              {ENTERPRISE_FEATURES.map((f) => (
+                <li key={f}>
+                  <Check size={14} />
+                  {f}
+                </li>
+              ))}
+            </ul>
+          </div>
         </div>
 
         <p className="bill-up-foot">
-          Above {PF_MAX.toLocaleString()} profiles, contact sales for Enterprise pricing.
+          Profiles and team seats are billed by TubeGhost. Proxies and phone numbers are bought
+          separately from TubeProxies and billed on their own subscription.
         </p>
       </div>
     </div>

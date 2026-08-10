@@ -13,7 +13,11 @@
 // produces the same result.
 
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { getWorkspace, getWorkspaceBySubscription, setWorkspaceQuota } from '../../billing-db.js'
+import {
+  getWorkspace,
+  getWorkspaceBySubscription,
+  setWorkspaceSubscription
+} from '../../billing-db.js'
 import { getSubscription, verifyWebhookSignature, type StripeSubscription } from '../../stripe.js'
 import { PRODUCT_TAG, STRIPE_WEBHOOK_SECRET } from '../../stripe-env.js'
 
@@ -126,11 +130,34 @@ async function onCheckoutCompleted(event: StripeEvent): Promise<void> {
   // nothing; the later subscription.updated event will grant it if it does.
   if (!isLive(sub.status)) return
 
-  await setWorkspaceQuota(workspaceId, {
-    profileQuota: intOrNull(meta.profile_quota),
-    seatQuota: intOrNull(meta.seat_quota),
-    subscriptionId,
-    planKey: meta.plan_key ?? null
+  await applySubscription(workspaceId, sub, meta)
+}
+
+/**
+ * Write the subscription's state onto the workspace.
+ *
+ * `extra_seats` is ADDITIVE over the plan's own allowance (the limit helper
+ * computes plan + extra), so we store the purchased extras exactly as
+ * configured at checkout — not the total seat count, which would
+ * double-count the seats the plan already includes.
+ */
+async function applySubscription(
+  workspaceId: string,
+  sub: StripeSubscription,
+  meta: Record<string, string>
+): Promise<void> {
+  await setWorkspaceSubscription(workspaceId, {
+    plan: meta.plan_key ?? 'free',
+    planCycle: meta.cycle,
+    planStatus: sub.status,
+    purchasedProfiles: intOrNull(meta.profile_quota),
+    extraSeats: intOrNull(meta.seat_quota) ?? 0,
+    stripeCustomerId: sub.customer,
+    stripeSubscriptionId: sub.id,
+    currentPeriodEnd: sub.current_period_end
+      ? new Date(sub.current_period_end * 1000).toISOString()
+      : null,
+    cancelAtPeriodEnd: sub.cancel_at_period_end ?? false
   })
 }
 
@@ -157,12 +184,7 @@ async function onSubscriptionUpdated(event: StripeEvent): Promise<void> {
     return
   }
 
-  await setWorkspaceQuota(workspace.id, {
-    profileQuota: intOrNull(sub.metadata.profile_quota),
-    seatQuota: intOrNull(sub.metadata.seat_quota),
-    subscriptionId: sub.id,
-    planKey: sub.metadata.plan_key ?? null
-  })
+  await applySubscription(workspace.id, sub, sub.metadata)
 }
 
 async function onSubscriptionDeleted(event: StripeEvent): Promise<void> {
@@ -186,11 +208,17 @@ async function onSubscriptionDeleted(event: StripeEvent): Promise<void> {
  * customer's profiles would be destructive and unrecoverable.
  */
 async function revoke(workspaceId: string): Promise<void> {
-  await setWorkspaceQuota(workspaceId, {
-    profileQuota: null,
-    seatQuota: null,
-    subscriptionId: null,
-    planKey: null
+  await setWorkspaceSubscription(workspaceId, {
+    plan: 'free',
+    planStatus: 'canceled',
+    // null (not 0) because the profile helper uses greatest(purchased, plan)
+    // — null means "no override", while 0 would work but reads as a
+    // deliberate zero. Seats are additive, so 0 is the correct clear.
+    purchasedProfiles: null,
+    extraSeats: 0,
+    stripeSubscriptionId: null,
+    currentPeriodEnd: null,
+    cancelAtPeriodEnd: false
   })
 }
 
