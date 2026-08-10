@@ -172,15 +172,13 @@ async function onSubscriptionUpdated(event: StripeEvent): Promise<void> {
   const sub = event.data.object as unknown as StripeSubscription
   if (!isOurs(sub.metadata)) return
 
-  const workspace =
-    (await getWorkspaceBySubscription(sub.id)) ??
-    (sub.metadata.workspace_id ? await getWorkspace(sub.metadata.workspace_id) : null)
+  const workspace = await resolveWorkspace(sub)
   if (!workspace) return
 
   if (!isLive(sub.status)) {
     // past_due keeps access (Stripe is still retrying); anything terminal
-    // revokes it.
-    await revoke(workspace.id)
+    // revokes it — but only if THIS subscription is still the active one.
+    if (isCurrent(workspace, sub)) await revoke(workspace.id)
     return
   }
 
@@ -191,12 +189,41 @@ async function onSubscriptionDeleted(event: StripeEvent): Promise<void> {
   const sub = event.data.object as unknown as StripeSubscription
   if (!isOurs(sub.metadata)) return
 
-  const workspace =
-    (await getWorkspaceBySubscription(sub.id)) ??
-    (sub.metadata.workspace_id ? await getWorkspace(sub.metadata.workspace_id) : null)
+  const workspace = await resolveWorkspace(sub)
   if (!workspace) return
 
+  // Only the CURRENT subscription's cancellation revokes anything.
+  //
+  // Stripe delivers webhooks asynchronously and out of order, so an upgrade
+  // (cancel old → buy new) can deliver the old subscription's `deleted`
+  // event AFTER the new one's `completed`. Revoking unconditionally would
+  // then wipe the entitlement the customer just paid for — observed in
+  // testing when a Starter cancellation landed after a Team purchase.
+  if (!isCurrent(workspace, sub)) return
+
   await revoke(workspace.id)
+}
+
+/** The workspace a subscription belongs to, by attachment then by metadata. */
+async function resolveWorkspace(
+  sub: StripeSubscription
+): Promise<{ id: string; stripe_subscription_id: string | null } | null> {
+  const attached = await getWorkspaceBySubscription(sub.id)
+  if (attached) return attached
+  return sub.metadata.workspace_id ? await getWorkspace(sub.metadata.workspace_id) : null
+}
+
+/**
+ * Is this subscription the one the workspace is currently entitled by?
+ *
+ * A null column means nothing is attached, so there is nothing to revoke
+ * either — treat that as "not current" and leave the row alone.
+ */
+function isCurrent(
+  workspace: { stripe_subscription_id: string | null },
+  sub: StripeSubscription
+): boolean {
+  return workspace.stripe_subscription_id === sub.id
 }
 
 /**

@@ -43,10 +43,16 @@ const SALES_URL = 'https://tubeghost.com/#pricing'
 export function UpgradeModal({
   usage,
   workspaceId,
+  currentPlan,
+  onManageBilling,
   onClose
 }: {
   usage: UpgradeUsage
   workspaceId: string | null
+  /** ghost.workspaces.plan — 'free' | 'starter' | 'team'. */
+  currentPlan?: string | null
+  /** Opens Stripe's portal, where an existing plan is changed. */
+  onManageBilling?: () => void
   onClose: () => void
 }): React.ReactElement {
   const cfg = useUpgradeConfig(usage)
@@ -86,6 +92,39 @@ export function UpgradeModal({
     } finally {
       setBusy(null)
     }
+  }
+
+  /**
+   * The CTA for a plan card.
+   *
+   * A subscriber's CURRENT plan can't be re-bought — checkout rejects a
+   * second subscription (409 subscription_exists), so offering "Choose" would
+   * dead-end. Changing an existing plan goes through Stripe's portal, which
+   * handles proration; we never build a second subscription alongside the
+   * first.
+   */
+  const planCta = (plan: GhostPlanKey, label: string): React.ReactElement => {
+    if (currentPlan === plan) {
+      return (
+        <Button
+          style={{ width: '100%', justifyContent: 'center', marginTop: '16px' }}
+          disabled
+        >
+          Current plan
+        </Button>
+      )
+    }
+    const subscribed = currentPlan != null && currentPlan !== 'free'
+    return (
+      <Button
+        variant="primary"
+        style={{ width: '100%', justifyContent: 'center', marginTop: '16px' }}
+        disabled={busy !== null}
+        onClick={() => (subscribed ? onManageBilling?.() : void start(plan))}
+      >
+        {busy === plan ? 'Starting…' : subscribed ? 'Switch plan' : label}
+      </Button>
+    )
   }
 
   const priceBlock = (q: { listMonthly: number; monthly: number; billed: number }): React.ReactElement => (
@@ -142,8 +181,11 @@ export function UpgradeModal({
 
         <div className="bill-up-grid">
           {/* STARTER — fixed allowances, nothing to configure. */}
-          <div className="bill-up-card">
-            <h3>Starter</h3>
+          <div className={'bill-up-card' + (currentPlan === 'starter' ? ' current' : '')}>
+            <h3>
+              Starter
+              {currentPlan === 'starter' && <span className="bill-up-now">Current</span>}
+            </h3>
             <p className="bill-up-tag">To get going. One operator, ten clean channels.</p>
             <div className="bill-up-row">
               <span>
@@ -152,14 +194,7 @@ export function UpgradeModal({
               <span className="bill-up-fixed">10</span>
             </div>
             {priceBlock(cfg.starter.quote)}
-            <Button
-              variant="primary"
-              style={{ width: '100%', justifyContent: 'center', marginTop: '16px' }}
-              disabled={busy !== null}
-              onClick={() => void start('starter')}
-            >
-              {busy === 'starter' ? 'Starting…' : 'Choose Starter'}
-            </Button>
+            {planCta('starter', 'Choose Starter')}
             <ul className="bill-up-feats">
               {STARTER_FEATURES.map((f) => (
                 <li key={f}>
@@ -171,9 +206,14 @@ export function UpgradeModal({
           </div>
 
           {/* TEAM — configurable profiles + seats. */}
-          <div className="bill-up-card featured">
-            <span className="pg-sticker">★ CROWD FAVOURITE</span>
-            <h3>Team</h3>
+          <div
+            className={'bill-up-card featured' + (currentPlan === 'team' ? ' current' : '')}
+          >
+            {currentPlan !== 'team' && <span className="pg-sticker">★ CROWD FAVOURITE</span>}
+            <h3>
+              Team
+              {currentPlan === 'team' && <span className="bill-up-now">Current</span>}
+            </h3>
             <p className="bill-up-tag">For growing creators &amp; teams. Profiles that scale.</p>
             <div className="bill-up-row">
               <span>
@@ -201,14 +241,7 @@ export function UpgradeModal({
               />
             </div>
             {priceBlock(cfg.team.quote)}
-            <Button
-              variant="primary"
-              style={{ width: '100%', justifyContent: 'center', marginTop: '16px' }}
-              disabled={busy !== null}
-              onClick={() => void start('team')}
-            >
-              {busy === 'team' ? 'Starting…' : 'Choose Team'}
-            </Button>
+            {planCta('team', 'Choose Team')}
             <ul className="bill-up-feats">
               {TEAM_FEATURES.map((f) => (
                 <li key={f}>

@@ -221,6 +221,8 @@ export function Billing(): React.ReactElement {
         <UpgradeModal
           usage={{ profilesUsed: data.profileCount, seatsUsed: data.memberCount }}
           workspaceId={workspace?.workspace_id ?? null}
+          currentPlan={workspace?.plan ?? null}
+          onManageBilling={manageBilling}
           onClose={() => setUpgrading(false)}
         />
       )}
