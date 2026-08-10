@@ -160,7 +160,6 @@ export function Proxies(): React.ReactElement {
           counts={counts}
           canCreate={canCreate}
           onAdd={() => setShowAddPanel(true)}
-          onBuy={() => navigate('/buy-proxies')}
         />
 
         {showAddPanel && (

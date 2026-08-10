@@ -203,12 +203,6 @@ function SidebarNav({
           active={active('/billing')}
           onClick={go('/billing')}
         />
-        <NavItem
-          icon={<NavIcon name="partner" />}
-          label="Partner program"
-          active={active('/partner')}
-          onClick={go('/partner')}
-        />
       </div>
     </>
   )
