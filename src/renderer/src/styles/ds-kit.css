@@ -444,6 +444,11 @@ html[data-platform='darwin'] .builder-top .editor-back { -webkit-app-region: no-
 .tpp-buy:hover { background: var(--line); }
 .tpp-buy.red { background: var(--red); color: #fff; box-shadow: var(--shadow-red-cta); }
 .tpp-buy.red:hover { background: var(--red-hover); }
+/* Sold out — mirrors the TubeProxies dashboard's greyed-out tier button.
+   `.sold` wins over `.red` so the featured tier greys out too. */
+.tpp-buy.sold, .tpp-buy.red.sold { background: var(--line); color: var(--t3); box-shadow: none; cursor: not-allowed; }
+.tpp-buy.sold:hover, .tpp-buy.red.sold:hover { background: var(--line); }
+.buy-stock-warn { margin-bottom: 18px; padding: 13px 16px; border: 1px solid var(--red); border-radius: var(--r); background: var(--red-soft, rgba(230,0,0,0.08)); font-size: 13px; color: var(--t1); }
 .tpp-cancel { font-size: 12px; color: var(--t3); margin-top: 12px; }
 .tpp-card.feat .tpp-cancel { color: var(--sb-t2); }
 .tpp-feats { width: 100%; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 9px; }

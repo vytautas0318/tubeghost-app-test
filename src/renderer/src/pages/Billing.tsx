@@ -1,13 +1,17 @@
 import * as React from 'react'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Briefcase, FileText, Smartphone } from 'lucide-react'
+import { Briefcase, Smartphone } from 'lucide-react'
 import { useAuth } from '@/store/auth'
 import { useWorkspace } from '@/store/workspace'
 import { Button, Badge, MetricCard } from '@/components/ui'
 import { ToastView, useToast } from '@/components/Toast'
 import { useBillingData } from './billing/useBillingData'
 import { SubList } from './billing/SubList'
+import { useSubscriptions } from './billing/useSubscriptions'
+import { InvoicesTab } from './billing/InvoicesTab'
+import { phoneSubToRow, proxySubToRow } from './billing/subMappers'
+import { openBillingPortal } from '@/lib/billing-api'
 
 const TABS: [string, string][] = [
   ['overview', 'Overview'],
@@ -43,10 +47,25 @@ function pct(used: number, cap: number | null): number {
 export function Billing(): React.ReactElement {
   const [tab, setTab] = useState('overview')
   const email = useAuth((s) => s.user?.email) ?? '—'
+  const userId = useAuth((s) => s.user?.id) ?? null
   const workspace = useWorkspace((s) => s.current)
   const data = useBillingData(workspace?.workspace_id ?? null, workspace?.plan ?? null)
+  // Live proxy + phone subscriptions from TubeProxies' tables (shared DB,
+  // read-own RLS). Previously these tabs were hardcoded to [] and always
+  // claimed "No active subscriptions" even for paying customers.
+  const subs = useSubscriptions(userId)
   const navigate = useNavigate()
   const { toast, show } = useToast()
+
+  /**
+   * All subscription management — plan changes, cancellation, payment
+   * methods, invoices — happens in Stripe's billing portal. The DB denies
+   * user writes to these tables by policy, so there is nothing to edit
+   * locally, and one portal covers both products' subscriptions.
+   */
+  const manageBilling = (): void => {
+    openBillingPortal().catch((e: Error) => show('error', e.message))
+  }
 
   const usage: { k: string; used: number; cap: number | null }[] = [
     { k: 'Profiles', used: data.profileCount, cap: data.profileLimit },
@@ -63,7 +82,7 @@ export function Billing(): React.ReactElement {
             <p>Manage your subscription, usage, and payment methods</p>
           </div>
           <div className="phead-actions">
-            <Button variant="primary" onClick={() => show('info', 'Manage plan — coming soon')}>
+            <Button variant="primary" onClick={manageBilling}>
               Manage plan
             </Button>
           </div>
@@ -143,15 +162,10 @@ export function Billing(): React.ReactElement {
                   ))}
                 </div>
                 <div className="foot-btns">
-                  <Button
-                    variant="primary"
-                    onClick={() => show('info', 'Upgrade plan — coming soon')}
-                  >
+                  <Button variant="primary" onClick={manageBilling}>
                     Upgrade plan
                   </Button>
-                  <Button onClick={() => show('info', 'Compare plans — coming soon')}>
-                    Compare plans
-                  </Button>
+                  <Button onClick={() => navigate('/buy-proxies')}>Compare plans</Button>
                 </div>
               </div>
               <div className="bill-side">
@@ -164,10 +178,7 @@ export function Billing(): React.ReactElement {
                       <div className="card-no">No payment method on file</div>
                       <div className="card-exp">Added when you upgrade or buy add-ons</div>
                     </div>
-                    <Button
-                      size="sm"
-                      onClick={() => show('info', 'Add payment method — coming soon')}
-                    >
+                    <Button size="sm" onClick={manageBilling}>
                       Add
                     </Button>
                   </div>
@@ -183,49 +194,37 @@ export function Billing(): React.ReactElement {
 
         {tab === 'proxies' && (
           <SubList
-            subs={[]}
+            subs={subs.proxy ? [proxySubToRow(subs.proxy)] : []}
             section="Proxy add-ons"
             desc="US static residential IPs from TubeProxies, billed alongside your plan."
-            emptyText="Proxy subscriptions you buy appear here."
+            emptyText={
+              subs.loading ? 'Loading your subscriptions…' : 'Proxy subscriptions you buy appear here.'
+            }
             ctaLabel="Buy proxies"
             ctaIcon={<Briefcase size={15} />}
             onCta={() => navigate('/buy-proxies')}
-            onManage={(n) => show('info', `Manage ${n} — coming soon`)}
+            onManage={manageBilling}
           />
         )}
 
         {tab === 'phone' && (
           <SubList
-            subs={[]}
+            subs={subs.phone ? [phoneSubToRow(subs.phone)] : []}
             section="Phone numbers"
             desc="US SMS-verification numbers from TubeProxies, billed alongside your plan."
-            emptyText="Phone-number subscriptions you buy appear here."
+            emptyText={
+              subs.loading
+                ? 'Loading your subscriptions…'
+                : 'Phone-number subscriptions you buy appear here.'
+            }
             ctaLabel="Get a number"
             ctaIcon={<Smartphone size={15} />}
             onCta={() => navigate('/phone')}
-            onManage={(n) => show('info', `Manage ${n} — coming soon`)}
+            onManage={manageBilling}
           />
         )}
 
-        {tab === 'invoices' && (
-          <div className="sec">
-            <div className="sec-row">
-              <div>
-                <div className="sec-t">Invoices</div>
-                <div className="sec-s">Receipts for the last 12 months.</div>
-              </div>
-            </div>
-            <div style={{ padding: '32px 16px', textAlign: 'center' }}>
-              <FileText size={20} style={{ margin: '0 auto 8px', color: 'var(--t4)' }} />
-              <div style={{ fontSize: '13.5px', fontWeight: 600, color: 'var(--t1)' }}>
-                No invoices yet
-              </div>
-              <div style={{ fontSize: '12.5px', color: 'var(--t3)', marginTop: '4px' }}>
-                Receipts appear here after your first purchase.
-              </div>
-            </div>
-          </div>
-        )}
+        {tab === 'invoices' && <InvoicesTab onManage={manageBilling} />}
       </div>
       <ToastView toast={toast} />
     </div>
