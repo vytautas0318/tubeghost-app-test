@@ -99,9 +99,8 @@ export function FingerprintPanel({ onToast }: { onToast: Toast }): React.ReactEl
               disabled={dis}
               style={{ minWidth: '100%' }}
             >
-              <option value="142">Chromium 142</option>
-              <option value="131">Chromium 131</option>
-              <option value="130">Chromium 130</option>
+              <option value="150">Chromium 150</option>
+              <option value="148">Chromium 148</option>
             </Select>
           </div>
         </div>

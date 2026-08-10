@@ -4,10 +4,17 @@ import { Check, X } from 'lucide-react'
 import { ToastView, useToast } from '@/components/Toast'
 import { PoweredByTubeProxies } from '@/components/PoweredByTubeProxies'
 import { Flag } from '@/components/Flag'
+import {
+  openProxyCheckout,
+  PROXY_SALES_URL,
+  type ProxyPlanName
+} from '@/lib/tubeproxies-checkout'
+import { canFulfilProxyTier } from '@/lib/tubeproxies-stock'
+import { useProxyStock } from './proxies/useProxyStock'
 
 type Tier = {
   id: string
-  name: string
+  name: ProxyPlanName
   desc: string
   ips: number
   perIp: number
@@ -15,9 +22,14 @@ type Tier = {
   members?: number
 }
 
-// Monthly per-IP rate; quarterly applies a 10% discount (mult 0.9).
+// Mirrors the dashboard's PRICING_PLANS (tubeproxies-dash/src/lib/plans.ts) —
+// `name` and `ips` are the checkout lookup keys, so both must match it
+// exactly. `perIp` is the monthly list price divided by ips, shown for
+// comparison only; the amount actually charged comes from Stripe.
+// Quarterly applies a 10% discount (mult 0.9).
 const TIERS: Tier[] = [
   { id: 'starter', name: 'Starter', desc: 'Perfect for testing', ips: 1, perIp: 8.0 },
+  { id: 'hobby', name: 'Hobby', desc: 'For solo operators', ips: 5, perIp: 7.8 },
   { id: 'small', name: 'Small Team', desc: 'Great for small teams', ips: 10, perIp: 7.5 },
   { id: 'growth', name: 'Growth', desc: 'Scale your operations', ips: 25, perIp: 7.0, feat: true },
   { id: 'scale', name: 'Scale', desc: 'For teams at scale', ips: 50, perIp: 6.5, members: 2 },
@@ -33,7 +45,11 @@ const TIERS: Tier[] = [
 
 export function BuyProxies(): React.ReactElement {
   const [term, setTerm] = useState<'quarterly' | 'monthly'>('quarterly')
-  const { toast, show } = useToast()
+  const { toast } = useToast()
+  // Live inventory from TubeProxies — the dashboard greys out tiers it can't
+  // fulfil, and showing a buyable button here for a sold-out tier just sends
+  // the user into a checkout that refuses them.
+  const { available, loaded: stockLoaded } = useProxyStock()
   const mult = term === 'quarterly' ? 0.9 : 1
   const fmt = (n: number): string =>
     n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -79,10 +95,27 @@ export function BuyProxies(): React.ReactElement {
           </div>
         </div>
 
+        {stockLoaded && available !== null && available < TIERS[0].ips && (
+          <div className="buy-stock-warn">
+            <strong>Temporarily out of stock.</strong> TubeProxies is restocking — check back
+            shortly, or{' '}
+            <span
+              className="bs-link"
+              onClick={() => window.open(PROXY_SALES_URL, '_blank', 'noopener,noreferrer')}
+            >
+              contact support
+            </span>{' '}
+            to join the waitlist.
+          </div>
+        )}
+
         <div className="tpp-grid">
           {TIERS.map((t) => {
             const perIp = t.perIp * mult
             const monthly = perIp * t.ips
+            // Unknown stock (null) keeps the tier buyable — checkout
+            // re-checks server-side, so a failed count must not block a sale.
+            const inStock = canFulfilProxyTier(available, t.ips)
             return (
               <div key={t.id} className={'tpp-card' + (t.feat ? ' feat' : '')}>
                 {t.feat && <div className="tpp-best">Best value</div>}
@@ -99,12 +132,16 @@ export function BuyProxies(): React.ReactElement {
                   ${Math.round(monthly)}/month · {term === 'quarterly' ? 'Quarterly' : 'Monthly'}
                 </div>
                 <button
-                  className={'tpp-buy' + (t.feat ? ' red' : '')}
-                  onClick={() => window.open('https://dash.tubeproxies.com/billing', '_blank')}
+                  className={'tpp-buy' + (t.feat ? ' red' : '') + (inStock ? '' : ' sold')}
+                  onClick={() => openProxyCheckout(t.name, t.ips)}
+                  disabled={!inStock}
+                  title={inStock ? undefined : 'TubeProxies is restocking this size'}
                 >
-                  Buy now
+                  {inStock ? 'Buy now' : 'Out of stock'}
                 </button>
-                <div className="tpp-cancel">Cancel anytime</div>
+                <div className="tpp-cancel">
+                  {inStock ? 'Cancel anytime' : 'Restocking soon'}
+                </div>
                 <div className="tpp-feats">
                   <div className={'tpp-feat' + (t.members ? ' yes' : ' no')}>
                     {t.members ? <Check size={14} /> : <X size={14} />}
@@ -135,7 +172,10 @@ export function BuyProxies(): React.ReactElement {
           </div>
           <div className="buy-foot-help">
             Need more than 100 IPs?{' '}
-            <span className="bs-link" onClick={() => show('info', 'Contacting TubeProxies sales')}>
+            <span
+              className="bs-link"
+              onClick={() => window.open(PROXY_SALES_URL, '_blank', 'noopener,noreferrer')}
+            >
               Talk to TubeProxies sales
             </span>
           </div>

@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { Check, Copy, Link2, RefreshCw, Send, X } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
 import { Badge } from '@/components/ui'
-import { invitationLink } from '@/lib/invitations'
+import { invitationLink, undeliveredMessage } from '@/lib/invitations'
 import type { MutateInvitationResult, ResendInvitationResult } from '@/lib/invitations'
 import type { InvitationView } from './useInvitationsData'
 
@@ -80,10 +80,7 @@ export function PendingInvitations({
     if (r.delivery === 'sent') {
       onNotify('success', 'Invitation email resent.')
     } else {
-      onNotify(
-        'info',
-        "Link refreshed, but the email couldn't be delivered — copy the link and share it directly."
-      )
+      onNotify('info', undeliveredMessage(r.invitation.email, r.deliveryReason))
     }
   }
 

@@ -4,6 +4,7 @@
 // encryption happen server-side in the totp Edge Function.
 
 import * as OTPAuth from 'otpauth'
+import jsQR from 'jsqr'
 import type { AuthPlatform } from '@/lib/authenticator'
 
 export interface ParsedSecret {
@@ -31,10 +32,27 @@ function normalizeBase32(raw: string): string {
   return raw.replace(/\s+/g, '').toUpperCase()
 }
 
-// Decode an otpauth:// URI out of an uploaded QR image using the built-in
-// Chromium BarcodeDetector (no extra dependency). Returns null if the API is
-// unavailable or no QR is found.
+// Decode an otpauth:// URI out of an uploaded QR image.
+//
+// Two decoders, tried in order:
+//   1. The built-in BarcodeDetector — it delegates to a NATIVE OS framework
+//      that most browsers do not have. Chrome/Android and Chrome/macOS ship it;
+//      Chrome on WINDOWS and LINUX do not, and neither Firefox nor Safari
+//      implements it at all. Where it is missing the constructor is undefined.
+//   2. jsQR — pure JS, behaves the same in every browser.
+//
+// The fallback is unconditional rather than gated on `!BarcodeDetector`: when
+// the native detector exists but finds nothing, jsQR still gets a turn. The two
+// disagree on marginal images more often than you'd expect (low contrast,
+// rotation, scaled screenshots).
+//
+// Before the fallback existed this returned null for most of the browser
+// market and the dialog told those users their image was unreadable.
 export async function decodeQr(file: File): Promise<string | null> {
+  return (await decodeQrNative(file)) ?? (await decodeQrFallback(file))
+}
+
+async function decodeQrNative(file: File): Promise<string | null> {
   const Detector = (
     globalThis as {
       BarcodeDetector?: new (o: { formats: string[] }) => {
@@ -48,6 +66,43 @@ export async function decodeQr(file: File): Promise<string | null> {
     const det = new Detector({ formats: ['qr_code'] })
     const codes = await det.detect(bitmap)
     return codes[0]?.rawValue ?? null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Read an image file as a `data:` URL, for the upload preview thumbnail.
+ *
+ * Deliberately NOT URL.createObjectURL: the app's CSP allows
+ * `img-src 'self' data: https:` and does NOT list blob:, so an object URL
+ * renders as a broken image. See src/renderer/index.html. Resolves null if the
+ * read fails.
+ */
+export function readAsDataUrl(file: File): Promise<string | null> {
+  return new Promise((resolve) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : null)
+    reader.onerror = () => resolve(null)
+    reader.readAsDataURL(file)
+  })
+}
+
+// jsQR wants raw RGBA, so the image goes through an offscreen canvas first.
+async function decodeQrFallback(file: File): Promise<string | null> {
+  try {
+    const bitmap = await createImageBitmap(file)
+    const canvas = document.createElement('canvas')
+    canvas.width = bitmap.width
+    canvas.height = bitmap.height
+    const ctx = canvas.getContext('2d', { willReadFrequently: true })
+    if (!ctx) return null
+    ctx.drawImage(bitmap, 0, 0)
+    bitmap.close()
+    const { data, width, height } = ctx.getImageData(0, 0, canvas.width, canvas.height)
+    // attemptBoth also tries inverted colours, so light-on-dark QRs (i.e. any
+    // screenshot taken in dark mode) decode too.
+    return jsQR(data, width, height, { inversionAttempts: 'attemptBoth' })?.data ?? null
   } catch {
     return null
   }

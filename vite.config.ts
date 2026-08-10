@@ -34,6 +34,9 @@ export default defineConfig({
       // would resolve to src/renderer/node_modules and match nothing.
       '@flags': resolve(__dirname, 'node_modules/country-flag-icons/3x2'),
       '@renderer': resolve(__dirname, 'src/renderer/src'),
+      // Code shared with the serverless functions under api/ (pricing math),
+      // so both quote the same numbers.
+      '@shared': resolve(__dirname, 'src/shared'),
       '@': resolve(__dirname, 'src/renderer/src')
     }
   },

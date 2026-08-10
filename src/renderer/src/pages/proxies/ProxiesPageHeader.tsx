@@ -1,9 +1,9 @@
 // Page title + subtitle + primary actions for the Proxies page. "Add custom
 // proxy" only shows on the Custom tab (TubeProxies rows come from sync, not
-// manual entry); "Buy proxies" is always available.
+// manual entry).
 
 import * as React from 'react'
-import { Briefcase, Plus } from 'lucide-react'
+import { Plus } from 'lucide-react'
 import { Button } from '@/components/ui'
 import type { ProxyTab } from './proxy-tab'
 
@@ -11,14 +11,12 @@ export function ProxiesPageHeader({
   tab,
   counts,
   canCreate,
-  onAdd,
-  onBuy
+  onAdd
 }: {
   tab: ProxyTab
   counts: { total: number; active: number; expired: number }
   canCreate: boolean
   onAdd: () => void
-  onBuy: () => void
 }): React.ReactElement {
   return (
     <div className="phead">
@@ -35,9 +33,6 @@ export function ProxiesPageHeader({
             Add custom proxy
           </Button>
         )}
-        <Button variant="primary" icon={<Briefcase size={15} />} onClick={onBuy}>
-          Buy proxies
-        </Button>
       </div>
     </div>
   )
