@@ -1,16 +1,15 @@
 import * as React from 'react'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Briefcase, Smartphone } from 'lucide-react'
 import { useAuth } from '@/store/auth'
 import { useWorkspace } from '@/store/workspace'
 import { Button, Badge, MetricCard } from '@/components/ui'
 import { ToastView, useToast } from '@/components/Toast'
 import { useBillingData } from './billing/useBillingData'
-import { SubList } from './billing/SubList'
 import { useSubscriptions } from './billing/useSubscriptions'
+import { PhoneTab, ProxiesTab } from './billing/AddonTabs'
 import { InvoicesTab } from './billing/InvoicesTab'
-import { phoneSubToRow, proxySubToRow } from './billing/subMappers'
+import { UpgradeModal } from './billing/UpgradeModal'
 import { openBillingPortal } from '@/lib/billing-api'
 
 const TABS: [string, string][] = [
@@ -67,6 +66,17 @@ export function Billing(): React.ReactElement {
     openBillingPortal().catch((e: Error) => show('error', e.message))
   }
 
+  const [upgrading, setUpgrading] = useState(false)
+
+  // A workspace with no TubeGhost subscription has nothing for the Stripe
+  // portal to manage — it needs the plan chooser. Once subscribed, plan
+  // changes and cancellation belong in the portal, which handles proration.
+  const hasPlan = workspace?.plan != null && workspace.plan !== 'free'
+  const onUpgradeClick = (): void => {
+    if (hasPlan) manageBilling()
+    else setUpgrading(true)
+  }
+
   const usage: { k: string; used: number; cap: number | null }[] = [
     { k: 'Profiles', used: data.profileCount, cap: data.profileLimit },
     { k: 'Team seats', used: data.memberCount, cap: data.seatLimit },
@@ -82,8 +92,8 @@ export function Billing(): React.ReactElement {
             <p>Manage your subscription, usage, and payment methods</p>
           </div>
           <div className="phead-actions">
-            <Button variant="primary" onClick={manageBilling}>
-              Manage plan
+            <Button variant="primary" onClick={onUpgradeClick}>
+              {hasPlan ? 'Manage plan' : 'Choose a plan'}
             </Button>
           </div>
         </div>
@@ -162,10 +172,10 @@ export function Billing(): React.ReactElement {
                   ))}
                 </div>
                 <div className="foot-btns">
-                  <Button variant="primary" onClick={manageBilling}>
-                    Upgrade plan
+                  <Button variant="primary" onClick={onUpgradeClick}>
+                    {hasPlan ? 'Change plan' : 'Upgrade plan'}
                   </Button>
-                  <Button onClick={() => navigate('/buy-proxies')}>Compare plans</Button>
+                  <Button onClick={() => setUpgrading(true)}>Compare plans</Button>
                 </div>
               </div>
               <div className="bill-side">
@@ -193,39 +203,27 @@ export function Billing(): React.ReactElement {
         )}
 
         {tab === 'proxies' && (
-          <SubList
-            subs={subs.proxy ? [proxySubToRow(subs.proxy)] : []}
-            section="Proxy add-ons"
-            desc="US static residential IPs from TubeProxies, billed alongside your plan."
-            emptyText={
-              subs.loading ? 'Loading your subscriptions…' : 'Proxy subscriptions you buy appear here.'
-            }
-            ctaLabel="Buy proxies"
-            ctaIcon={<Briefcase size={15} />}
-            onCta={() => navigate('/buy-proxies')}
+          <ProxiesTab
+            subs={subs}
+            onBuy={() => navigate('/buy-proxies')}
             onManage={manageBilling}
           />
         )}
 
         {tab === 'phone' && (
-          <SubList
-            subs={subs.phone ? [phoneSubToRow(subs.phone)] : []}
-            section="Phone numbers"
-            desc="US SMS-verification numbers from TubeProxies, billed alongside your plan."
-            emptyText={
-              subs.loading
-                ? 'Loading your subscriptions…'
-                : 'Phone-number subscriptions you buy appear here.'
-            }
-            ctaLabel="Get a number"
-            ctaIcon={<Smartphone size={15} />}
-            onCta={() => navigate('/phone')}
-            onManage={manageBilling}
-          />
+          <PhoneTab subs={subs} onBuy={() => navigate('/phone')} onManage={manageBilling} />
         )}
 
         {tab === 'invoices' && <InvoicesTab onManage={manageBilling} />}
       </div>
+
+      {upgrading && (
+        <UpgradeModal
+          usage={{ profilesUsed: data.profileCount, seatsUsed: data.memberCount }}
+          workspaceId={workspace?.workspace_id ?? null}
+          onClose={() => setUpgrading(false)}
+        />
+      )}
       <ToastView toast={toast} />
     </div>
   )
