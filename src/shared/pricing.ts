@@ -122,6 +122,7 @@ export function isGhostPlanKey(v: unknown): v is GhostPlanKey {
   return v === 'starter' || v === 'team'
 }
 
+<<<<<<< HEAD
 export interface PlanDef {
   key: GhostPlanKey
   name: string
@@ -197,6 +198,8 @@ export function planList(
   return profileCost + billableSeats(plan, members) * SEAT_RATE
 }
 
+=======
+>>>>>>> 72d9daa29100b218f45148bf6f574bf7a3a70b9f
 /**
  * Validate a requested Team configuration. Returns an error string, or null
  * when acceptable. Shared by the UI (to disable the button) and the checkout

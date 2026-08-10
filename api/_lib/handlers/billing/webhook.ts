@@ -13,11 +13,15 @@
 // produces the same result.
 
 import type { VercelRequest, VercelResponse } from '@vercel/node'
+<<<<<<< HEAD
 import {
   getWorkspace,
   getWorkspaceBySubscription,
   setWorkspaceSubscription
 } from '../../billing-db.js'
+=======
+import { getWorkspace, getWorkspaceBySubscription, setWorkspaceQuota } from '../../billing-db.js'
+>>>>>>> 72d9daa29100b218f45148bf6f574bf7a3a70b9f
 import { getSubscription, verifyWebhookSignature, type StripeSubscription } from '../../stripe.js'
 import { PRODUCT_TAG, STRIPE_WEBHOOK_SECRET } from '../../stripe-env.js'
 
@@ -130,6 +134,7 @@ async function onCheckoutCompleted(event: StripeEvent): Promise<void> {
   // nothing; the later subscription.updated event will grant it if it does.
   if (!isLive(sub.status)) return
 
+<<<<<<< HEAD
   await applySubscription(workspaceId, sub, meta)
 }
 
@@ -158,6 +163,13 @@ async function applySubscription(
       ? new Date(sub.current_period_end * 1000).toISOString()
       : null,
     cancelAtPeriodEnd: sub.cancel_at_period_end ?? false
+=======
+  await setWorkspaceQuota(workspaceId, {
+    profileQuota: intOrNull(meta.profile_quota),
+    seatQuota: intOrNull(meta.seat_quota),
+    subscriptionId,
+    planKey: meta.plan_key ?? null
+>>>>>>> 72d9daa29100b218f45148bf6f574bf7a3a70b9f
   })
 }
 
@@ -184,7 +196,16 @@ async function onSubscriptionUpdated(event: StripeEvent): Promise<void> {
     return
   }
 
+<<<<<<< HEAD
   await applySubscription(workspace.id, sub, sub.metadata)
+=======
+  await setWorkspaceQuota(workspace.id, {
+    profileQuota: intOrNull(sub.metadata.profile_quota),
+    seatQuota: intOrNull(sub.metadata.seat_quota),
+    subscriptionId: sub.id,
+    planKey: sub.metadata.plan_key ?? null
+  })
+>>>>>>> 72d9daa29100b218f45148bf6f574bf7a3a70b9f
 }
 
 async function onSubscriptionDeleted(event: StripeEvent): Promise<void> {
@@ -208,6 +229,7 @@ async function onSubscriptionDeleted(event: StripeEvent): Promise<void> {
  * customer's profiles would be destructive and unrecoverable.
  */
 async function revoke(workspaceId: string): Promise<void> {
+<<<<<<< HEAD
   await setWorkspaceSubscription(workspaceId, {
     plan: 'free',
     planStatus: 'canceled',
@@ -219,6 +241,13 @@ async function revoke(workspaceId: string): Promise<void> {
     stripeSubscriptionId: null,
     currentPeriodEnd: null,
     cancelAtPeriodEnd: false
+=======
+  await setWorkspaceQuota(workspaceId, {
+    profileQuota: null,
+    seatQuota: null,
+    subscriptionId: null,
+    planKey: null
+>>>>>>> 72d9daa29100b218f45148bf6f574bf7a3a70b9f
   })
 }
 
