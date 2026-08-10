@@ -63,9 +63,13 @@ export function SubList({
                 <div className="px-sub-loc">{s.loc}</div>
               </div>
               <div className="px-sub-cyc">{s.renew}</div>
+              {/* Amount is omitted for TubeProxies add-ons — the charged
+                  price lives in Stripe (coupons, proration, custom deals),
+                  so a guess here could contradict the real invoice. Render
+                  nothing rather than a bare "/". */}
               <div className="px-sub-amt">
                 {s.amt}
-                <span>/{s.per}</span>
+                {s.per && <span>/{s.per}</span>}
               </div>
               <Badge tone={s.tone}>{s.state}</Badge>
               <div className="px-sub-x" onClick={() => onManage(s.name)}>

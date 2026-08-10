@@ -8,6 +8,7 @@ import { useAuth } from '@/store/auth'
 import { useHasAnyPermission, useHasPermission, useIsPreview } from '@/lib/permissions'
 import { Button } from '@/components/ui'
 import { ToastView, useToast } from '@/components/Toast'
+import { undeliveredMessage } from '@/lib/invitations'
 import { useTeamHeaderSlot } from '../team/TeamHeaderContext'
 import { useMembersData } from './useMembersData'
 import { useInvitationsData } from './useInvitationsData'
@@ -212,6 +213,14 @@ export function MembersBody(): React.ReactElement {
                   void navigator.clipboard.writeText(text)
                   show('success', 'Invitation link copied.')
                 }}
+                onResend={async (id) => {
+                  const r = await invites.resend(id)
+                  if (!r.ok) show('error', r.message || 'Resend failed.')
+                  else if (r.delivery === 'sent')
+                    show('success', `Invitation resent to ${inv.email}.`)
+                  else show('info', undeliveredMessage(inv.email, r.deliveryReason))
+                  return r
+                }}
                 onRevoke={async (id) => {
                   const r = await invites.revoke(id)
                   show(r.ok ? 'success' : 'error', r.ok ? 'Invitation revoked.' : 'Revoke failed.')
@@ -244,11 +253,7 @@ export function MembersBody(): React.ReactElement {
               if (r.delivery === 'sent') {
                 show('success', `Invitation email sent to ${input.email}.`)
               } else {
-                show(
-                  'info',
-                  `${input.email} was invited, but the email couldn't be delivered. ` +
-                    `Copy the invite link from the list below and share it directly.`
-                )
+                show('info', undeliveredMessage(input.email, r.deliveryReason))
               }
             }
             return r

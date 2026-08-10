@@ -1,6 +1,6 @@
 import * as React from 'react'
-import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useEffect, useRef, useState } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { ExternalLink, ChevronRight, Users } from 'lucide-react'
 import { Button } from '@/components/ui'
 import { ToastView, useToast } from '@/components/Toast'
@@ -18,6 +18,8 @@ import { useAuth } from '@/store/auth'
 import { type PhoneNum, type Sms, type ProfileOpt } from './phone/phoneData'
 import { NumbersPanel } from './phone/NumbersPanel'
 import { RecentSms } from './phone/RecentSms'
+import { PhonePricing } from './phone/PhonePricing'
+import { PHONE_TEAM_SHARING_MIN } from '@shared/phone-plans'
 
 // Derive a display area label from the number's country/area code (best-effort;
 // US +1 numbers show their 3-digit area code).
@@ -47,9 +49,16 @@ function rowToPhoneNum(r: PhoneNumberRow): PhoneNum {
 // Map a received SMS to the inbox view model. `parsed_code` is withheld
 // (locked) when the phone subscription is past due — show a placeholder
 // rather than an empty cell so the reason is visible.
-function smsToView(m: PhoneSmsRow): Sms {
+//
+// `numberById` resolves phone_number_id to the recipient number so the card
+// can say WHICH of your numbers got the code — with several numbers on one
+// subscription the sender shortcode alone doesn't tell you. A miss means the
+// number was released or expired (the overview only returns active ones)
+// while its messages are still inside the 30-day window.
+function smsToView(m: PhoneSmsRow, numberById: Map<string, string>): Sms {
   return {
     id: m.id,
+    to: numberById.get(m.phone_number_id) ?? 'Released number',
     from: m.from_number ?? 'Unknown',
     body: m.body,
     code: m.locked ? '•••••' : (m.parsed_code ?? ''),
@@ -66,24 +75,53 @@ export function Phone(): React.ReactElement {
   // (ghost.user_phone_numbers) was dropped in the DB consolidation.
   const [overview, setOverview] = useState<PhoneOverview | null>(null)
   const [nums, setNums] = useState<PhoneNum[]>([])
+  // Distinguishes "no numbers" from "not loaded yet" — without it the page
+  // flashes the price ladder for a moment on every visit, including for
+  // customers who already have numbers.
+  const [loaded, setLoaded] = useState(false)
   const [profileOpts, setProfileOpts] = useState<ProfileOpt[]>([])
   const workspaceId = useWorkspace((s) => s.current?.workspace_id ?? null)
   const user = useAuth((s) => s.user)
   const { toast, show } = useToast()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const pricingRef = useRef<HTMLDivElement>(null)
 
   // Load the caller's phone overview. Re-runs when the signed-in user changes.
   useEffect(() => {
+    let cancelled = false
     getPhoneOverview()
       .then((o) => {
+        if (cancelled) return
         setOverview(o)
         setNums(o.phone_numbers.map(rowToPhoneNum))
       })
       .catch(() => {
+        if (cancelled) return
         setOverview(null)
         setNums([])
       })
+      .finally(() => {
+        if (!cancelled) setLoaded(true)
+      })
+    return () => {
+      cancelled = true
+      // Signed-in user changed: the previous user's numbers are no longer
+      // valid, so drop back to the loading state rather than showing them
+      // (or flashing pricing) until the new overview arrives.
+      setLoaded(false)
+    }
   }, [user?.id])
+
+  // The sidebar's buy shortcut arrives as ?buy=1. Wait for `loaded` — the
+  // pricing block doesn't exist until the overview resolves, so scrolling
+  // any earlier finds nothing to scroll to. When the user has no numbers the
+  // whole page is already the price list, so there's nothing to scroll past.
+  const wantsBuy = searchParams.get('buy') === '1'
+  useEffect(() => {
+    if (!wantsBuy || !loaded) return
+    pricingRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }, [wantsBuy, loaded])
 
   // Real workspace profiles for the "Assign to profile" popover.
   useEffect(() => {
@@ -93,10 +131,20 @@ export function Phone(): React.ReactElement {
       .catch(() => setProfileOpts([]))
   }, [workspaceId])
 
+  // Before any numbers are owned, the page IS the price list — an empty
+  // table tells the user nothing about what this costs.
+  const showPricingOnly = loaded && nums.length === 0
   const active = nums.filter((n) => n.profile !== 'Unassigned').length
-  const teamGap = Math.max(0, 5 - nums.length)
+  // 7, per TubeProxies' enforce_phone_team_seat_limit — the previous 5 here
+  // promised unlock at a quantity their backend still rejects.
+  const teamGap = Math.max(0, PHONE_TEAM_SHARING_MIN - nums.length)
   const sub = overview?.subscription ?? null
-  const inbox = (overview?.sms ?? []).map(smsToView)
+  const numberById = new Map(
+    (overview?.phone_numbers ?? [])
+      .filter((r) => r.phone_number)
+      .map((r) => [r.id, r.phone_number as string])
+  )
+  const inbox = (overview?.sms ?? []).map((m) => smsToView(m, numberById))
   const renewal = sub?.current_period_end
     ? new Date(sub.current_period_end).toLocaleDateString()
     : 'No subscription'
@@ -125,6 +173,10 @@ export function Phone(): React.ReactElement {
           </div>
         </div>
 
+        {showPricingOnly ? (
+          <PhonePricing />
+        ) : (
+          <>
         <div className="phone-summary">
           <div className="ps-stat">
             <div className="ps-k">Usage</div>
@@ -161,7 +213,7 @@ export function Phone(): React.ReactElement {
             <div className="pt-title">Team sharing {teamGap > 0 ? '— locked' : '— unlocked'}</div>
             <div className="pt-sub">
               {teamGap > 0
-                ? `Add ${teamGap} more numbers (5+ total) to unlock team sharing.`
+                ? `Add ${teamGap} more numbers (${PHONE_TEAM_SHARING_MIN}+ total) to unlock team sharing.`
                 : 'Your team can share these numbers for verification.'}
             </div>
           </div>
@@ -169,6 +221,16 @@ export function Phone(): React.ReactElement {
             Manage on Members <ChevronRight size={14} />
           </span>
         </div>
+
+        {/* Buy-more, per Julian: once numbers exist the list comes first,
+            but the prices stay one scroll away rather than behind a link. */}
+        <div className="pp-more-head" ref={pricingRef}>
+          <h2>Add more numbers</h2>
+          <p>Volume pricing — the more you hold, the less each one costs.</p>
+        </div>
+        <PhonePricing compact />
+          </>
+        )}
       </div>
       <ToastView toast={toast} position="bottom-center" />
     </div>

@@ -1,9 +1,11 @@
 import * as React from 'react'
-import { useRef, useState } from 'react'
-import { QrCode, KeyRound, Upload, X } from 'lucide-react'
+import { useState } from 'react'
+import { QrCode, KeyRound, X } from 'lucide-react'
 import { Button, Input, Select } from '@/components/ui'
 import { PLATFORM_ISSUER } from './authData'
-import { parseInput, platformForIssuer, decodeQr, type ParsedSecret } from './parse'
+import { parseInput, platformForIssuer, decodeQr, readAsDataUrl } from './parse'
+import type { ParsedSecret } from './parse'
+import { QrDropZone } from './QrDropZone'
 import { TagPicker } from './TagPicker'
 import type { NewAuthTokenInput, AuthPlatform } from '@/lib/authenticator'
 import type { TagRow } from '@/lib/tags'
@@ -42,7 +44,9 @@ export function AddAccountDialog({
   const [parsed, setParsed] = useState<ParsedSecret | null>(null)
   const [err, setErr] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
-  const fileRef = useRef<HTMLInputElement>(null)
+  // data: URL of the uploaded QR image, for the preview thumbnail. Held as a
+  // plain string (no object URL) so there is nothing to revoke.
+  const [qrPreview, setQrPreview] = useState<string | null>(null)
 
   // Try to parse whatever the user has entered; surface validation inline.
   const tryParse = (): ParsedSecret | null => {
@@ -61,9 +65,16 @@ export function AddAccountDialog({
   }
 
   const onFile = async (file: File): Promise<void> => {
+    // Show the image regardless of the decode result — on failure it lets the
+    // user see WHAT they picked (wrong screenshot, cropped code) instead of
+    // guessing at a bare error string.
+    void readAsDataUrl(file).then(setQrPreview)
     const uri = await decodeQr(file)
     if (!uri) {
-      setErr('Couldn’t read a QR code from that image. Paste the setup key instead.')
+      setErr(
+        'No QR code found in that image. Try a sharper or less cropped screenshot, ' +
+          'or paste the setup key instead.'
+      )
       return
     }
     setRaw(uri)
@@ -140,22 +151,11 @@ export function AddAccountDialog({
         </div>
 
         {method === 'qr' ? (
-          <div className="mb-3">
-            <input
-              ref={fileRef}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={(e) => e.target.files?.[0] && void onFile(e.target.files[0])}
-            />
-            <button
-              onClick={() => fileRef.current?.click()}
-              className="w-full flex flex-col items-center gap-2 py-6 border border-dashed border-[var(--line)] rounded-[var(--r)] text-[var(--t2)] hover:bg-[var(--hover)]"
-            >
-              <Upload size={20} />
-              <span className="text-sm">Upload a QR code image</span>
-            </button>
-          </div>
+          <QrDropZone
+            preview={qrPreview}
+            decoded={parsed !== null}
+            onFile={(f) => void onFile(f)}
+          />
         ) : (
           <div className="mb-3">
             <label className="block text-xs font-medium text-[var(--t2)] mb-1">

@@ -7,6 +7,18 @@
 
 import { z } from 'zod'
 import { getSupabase, type GhostClient } from '@/lib/supabase'
+import { sendInvitationEmail, type DeliveryOutcome } from '@/lib/invitation-delivery'
+
+// The link + email-delivery half of this service lives in invitation-delivery.ts
+// (250-line rule). Re-exported so `@/lib/invitations` remains the one import
+// site for consumers.
+export {
+  invitationLink,
+  invitationDeepLink,
+  undeliveredMessage,
+  type EmailDelivery,
+  type DeliveryOutcome
+} from '@/lib/invitation-delivery'
 
 export type InvitationStatus = 'pending' | 'accepted' | 'expired' | 'revoked'
 
@@ -145,18 +157,8 @@ export async function validateInvitation(token: string): Promise<InvitationValid
 
 // ── Mutations ────────────────────────────────────────────────────────────────
 
-// Delivery outcome of the invitation email, surfaced alongside a successful
-// invite so the UI can distinguish "invited + emailed" from "invited but the
-// email didn't go out" (previously this failure was silently swallowed, so an
-// invitee who never got the email looked identical to a delivered one).
-//   'sent'         → Resend accepted the message
-//   'not-delivered'→ function ran but no mail provider delivered (stub / send failed)
-//   'failed'       → the send call itself errored (network / function error)
-export type EmailDelivery = 'sent' | 'not-delivered' | 'failed'
-
 export type CreateInvitationResult =
-  | { ok: true; invitation: InvitationRow; delivery: EmailDelivery }
-  | InviteFailure
+  ({ ok: true; invitation: InvitationRow } & DeliveryOutcome) | InviteFailure
 
 // Create + persist an invitation. Server generates the token, expiry, and
 // pending status. Email/role are validated client-side (fast feedback) and
@@ -191,11 +193,7 @@ export async function createInvitation(
       const existing = (await listPendingInvitations(workspaceId)).find(
         (i) => i.email.toLowerCase() === email
       )
-      if (existing) {
-        const r = await resendInvitation(existing.id)
-        if (r.ok) return { ok: true, invitation: r.invitation, delivery: r.delivery }
-        return r
-      }
+      if (existing) return await resendInvitation(existing.id)
     }
     return failure
   }
@@ -204,47 +202,7 @@ export async function createInvitation(
   // (the owner can copy/share the link). But we now RETURN the outcome so the
   // UI can warn "invited, but the email didn't send" instead of showing a
   // false success and leaving the invitee waiting for a mail that never came.
-  const delivery = await sendInvitationEmail(invitation)
-  return { ok: true, invitation, delivery }
-}
-
-// Ask the edge function to email the invitee and report the outcome. Never
-// throws — returns a delivery status the caller can surface. The edge function
-// responds { ok, delivered }: delivered=false means it ran but no provider
-// actually sent (stub, or Resend rejected the send).
-async function sendInvitationEmail(invitation: InvitationRow): Promise<EmailDelivery> {
-  const c = getSupabase()
-  if (!c) return 'failed'
-  try {
-    const { data, error } = await c.functions.invoke('send-invitation-email', {
-      body: { invitation_id: invitation.id, accept_url: invitationLink(invitation.token) }
-    })
-    if (error) {
-      // TEMP DIAGNOSTIC: surface the real failure. supabase-js puts the function's
-      // response body on error.context; log it so the exact stage is visible in
-      // DevTools console when a send fails. Remove once delivery is confirmed.
-      try {
-        const ctx = (error as { context?: Response }).context
-        const detail = ctx ? await ctx.clone().text() : ''
-        // eslint-disable-next-line no-console
-        console.error('[sendInvitationEmail] invoke error:', error.message, '| body:', detail)
-      } catch {
-        // eslint-disable-next-line no-console
-        console.error('[sendInvitationEmail] invoke error:', (error as Error).message)
-      }
-      return 'failed'
-    }
-    const delivered = (data as { delivered?: boolean } | null)?.delivered === true
-    if (!delivered) {
-      // eslint-disable-next-line no-console
-      console.error('[sendInvitationEmail] function ran but delivered=false. data:', data)
-    }
-    return delivered ? 'sent' : 'not-delivered'
-  } catch (e) {
-    // eslint-disable-next-line no-console
-    console.error('[sendInvitationEmail] threw:', (e as Error).message)
-    return 'failed'
-  }
+  return { ok: true, invitation, ...(await sendInvitationEmail(invitation.id)) }
 }
 
 export type AcceptInvitationResult = { ok: true; workspaceId: string } | InviteFailure
@@ -275,8 +233,7 @@ export type MutateInvitationResult = { ok: true; invitation: InvitationRow } | I
 // Resend carries a delivery status too — clicking "Resend" must actually put an
 // email in the invitee's inbox, not just refresh the DB row.
 export type ResendInvitationResult =
-  | { ok: true; invitation: InvitationRow; delivery: EmailDelivery }
-  | InviteFailure
+  ({ ok: true; invitation: InvitationRow } & DeliveryOutcome) | InviteFailure
 
 export async function revokeInvitation(invitationId: string): Promise<MutateInvitationResult> {
   const { data, error } = await client().rpc('revoke_invitation', { p_invitation_id: invitationId })
