@@ -181,6 +181,20 @@ export function UpgradeModal({
       {/* Make it explicit that the headline figure already includes the
           add-ons, so the Stripe total is never a surprise. */}
       {addOnList > 0 && <p className="bill-up-incl">includes add-ons</p>}
+
+      {/* The commitment, stated where the decision is made.
+          Stripe's page is in SETUP mode: its button says "Save", not "Pay",
+          and the amount appears only as small grey text that is easy to
+          miss. This is the last clear chance to show what will be charged,
+          so it must be unmissable here. */}
+      <p className="bill-up-charge">
+        You&apos;ll be charged <strong>{money(q.billed || q.monthly)}</strong>
+        {cfg.cycle === 'annual'
+          ? ' today, then yearly'
+          : cfg.cycle === 'quarterly'
+            ? ' today, then every 3 months'
+            : ' today, then monthly'}
+      </p>
     </div>
   )
 

@@ -223,9 +223,12 @@ export function chargeSummaryFor(cart: Cart): string {
       ? parts[0]
       : `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`
 
+  // Leads with the amount and the word "charged". Stripe renders this in
+  // small grey text beside a button labelled "Save", so burying the figure
+  // mid-sentence makes it easy to miss entirely.
   return parts.length > 1
-    ? `${amount} per ${per} for ${items}, billed separately per item.`
-    : `${amount} per ${per} for ${items}.`
+    ? `You will be charged ${amount} per ${per} for ${items}. Each item is billed separately.`
+    : `You will be charged ${amount} per ${per} for ${items}.`
 }
 
 /** Line items for the plan itself, used by the webhook when it subscribes. */
