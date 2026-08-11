@@ -61,10 +61,16 @@ export interface CheckoutRequest {
   profiles?: number
   /** Additional seats beyond the owner's. Team only. */
   seats?: number
-  /** TubeProxies proxy bundle size, 0 for none. Monthly/quarterly only. */
-  proxies?: number
-  /** TubeProxies phone bundle size, 0 for none. Monthly/quarterly only. */
-  numbers?: number
+  /**
+   * True when proxy / phone steps follow this one. Changes only the Stripe
+   * return URL, so the order runner picks the sequence back up instead of
+   * ending on the Billing page — without it the customer gets their plan and
+   * nothing else.
+   *
+   * Proxies and numbers are NOT sent here: they are separate Checkout
+   * sessions (one subscription per session), created by /api/billing/order.
+   */
+  partOfOrder?: boolean
 }
 
 /**

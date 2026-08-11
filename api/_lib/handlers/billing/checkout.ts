@@ -38,6 +38,12 @@ interface Body {
   cycle?: unknown
   profiles?: unknown
   seats?: unknown
+  /**
+   * True when this checkout is the first step of a multi-product order.
+   * Changes only the success URL: it must return to /billing in a state the
+   * order runner recognises, or the remaining steps never launch.
+   */
+  partOfOrder?: unknown
   /** TubeProxies add-ons bundled into this checkout. 0 = not buying any. */
   proxies?: unknown
   numbers?: unknown
@@ -131,7 +137,13 @@ export default async function checkout(req: VercelRequest, res: VercelResponse):
     const checkoutSession = await createCheckoutSession({
       customer,
       lineItems: built.lineItems,
-      successUrl: `${PUBLIC_BASE_URL}/billing?checkout=success`,
+      // A standalone plan purchase just lands on Billing. As part of an
+      // order it must come back in the shape the order runner watches for,
+      // otherwise the proxy/phone steps are never launched and the customer
+      // silently gets only their plan.
+      successUrl: body.partOfOrder
+        ? `${PUBLIC_BASE_URL}/billing?order=continue&done=plan`
+        : `${PUBLIC_BASE_URL}/billing?checkout=success`,
       cancelUrl: `${PUBLIC_BASE_URL}/billing?checkout=canceled`,
       metadata: {
         // PRODUCT_TAG is what keeps this account's two products apart — the

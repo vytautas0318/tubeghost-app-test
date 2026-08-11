@@ -98,12 +98,16 @@ export async function runOrder(order: Order, completed: OrderStepKind[] = []): P
   // The plan step reuses the normal checkout endpoint, which owns the plan's
   // validation, pricing and metadata.
   if (json.usePlanCheckout) {
+    // Tell checkout whether anything follows, so it returns to a URL that
+    // continues the order instead of ending on the Billing page.
+    const hasMoreSteps = order.proxies > 0 || order.numbers > 0
     await startCheckout({
       workspaceId: order.workspaceId,
       plan: order.plan,
       cycle: order.cycle,
       profiles: order.profiles,
-      seats: order.seats
+      seats: order.seats,
+      partOfOrder: hasMoreSteps
     })
     return
   }
