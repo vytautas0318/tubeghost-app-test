@@ -9,10 +9,12 @@ import {
   type Cycle,
   type GhostPlanKey
 } from '@shared/pricing'
-import { runOrder } from '@/lib/order-runner'
+import { startSingleCheckout } from '@/lib/billing-api'
 import { CountStepper, ProfileStepper } from './Steppers'
 import { BundlePicker } from './BundlePicker'
-import { PHONE_BUNDLES, PROXY_BUNDLES } from '@shared/addons'
+import { PHONE_BUNDLES, purchasableProxyBundles } from '@shared/addons'
+import { useOwnedProxies } from './useOwnedProxies'
+import { useOrderValidation } from './useOrderValidation'
 import { SEAT_RATE, useUpgradeConfig, type UpgradeUsage } from './useUpgradeConfig'
 
 const CYCLES: [Cycle, string, string | null][] = [
@@ -64,6 +66,20 @@ export function UpgradeModal({
   onClose: () => void
 }): React.ReactElement {
   const cfg = useUpgradeConfig(usage)
+  const { active: ownedProxies } = useOwnedProxies(workspaceId)
+
+  // Checked before payment so predictable failures — out-of-stock proxies, a
+  // bundle that would assign nothing — surface while the selection can still
+  // be changed, rather than after the card is charged.
+  const validation = useOrderValidation({
+    workspaceId,
+    plan: 'team',
+    cycle: cfg.cycle,
+    profiles: cfg.team.profiles,
+    seats: cfg.team.seats,
+    proxies: cfg.addOns.proxies,
+    numbers: cfg.addOns.numbers
+  })
   const [busy, setBusy] = useState<GhostPlanKey | null>(null)
   const [error, setError] = useState<string | null>(null)
   const ref = useRef<HTMLDivElement>(null)
@@ -85,22 +101,23 @@ export function UpgradeModal({
     setError(null)
     setBusy(plan)
     try {
-      // One order, run as a sequence of Checkouts — the plan first, then any
-      // TubeProxies add-ons. Each needs its own subscription, so they cannot
-      // share a session.
-      await runOrder({
+      // ONE checkout page. Stripe saves the card without charging; the
+      // webhook then creates a subscription per product (three tables each
+      // need their own subscription id, so one session cannot cover them).
+      await startSingleCheckout({
         workspaceId,
         plan,
         cycle: cfg.cycle,
         // Ignored for Starter, which has fixed allowances.
         profiles: cfg.team.profiles,
         seats: cfg.team.seats,
-        // Zero when none selected, or when the cycle disallows them.
-        proxies: cfg.addOns.proxies,
-        numbers: cfg.addOns.numbers
+        // The add-on selectors live on the Team card only, so a Starter
+        // purchase must not silently carry whatever was configured there.
+        proxies: plan === 'team' ? cfg.addOns.proxies : 0,
+        numbers: plan === 'team' ? cfg.addOns.numbers : 0
       })
-      // runOrder navigates to Stripe on success; reaching here means the
-      // order had nothing left to do, so release the button.
+      // startSingleCheckout navigates to Stripe on success; reaching here
+      // means it resolved without redirecting, so release the button.
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not start checkout.')
     } finally {
@@ -129,11 +146,14 @@ export function UpgradeModal({
       )
     }
     const subscribed = currentPlan != null && currentPlan !== 'free'
+    // Only Team carries add-ons, so only Team is gated on their validation.
+    const blocked = plan === 'team' && validation.blocked
     return (
       <Button
         variant="primary"
         style={{ width: '100%', justifyContent: 'center', marginTop: '16px' }}
-        disabled={busy !== null}
+        disabled={busy !== null || blocked}
+        title={blocked ? 'Resolve the issues above to continue' : undefined}
         onClick={() => (subscribed ? onManageBilling?.() : void start(plan))}
       >
         {busy === plan ? 'Starting…' : subscribed ? 'Switch plan' : label}
@@ -210,18 +230,34 @@ export function UpgradeModal({
             </div>
             <div className="bill-up-row">
               <span>
-                Proxies<em>US static residential</em>
+                Proxies
+                <em>
+                  {ownedProxies > 0
+                    ? `US static residential · you have ${ownedProxies}`
+                    : 'US static residential'}
+                </em>
               </span>
+              {/* Bundles at or below what they already hold are omitted:
+                  TubeProxies assigns greatest(0, limit − owned), so those
+                  charge the customer and assign nothing. */}
               <BundlePicker
                 value={cfg.addOns.proxies}
                 onChange={cfg.addOns.setProxies}
-                options={PROXY_BUNDLES.map((b) => ({
+                options={purchasableProxyBundles(ownedProxies).map((b) => ({
                   value: b.proxies,
                   label: `${b.proxies} IP${b.proxies > 1 ? 's' : ''} — ${money(b.monthly)}/mo`
                 }))}
                 label="Proxies"
               />
             </div>
+            {validation.issues
+              .filter((i) => i.item === 'proxies')
+              .map((i) => (
+                <div key={i.message} className={'bill-up-issue' + (i.blocking ? ' blocking' : '')}>
+                  {i.message}
+                </div>
+              ))}
+
             <div className="bill-up-row">
               <span>
                 Phone numbers<em>US non-VoIP, for 2FA</em>
@@ -236,6 +272,14 @@ export function UpgradeModal({
                 label="Phone numbers"
               />
             </div>
+
+            {validation.issues
+              .filter((i) => i.item === 'numbers')
+              .map((i) => (
+                <div key={i.message} className={'bill-up-issue' + (i.blocking ? ' blocking' : '')}>
+                  {i.message}
+                </div>
+              ))}
           </div>
         ) : ADDONS_IN_CHECKOUT_ENABLED ? (
           // Switch is on, so this is the annual-cycle exclusion.

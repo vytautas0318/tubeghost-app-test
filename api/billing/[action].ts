@@ -10,6 +10,8 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import checkout from '../_lib/handlers/billing/checkout.js'
 import portal from '../_lib/handlers/billing/portal.js'
 import order from '../_lib/handlers/billing/order.js'
+import validate from '../_lib/handlers/billing/validate.js'
+import checkoutSingle from '../_lib/handlers/billing/checkout-single.js'
 
 export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   const action = String(req.query.action ?? '')
@@ -20,6 +22,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
       return await portal(req, res)
     case 'order':
       return await order(req, res)
+    case 'validate':
+      return await validate(req, res)
+    case 'checkout-single':
+      return await checkoutSingle(req, res)
     default:
       res.status(404).json({ error: 'not_found' })
   }

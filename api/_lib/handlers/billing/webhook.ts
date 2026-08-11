@@ -19,11 +19,14 @@ import {
   setWorkspaceSubscription
 } from '../../billing-db.js'
 import {
+  getSetupIntent,
   getSubscription,
   subscriptionPeriodEnd,
   verifyWebhookSignature,
   type StripeSubscription
 } from '../../stripe.js'
+import { parseCart } from '../../../../src/shared/cart.js'
+import { fulfilCart } from './fulfil.js'
 import { PRODUCT_TAG, STRIPE_WEBHOOK_SECRET } from '../../stripe-env.js'
 
 interface StripeEvent {
@@ -95,6 +98,51 @@ export default async function webhook(req: VercelRequest, res: VercelResponse): 
   }
 }
 
+/**
+ * A single-page (setup mode) checkout completed: create the subscriptions.
+ *
+ * Idempotency has two layers. Stripe's own key, derived from the setup
+ * intent, means a retried create returns the ORIGINAL subscription rather
+ * than charging twice. On top of that, the plan's own webhook
+ * (customer.subscription.created → updated) grants the quota, so this
+ * handler only has to get the subscriptions made.
+ */
+async function onSetupCompleted(session: {
+  customer?: string
+  setup_intent?: string
+}): Promise<void> {
+  if (!session.setup_intent || !session.customer) return
+
+  const intent = await getSetupIntent(session.setup_intent)
+  const cart = parseCart(intent.metadata?.cart)
+  if (!cart) {
+    console.error('[billing] setup checkout without a readable cart', session.setup_intent)
+    return
+  }
+  const userId = intent.metadata?.user_id
+  if (!userId) return
+
+  const result = await fulfilCart(
+    cart,
+    session.customer,
+    userId,
+    session.setup_intent,
+    intent.payment_method
+  )
+
+  // Logged rather than thrown: the customer's outcome is already decided by
+  // Stripe at this point, and returning 500 would make Stripe redeliver and
+  // re-run a fulfilment that has partially succeeded.
+  for (const o of result.outcomes) {
+    if (o.status === 'failed') {
+      console.error(`[billing] ${o.product} failed for ${userId}: ${o.error}`)
+    }
+  }
+  if (result.aborted) {
+    console.error(`[billing] order abandoned for ${userId} — plan could not be charged`)
+  }
+}
+
 /** Ours? Guard against acting on the other product's events. */
 function isOurs(metadata: Record<string, string> | undefined): boolean {
   return metadata?.product === PRODUCT_TAG
@@ -109,9 +157,20 @@ function isOurs(metadata: Record<string, string> | undefined): boolean {
  */
 async function onCheckoutCompleted(event: StripeEvent): Promise<void> {
   const session = event.data.object as {
+    mode?: string
+    customer?: string
     subscription?: string
+    setup_intent?: string
     metadata?: Record<string, string>
   }
+
+  // Setup mode: no subscription exists yet — we create them now, one per
+  // product, charging the card Stripe just saved.
+  if (session.mode === 'setup') {
+    await onSetupCompleted(session)
+    return
+  }
+
   if (!isOurs(session.metadata)) return
 
   const subscriptionId = session.subscription

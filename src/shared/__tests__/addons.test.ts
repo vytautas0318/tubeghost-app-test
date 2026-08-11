@@ -4,9 +4,43 @@ import {
   PHONE_BUNDLES,
   phoneBundleFor,
   PROXY_BUNDLES,
-  proxyBundleFor
+  proxyBundleAddsValue,
+  proxyBundleFor,
+  purchasableProxyBundles
 } from '../addons.js'
 import { addOnsAvailable, ADDONS_IN_CHECKOUT_ENABLED } from '../pricing.js'
+
+describe('bundles worth buying', () => {
+  // TubeProxies assigns greatest(0, plan_limit - active_count). A bundle at
+  // or below what the customer already holds assigns ZERO proxies while
+  // still charging them — observed live: 3 proxies owned, 1-proxy bundle
+  // bought, 0 assigned, no error shown.
+  it('offers every bundle to a first-time buyer', () => {
+    expect(purchasableProxyBundles(0)).toHaveLength(PROXY_BUNDLES.length)
+  })
+
+  it('hides bundles the customer already matches or exceeds', () => {
+    // Owning 3, the 1-proxy bundle would assign nothing.
+    const sizes = purchasableProxyBundles(3).map((b) => b.proxies)
+    expect(sizes).not.toContain(1)
+    expect(sizes).toContain(5)
+  })
+
+  it('hides everything when the customer holds the largest bundle', () => {
+    expect(purchasableProxyBundles(100)).toHaveLength(0)
+  })
+
+  it('treats an exact match as adding nothing', () => {
+    // 25 owned + 25 bundle → greatest(0, 25-25) = 0 assigned.
+    expect(proxyBundleAddsValue(25, 25)).toBe(false)
+    expect(proxyBundleAddsValue(50, 25)).toBe(true)
+  })
+
+  it('offers everything when the owned count is unknown (0)', () => {
+    // A failed lookup must never block a legitimate sale.
+    expect(proxyBundleAddsValue(1, 0)).toBe(true)
+  })
+})
 
 describe('add-on availability', () => {
   it('follows the master switch', () => {

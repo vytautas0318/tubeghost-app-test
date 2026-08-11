@@ -11,11 +11,15 @@
 
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { requireSession } from '../../session.js'
-import { getWorkspace } from '../../billing-db.js'
+import { countActiveProxies, getWorkspace } from '../../billing-db.js'
 import { createCheckoutSession, findOrCreateCustomer, StripeError } from '../../stripe.js'
 import { phonePriceId, proxyPriceId, PRODUCT_TAG, stripeConfigured } from '../../stripe-env.js'
 import { PUBLIC_BASE_URL } from '../../env.js'
-import { phoneBundleFor, proxyBundleFor } from '../../../../src/shared/addons.js'
+import {
+  phoneBundleFor,
+  proxyBundleAddsValue,
+  proxyBundleFor
+} from '../../../../src/shared/addons.js'
 import {
   orderSteps,
   tubeproxiesMetadata,
@@ -100,7 +104,12 @@ export default async function order(req: VercelRequest, res: VercelResponse): Pr
     return
   }
 
-  const built = buildAddOnStep(next.kind, next.quantity, full.cycle)
+  // Active proxies this user already holds, read server-side rather than
+  // trusted from the client.
+  const ownedProxies =
+    next.kind === 'proxies' ? await countActiveProxies(session.userId) : 0
+
+  const built = buildAddOnStep(next.kind, next.quantity, full.cycle, ownedProxies)
   if ('error' in built) {
     res.status(400).json({ error: 'invalid_addon', detail: built.error })
     return
@@ -149,11 +158,20 @@ export default async function order(req: VercelRequest, res: VercelResponse): Pr
 function buildAddOnStep(
   kind: Exclude<OrderStepKind, 'plan'>,
   quantity: number,
-  cycle: Order['cycle']
+  cycle: Order['cycle'],
+  ownedProxies: number
 ): { price: string; planName?: string } | { error: string } {
   if (kind === 'proxies') {
     const bundle = proxyBundleFor(quantity)
     if (!bundle) return { error: `No proxy bundle of ${quantity}.` }
+    // The UI hides these, but a stale page could still submit one. Assigning
+    // is capped at greatest(0, limit − owned), so a bundle at or below what
+    // they hold would charge them and assign nothing.
+    if (!proxyBundleAddsValue(quantity, ownedProxies)) {
+      return {
+        error: `You already have ${ownedProxies} proxies — choose a larger bundle.`
+      }
+    }
     const price = proxyPriceId(quantity, cycle)
     if (!price) return { error: `Proxy bundle of ${quantity} is unavailable ${cycle}.` }
     // Their handler writes plan_name into public.subscriptions and looks it

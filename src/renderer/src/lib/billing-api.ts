@@ -85,6 +85,30 @@ export async function startCheckout(req: CheckoutRequest): Promise<void> {
   window.location.assign(url)
 }
 
+/**
+ * Buy everything in one checkout.
+ *
+ * Stripe collects the card ONCE without charging; the webhook then creates a
+ * subscription per product. One page, one total — the three-page sequence is
+ * gone.
+ *
+ * Navigates the current tab rather than opening a new one: returning from
+ * payment should land the user back where they started, and popup blockers
+ * fire on window.open after an await.
+ */
+export async function startSingleCheckout(cart: {
+  workspaceId: string
+  plan: GhostPlanKey
+  cycle: Cycle
+  profiles: number
+  seats: number
+  proxies: number
+  numbers: number
+}): Promise<void> {
+  const { url } = await post<{ url: string }>('/api/billing/checkout-single', cart)
+  window.location.assign(url)
+}
+
 /** Open Stripe's billing portal — plan changes, invoices, payment methods. */
 export async function openBillingPortal(): Promise<void> {
   const { url } = await post<{ url: string }>('/api/billing/portal')

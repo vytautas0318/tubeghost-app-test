@@ -132,6 +132,66 @@ export async function setWorkspaceSubscription(
 }
 
 /**
+ * Unassigned proxies TubeProxies can hand out right now.
+ *
+ * Calls THEIR SECURITY DEFINER RPC rather than reading proxy_inventory
+ * directly, so the count follows whatever rules they apply to availability.
+ *
+ * Returns null (not 0) when the lookup fails — callers must treat that as
+ * "unknown" and let the purchase proceed. Reporting 0 on a network blip would
+ * tell customers we are sold out when we are not.
+ */
+export async function countAvailableInventory(): Promise<number | null> {
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/get_available_inventory_count`, {
+      method: 'POST',
+      headers: {
+        apikey: SUPABASE_SERVICE_ROLE_KEY,
+        Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: '{}'
+    })
+    if (!res.ok) return null
+    const n = (await res.json()) as unknown
+    return typeof n === 'number' ? n : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Active proxies this user already holds on TubeProxies.
+ *
+ * public.proxies is THEIR table, so this request must NOT carry the ghost
+ * schema headers the rest of this file uses.
+ *
+ * Needed because assign_proxies_immediately() assigns
+ * `greatest(0, subscription.proxy_limit - active_count)` — a bundle at or
+ * below what they already hold assigns nothing while still charging them.
+ *
+ * Returns 0 on any failure so a lookup problem never blocks a sale; the
+ * worst case is the pre-existing behaviour.
+ */
+export async function countActiveProxies(userId: string): Promise<number> {
+  const res = await fetch(
+    `${SUPABASE_URL}/rest/v1/proxies` +
+      `?user_id=eq.${encodeURIComponent(userId)}&status=eq.active&select=id`,
+    {
+      headers: {
+        apikey: SUPABASE_SERVICE_ROLE_KEY,
+        Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+        Prefer: 'count=exact',
+        Range: '0-0'
+      }
+    }
+  )
+  if (!res.ok) return 0
+  const total = Number((res.headers.get('content-range') ?? '').split('/')[1])
+  return Number.isFinite(total) ? total : 0
+}
+
+/**
  * Current profile count — to warn before a downgrade strands profiles.
  *
  * `browser_profiles`, NOT `profiles`: in the shared project `public.profiles`

@@ -53,6 +53,25 @@ export function proxyBundleFor(proxies: number): ProxyBundle | null {
   return PROXY_BUNDLES.find((b) => b.proxies === proxies) ?? null
 }
 
+/**
+ * Bundles worth buying for someone who already holds `owned` active proxies.
+ *
+ * TubeProxies assigns `greatest(0, plan_limit - active_count)` proxies, so a
+ * bundle at or below what the customer already has assigns ZERO — they are
+ * charged and receive nothing, with no error shown. Offering those is a trap,
+ * so they are filtered out.
+ *
+ * `owned = 0` (a first-time buyer, or an unknown count) returns everything.
+ */
+export function purchasableProxyBundles(owned: number): ProxyBundle[] {
+  return PROXY_BUNDLES.filter((b) => b.proxies > owned)
+}
+
+/** True when this bundle would actually grant the customer more proxies. */
+export function proxyBundleAddsValue(proxies: number, owned: number): boolean {
+  return proxies > owned
+}
+
 export function phoneBundleFor(numbers: number): PhoneBundle | null {
   return PHONE_BUNDLES.find((b) => b.numbers === numbers) ?? null
 }

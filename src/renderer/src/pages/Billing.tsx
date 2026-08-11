@@ -9,6 +9,7 @@ import { useBillingData } from './billing/useBillingData'
 import { useSubscriptions } from './billing/useSubscriptions'
 import { PhoneTab, ProxiesTab } from './billing/AddonTabs'
 import { InvoicesTab } from './billing/InvoicesTab'
+import { ProcessingNotice } from './billing/ProcessingNotice'
 import { UpgradeModal } from './billing/UpgradeModal'
 import { openBillingPortal } from '@/lib/billing-api'
 import { clearPendingOrder, pendingOrder, resumeOrder } from '@/lib/order-runner'
@@ -77,6 +78,7 @@ export function Billing(): React.ReactElement {
   // double-count a step and skip a purchase the user is owed.
   const orderParam = searchParams.get('order')
   const doneParam = searchParams.get('done')
+  const processingParam = searchParams.get('processing')
 
   useEffect(() => {
     if (orderParam !== 'continue') return
@@ -123,6 +125,11 @@ export function Billing(): React.ReactElement {
             </Button>
           </div>
         </div>
+
+        {/* Returning from the single checkout page. Stripe has the card; the
+            webhook is creating the subscriptions. Entitlements land within a
+            few seconds, so poll rather than claim success immediately. */}
+        {processingParam && <ProcessingNotice onDone={() => setSearchParams({}, { replace: true })} />}
 
         {orderParam === 'continue' && (
           <div className="bill-order-note">Opening the next step of your order…</div>

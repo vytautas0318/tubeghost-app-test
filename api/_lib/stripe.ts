@@ -54,12 +54,18 @@ export class StripeError extends Error {
   }
 }
 
-async function call<T>(path: string, body?: FormShape, method = 'POST'): Promise<T> {
+async function call<T>(
+  path: string,
+  body?: FormShape,
+  method = 'POST',
+  extraHeaders?: Record<string, string>
+): Promise<T> {
   const res = await fetch(`${API}${path}`, {
     method,
     headers: {
       Authorization: `Bearer ${STRIPE_SECRET_KEY}`,
-      'Content-Type': 'application/x-www-form-urlencoded'
+      'Content-Type': 'application/x-www-form-urlencoded',
+      ...extraHeaders
     },
     body: body ? form(body).toString() : undefined
   })
@@ -152,6 +158,99 @@ export async function createCheckoutSession(params: {
     // events, which carry the subscription but not the session.
     subscription_data: { metadata: params.metadata }
   })
+}
+
+/**
+ * A Checkout session that SAVES a card without charging it.
+ *
+ * `currency` is required in setup mode even though nothing is charged —
+ * omitting it returns "Missing required param: currency".
+ *
+ * The cart travels on setup_intent_data.metadata (not session metadata) so
+ * the webhook can read it back off the SetupIntent.
+ */
+export async function createSetupSession(params: {
+  customer: string
+  successUrl: string
+  cancelUrl: string
+  metadata: Record<string, string>
+}): Promise<CheckoutSession> {
+  return await call<CheckoutSession>('/checkout/sessions', {
+    mode: 'setup',
+    currency: 'usd',
+    customer: params.customer,
+    success_url: params.successUrl,
+    cancel_url: params.cancelUrl,
+    setup_intent_data: { metadata: params.metadata }
+  })
+}
+
+export interface StripeSetupIntent {
+  id: string
+  status: string
+  payment_method: string | null
+  metadata: Record<string, string>
+}
+
+export async function getSetupIntent(id: string): Promise<StripeSetupIntent> {
+  return await call<StripeSetupIntent>(`/setup_intents/${id}`, undefined, 'GET')
+}
+
+export async function getCheckoutSession(id: string): Promise<{
+  id: string
+  setup_intent: string | null
+  status: string
+}> {
+  return await call(`/checkout/sessions/${id}`, undefined, 'GET')
+}
+
+/** Make a saved card the customer's default for future invoices. */
+export async function setDefaultPaymentMethod(
+  customer: string,
+  paymentMethod: string
+): Promise<void> {
+  await call(`/customers/${customer}`, {
+    invoice_settings: { default_payment_method: paymentMethod }
+  })
+}
+
+/**
+ * Create a subscription and charge the customer's saved card immediately.
+ *
+ * `error_if_incomplete` is the key choice: the call either returns an ACTIVE
+ * subscription or throws with the decline reason. That gives a clean
+ * per-product success/failure signal.
+ *
+ * The alternative the Stripe docs suggest — `default_incomplete` plus
+ * expanding `latest_invoice.payment_intent` — does NOT work on API version
+ * 2025-12-15.clover: that field no longer exists (it is now
+ * `confirmation_secret`), so the status could never be read back.
+ *
+ * `idempotencyKey` must be deterministic per (setup intent, product) so a
+ * retried webhook cannot create a second subscription or double-charge.
+ */
+export async function createSubscription(params: {
+  customer: string
+  items: LineItem[]
+  metadata: Record<string, string>
+  idempotencyKey: string
+}): Promise<StripeSubscription> {
+  return await call<StripeSubscription>(
+    '/subscriptions',
+    {
+      customer: params.customer,
+      items: params.items,
+      payment_behavior: 'error_if_incomplete',
+      metadata: params.metadata
+    },
+    'POST',
+    { 'Idempotency-Key': params.idempotencyKey }
+  )
+}
+
+/** Cancel a subscription immediately — used to unwind a failed order. */
+export async function cancelSubscription(id: string): Promise<void> {
+  await call(`/subscriptions/${id}`, undefined, 'DELETE')
 }
 
 // ── Billing portal ─────────────────────────────────────────────────
