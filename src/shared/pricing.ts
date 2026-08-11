@@ -133,24 +133,34 @@ export function isGhostPlanKey(v: unknown): v is GhostPlanKey {
 }
 
 /**
- * MASTER SWITCH for bundling TubeProxies products into a TubeGhost checkout.
+ * MASTER SWITCH for offering TubeProxies products alongside a TubeGhost plan.
  *
- * OFF until tubeproxies-dash can provision a bundled purchase. TubeGhost can
- * already CHARGE for proxies and numbers in one session, but their webhook
- * dispatcher branches on its own metadata shape (`type: 'phone_number'`,
- * `proxy_count`, …) and does not recognise the `tubeghost_proxies` /
- * `tubeghost_numbers` keys this app sends. A bundled purchase today would
- * take the customer's money and deliver nothing, silently.
+ * Each product gets its OWN Checkout session (Stripe allows one subscription
+ * per session, and the three products are recorded in three tables that each
+ * require a unique stripe_subscription_id). The proxy and phone sessions
+ * carry TubeProxies' own metadata keys — `type: 'phone_number'`,
+ * `proxy_count`, `plan_name` — so their existing webhook dispatcher should
+ * route and provision them with no change on their side.
  *
- * Flip to true only after:
- *   1. tubeproxies-dash handles the tubeghost_* metadata, AND
- *   2. a test-mode bundle purchase is confirmed to actually provision, AND
- *   3. TubeProxies' price IDs are set in this app's environment.
+ * ⚠️ "Should" is not "does". This has NOT been confirmed against a real
+ * purchase. Until it is, the failure mode is that the customer is charged and
+ * receives nothing, silently.
  *
- * Everything behind it is written and tested; this gate is about the OTHER
- * side of the integration being ready, not about this code.
+ * BEFORE ENABLING IN PRODUCTION, verify in TEST MODE that a bundled order
+ * actually provisions:
+ *
+ *   select plan_name, proxy_limit, status from public.subscriptions
+ *     where user_id = '<uid>';
+ *   select count(*) from public.proxies where user_id = '<uid>';
+ *
+ * A missing subscriptions row means their dispatcher rejected our session and
+ * the dash side needs a change after all.
+ *
+ * Also requires TubeProxies' price IDs in this app's environment
+ * (NEXT_PUBLIC_PRICE_GROWTH_MONTHLY, NEXT_PUBLIC_PRICE_PHONE_QTY_3, …);
+ * without them checkout reports the bundle as unavailable.
  */
-export const ADDONS_IN_CHECKOUT_ENABLED = false
+export const ADDONS_IN_CHECKOUT_ENABLED = true
 
 /**
  * Can proxies and phone numbers be bought in the same checkout as the plan?

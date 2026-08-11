@@ -9,24 +9,17 @@ import {
 import { addOnsAvailable, ADDONS_IN_CHECKOUT_ENABLED } from '../pricing.js'
 
 describe('add-on availability', () => {
-  // The master switch is OFF until tubeproxies-dash can provision a bundled
-  // purchase. Until then a bundle would charge the customer and deliver
-  // nothing, so nothing may be offered on ANY cycle.
-  it('offers nothing while the provisioning side is not ready', () => {
-    expect(ADDONS_IN_CHECKOUT_ENABLED).toBe(false)
-    expect(addOnsAvailable('monthly')).toBe(false)
-    expect(addOnsAvailable('quarterly')).toBe(false)
-    expect(addOnsAvailable('annual')).toBe(false)
+  it('follows the master switch', () => {
+    // Whatever the switch is set to, the two must agree — a stale
+    // availability check would offer products the checkout then refuses.
+    expect(addOnsAvailable('monthly')).toBe(ADDONS_IN_CHECKOUT_ENABLED)
+    expect(addOnsAvailable('quarterly')).toBe(ADDONS_IN_CHECKOUT_ENABLED)
   })
 
-  // Guards the rule that must survive flipping the switch on: every line item
-  // in one Stripe session shares a billing interval, and TubeProxies sells no
-  // annual proxy or phone price. Annual must stay excluded regardless.
-  it('keeps annual excluded independently of the switch', () => {
-    const gate = (enabled: boolean, cycle: string): boolean => enabled && cycle !== 'annual'
-    expect(gate(true, 'monthly')).toBe(true)
-    expect(gate(true, 'quarterly')).toBe(true)
-    expect(gate(true, 'annual')).toBe(false)
+  it('NEVER offers add-ons on annual, whatever the switch says', () => {
+    // TubeProxies sells no annual proxy or phone price. This exclusion is
+    // structural, not a rollout gate, so it must hold in both switch states.
+    expect(addOnsAvailable('annual')).toBe(false)
   })
 })
 
