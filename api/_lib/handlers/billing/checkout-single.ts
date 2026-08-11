@@ -30,12 +30,19 @@ import {
 import { proxyBundleAddsValue, proxyBundleFor, phoneBundleFor } from '../../../../src/shared/addons.js'
 import {
   addOnsAvailable,
+  applyCycle,
+  billableSeats,
+  billedTotal,
   isCycle,
   isGhostPlanKey,
+  money,
+  pfPrice,
   PLANS,
-  billableSeats,
+  SEAT_RATE,
+  STARTER_BASE,
   validateTeamConfig
 } from '../../../../src/shared/pricing.js'
+import { addOnsList } from '../../../../src/shared/addons.js'
 import type { Cart } from '../../../../src/shared/cart.js'
 
 const env: (n: string) => string | undefined = (n) => process.env[n]
@@ -109,7 +116,10 @@ export default async function checkoutSingle(
         cart: JSON.stringify(cart),
         user_id: session.userId,
         product: 'tubeghost'
-      }
+      },
+      // Recomputed here, never taken from the client — the page must state
+      // the real amount, and a tampered cart must not change what is shown.
+      chargeSummary: chargeSummaryFor(cart)
     })
 
     if (!checkout.url) {
@@ -179,6 +189,43 @@ async function validateCart(cart: Cart, userId: string): Promise<string | null> 
   }
 
   return null
+}
+
+/**
+ * The sentence shown above Stripe's submit button.
+ *
+ * Setup mode displays no price of its own, so this is the ONLY place the
+ * customer sees what they are agreeing to pay on the payment page itself.
+ * Computed from the price catalogue, never from the client.
+ *
+ * Says "billed separately" because the products are separate subscriptions —
+ * the customer will see more than one line on their statement, and finding
+ * that out afterwards causes support tickets.
+ */
+export function chargeSummaryFor(cart: Cart): string {
+  const planMonthly =
+    cart.plan === 'starter'
+      ? STARTER_BASE
+      : pfPrice(cart.profiles) + billableSeats(PLANS.team, cart.seats) * SEAT_RATE
+  const addOns = addOnsList(cart.proxies, cart.numbers)
+  const monthly = applyCycle(planMonthly + addOns, cart.cycle)
+  const each = billedTotal(monthly, cart.cycle)
+
+  const per =
+    cart.cycle === 'annual' ? 'year' : cart.cycle === 'quarterly' ? '3 months' : 'month'
+  const amount = money(each || monthly)
+  const parts = ['your plan']
+  if (cart.proxies > 0) parts.push('proxies')
+  if (cart.numbers > 0) parts.push('phone numbers')
+
+  const items =
+    parts.length === 1
+      ? parts[0]
+      : `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`
+
+  return parts.length > 1
+    ? `${amount} per ${per} for ${items}, billed separately per item.`
+    : `${amount} per ${per} for ${items}.`
 }
 
 /** Line items for the plan itself, used by the webhook when it subscribes. */

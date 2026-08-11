@@ -395,8 +395,9 @@ export function UpgradeModal({
         </div>
 
         <p className="bill-up-foot">
-          Profiles and team seats are billed by TubeGhost. Proxies and phone numbers are bought
-          separately from TubeProxies and billed on their own subscription.
+          The next page saves your card — you&apos;ll see the amount there before confirming.
+          Profiles and team seats are billed by TubeGhost; proxies and phone numbers come from
+          TubeProxies and appear as separate charges.
         </p>
       </div>
     </div>

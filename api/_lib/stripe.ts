@@ -174,6 +174,15 @@ export async function createSetupSession(params: {
   successUrl: string
   cancelUrl: string
   metadata: Record<string, string>
+  /**
+   * What the customer will be charged, shown above the submit button.
+   *
+   * REQUIRED in practice, not cosmetic: setup mode collects a card without
+   * an amount, so Stripe's page would otherwise show no price at all. Asking
+   * for card details with no visible cost is bad for trust and, in some
+   * jurisdictions, for compliance.
+   */
+  chargeSummary?: string
 }): Promise<CheckoutSession> {
   return await call<CheckoutSession>('/checkout/sessions', {
     mode: 'setup',
@@ -181,7 +190,10 @@ export async function createSetupSession(params: {
     customer: params.customer,
     success_url: params.successUrl,
     cancel_url: params.cancelUrl,
-    setup_intent_data: { metadata: params.metadata }
+    setup_intent_data: { metadata: params.metadata },
+    ...(params.chargeSummary
+      ? { custom_text: { submit: { message: params.chargeSummary } } }
+      : {})
   })
 }
 

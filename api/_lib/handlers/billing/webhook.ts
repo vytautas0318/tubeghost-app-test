@@ -78,6 +78,11 @@ export default async function webhook(req: VercelRequest, res: VercelResponse): 
       case 'checkout.session.completed':
         await onCheckoutCompleted(event)
         break
+      // Subscriptions we create OURSELVES (single-page setup-mode checkout)
+      // only ever emit `created` — there is no checkout.session.completed
+      // carrying them, because Stripe's page only saved the card. Without
+      // this branch the customer is charged and granted nothing.
+      case 'customer.subscription.created':
       case 'customer.subscription.updated':
         await onSubscriptionUpdated(event)
         break
@@ -143,9 +148,22 @@ async function onSetupCompleted(session: {
   }
 }
 
-/** Ours? Guard against acting on the other product's events. */
+/**
+ * Is this the TubeGhost PLAN subscription?
+ *
+ * Not merely "did we create it". The single-page checkout creates three
+ * subscriptions — plan, proxies, numbers — and all three are ours, but only
+ * the plan describes a workspace's entitlement.
+ *
+ * `plan_key` is the discriminator: proxy and phone subscriptions carry
+ * TubeProxies' metadata shape and have none. Without this check,
+ * applySubscription() falls back to `plan: 'free'`, silently downgrading a
+ * paying workspace and overwriting its subscription id with the proxy or
+ * phone one — observed live: a phone subscription id on the workspace with
+ * plan reset to free.
+ */
 function isOurs(metadata: Record<string, string> | undefined): boolean {
-  return metadata?.product === PRODUCT_TAG
+  return metadata?.product === PRODUCT_TAG && Boolean(metadata?.plan_key)
 }
 
 /**
@@ -210,8 +228,15 @@ async function applySubscription(
   sub: StripeSubscription,
   meta: Record<string, string>
 ): Promise<void> {
+  // Defensive: isOurs() already requires plan_key, so reaching here without
+  // one means a caller bypassed the guard. Downgrading to 'free' would strip
+  // a paying customer's entitlement, so refuse instead.
+  if (!meta.plan_key) {
+    console.error('[billing] applySubscription called without plan_key', sub.id)
+    return
+  }
   await setWorkspaceSubscription(workspaceId, {
-    plan: meta.plan_key ?? 'free',
+    plan: meta.plan_key,
     planCycle: meta.cycle,
     planStatus: sub.status,
     purchasedProfiles: intOrNull(meta.profile_quota),
