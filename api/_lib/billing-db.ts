@@ -192,6 +192,54 @@ export async function countActiveProxies(userId: string): Promise<number> {
 }
 
 /**
+ * Does the user already hold an active TubeProxies subscription?
+ *
+ * TubeProxies enforces ONE active subscription per product per user:
+ *   idx_one_active_subscription      on public.subscriptions
+ *   one_active_phone_sub_per_user    on public.phone_subscriptions
+ *
+ * Buying more is an UPGRADE of the existing subscription
+ * (stripe.subscriptions.update with proration), not a second subscription —
+ * so our bundle, which creates new ones, cannot serve these customers.
+ *
+ * Without this check the customer is CHARGED and the insert then fails on the
+ * unique index, delivering nothing. Observed live:
+ *   [phone] duplicate key value violates "one_active_phone_sub_per_user"
+ *
+ * These are TubeProxies' tables, so no ghost schema headers.
+ *
+ * Returns false on a lookup failure: an outage must not block a legitimate
+ * sale, and the worst case is the pre-existing behaviour.
+ */
+async function hasActiveRow(table: string, userId: string): Promise<boolean> {
+  try {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/${table}` +
+        `?user_id=eq.${encodeURIComponent(userId)}&status=eq.active&select=id&limit=1`,
+      {
+        headers: {
+          apikey: SUPABASE_SERVICE_ROLE_KEY,
+          Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`
+        }
+      }
+    )
+    if (!res.ok) return false
+    const rows = (await res.json()) as unknown[]
+    return rows.length > 0
+  } catch {
+    return false
+  }
+}
+
+export function hasActiveProxySubscription(userId: string): Promise<boolean> {
+  return hasActiveRow('subscriptions', userId)
+}
+
+export function hasActivePhoneSubscription(userId: string): Promise<boolean> {
+  return hasActiveRow('phone_subscriptions', userId)
+}
+
+/**
  * Current profile count — to warn before a downgrade strands profiles.
  *
  * `browser_profiles`, NOT `profiles`: in the shared project `public.profiles`

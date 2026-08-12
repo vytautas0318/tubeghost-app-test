@@ -15,7 +15,9 @@ import { requireSession } from '../../session.js'
 import {
   countActiveProxies,
   countAvailableInventory,
-  getWorkspace
+  getWorkspace,
+  hasActivePhoneSubscription,
+  hasActiveProxySubscription
 } from '../../billing-db.js'
 import { phonePriceId, priceId, proxyPriceId, stripeConfigured } from '../../stripe-env.js'
 import {
@@ -117,7 +119,7 @@ export default async function validate(req: VercelRequest, res: VercelResponse):
     })
   } else {
     if (proxies) issues.push(...(await checkProxies(proxies, cycle, session.userId)))
-    if (numbers) issues.push(...checkNumbers(numbers, cycle))
+    if (numbers) issues.push(...(await checkNumbers(numbers, cycle, session.userId)))
   }
 
   res.status(200).json({
@@ -132,6 +134,20 @@ async function checkProxies(
   userId: string
 ): Promise<Issue[]> {
   const issues: Issue[] = []
+
+  // One active proxy subscription per user (idx_one_active_subscription).
+  // Buying more is an upgrade of the existing one, which this bundle does
+  // not implement — so surface it before they pay rather than after.
+  if (await hasActiveProxySubscription(userId)) {
+    return [
+      {
+        item: 'proxies',
+        message:
+          'You already have a proxy subscription. Add more from the TubeProxies dashboard.',
+        blocking: true
+      }
+    ]
+  }
 
   if (!proxyBundleFor(quantity)) {
     return [{ item: 'proxies', message: `No ${quantity}-proxy bundle exists.`, blocking: true }]
@@ -174,7 +190,23 @@ async function checkProxies(
   return issues
 }
 
-function checkNumbers(quantity: number, cycle: Cycle): Issue[] {
+async function checkNumbers(
+  quantity: number,
+  cycle: Cycle,
+  userId: string
+): Promise<Issue[]> {
+  // one_active_phone_sub_per_user — same rule as proxies.
+  if (await hasActivePhoneSubscription(userId)) {
+    return [
+      {
+        item: 'numbers',
+        message:
+          'You already have a phone-number subscription. Add more from the TubeProxies dashboard.',
+        blocking: true
+      }
+    ]
+  }
+
   if (!phoneBundleFor(quantity)) {
     return [{ item: 'numbers', message: `No ${quantity}-number bundle exists.`, blocking: true }]
   }

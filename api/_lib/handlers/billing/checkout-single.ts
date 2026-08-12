@@ -17,7 +17,13 @@
 
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { requireSession } from '../../session.js'
-import { countActiveProxies, countAvailableInventory, getWorkspace } from '../../billing-db.js'
+import {
+  countActiveProxies,
+  countAvailableInventory,
+  getWorkspace,
+  hasActivePhoneSubscription,
+  hasActiveProxySubscription
+} from '../../billing-db.js'
 import { createSetupSession, findOrCreateCustomer, StripeError } from '../../stripe.js'
 import { stripeConfigured } from '../../stripe-env.js'
 import { PUBLIC_BASE_URL } from '../../env.js'
@@ -162,6 +168,14 @@ async function validateCart(cart: Cart, userId: string): Promise<string | null> 
   }
 
   if (cart.proxies > 0) {
+    // TubeProxies allows ONE active proxy subscription per user. For an
+    // existing customer, buying more is an upgrade of that subscription, not
+    // a new one — a path this bundle does not implement. Creating a second
+    // charges them and then fails on idx_one_active_subscription, delivering
+    // nothing.
+    if (await hasActiveProxySubscription(userId)) {
+      return 'You already have a proxy subscription — change it from the TubeProxies dashboard.'
+    }
     if (!proxyBundleFor(cart.proxies)) return `No ${cart.proxies}-proxy bundle exists.`
     if (!proxyPrice(cart.proxies, cart.cycle, env)) {
       return `The ${cart.proxies}-proxy bundle is not available ${cart.cycle}.`
@@ -182,6 +196,10 @@ async function validateCart(cart: Cart, userId: string): Promise<string | null> 
   }
 
   if (cart.numbers > 0) {
+    // Same rule, enforced by one_active_phone_sub_per_user.
+    if (await hasActivePhoneSubscription(userId)) {
+      return 'You already have a phone-number subscription — change it from the TubeProxies dashboard.'
+    }
     if (!phoneBundleFor(cart.numbers)) return `No ${cart.numbers}-number bundle exists.`
     if (!phonePrice(cart.numbers, cart.cycle, env)) {
       return `The ${cart.numbers}-number bundle is not available ${cart.cycle}.`
