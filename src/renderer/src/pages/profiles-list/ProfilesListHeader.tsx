@@ -11,6 +11,8 @@ import {
   type ImportVendor
 } from '@/lib/importers'
 import { useWorkspace } from '@/store/workspace'
+import { ViewSwitch } from './ViewSwitch'
+import type { ProfilesView } from './cardViewState'
 
 // What the hidden file input is currently picking for.
 type ImportSource = ImportVendor | 'tubeghost' | 'cookies'
@@ -27,12 +29,18 @@ export function ProfilesListHeader({
   count,
   openCount,
   onImported,
-  onToast
+  onToast,
+  view,
+  onViewChange
 }: {
   count: number
   openCount: number
   onImported?: () => void
   onToast?: (kind: 'error' | 'info', text: string) => void
+  // Simple ⇄ Advanced. Omitted on the loading/error headers, which have no
+  // profiles to show either way.
+  view?: ProfilesView
+  onViewChange?: (v: ProfilesView) => void
 }): React.ReactElement {
   const workspace = useWorkspace((s) => s.current)
   const navigate = useNavigate()
@@ -111,75 +119,80 @@ export function ProfilesListHeader({
           {count} browser {count === 1 ? 'profile' : 'profiles'} · {openCount} running now
         </p>
       </div>
-      {canCreate && (
-        <div className="phead-actions flex items-center gap-2.5">
-          <input
-            ref={fileInputRef}
-            type="file"
-            className="hidden"
-            onChange={(e) => {
-              const f = e.target.files?.[0]
-              if (f) void onFile(f)
-              e.target.value = ''
-            }}
-          />
-          <button
-            onClick={() => navigate('/profiles/new')}
-            className="inline-flex items-center gap-2 h-9 px-3.5 rounded-[var(--r)] bg-[var(--red)] hover:bg-[var(--red-hover)] text-[13px] font-[550] text-white shadow-[var(--shadow)] transition-colors"
-          >
-            <Plus className="w-4 h-4" />
-            Create profile
-          </button>
-          <div className="import-wrap" ref={wrapRef}>
+      <div className="phead-right flex items-center gap-2.5">
+        {view && onViewChange && <ViewSwitch view={view} onChange={onViewChange} />}
+        {canCreate && (
+          <div className="phead-actions flex items-center gap-2.5">
+            <input
+              ref={fileInputRef}
+              type="file"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0]
+                if (f) void onFile(f)
+                e.target.value = ''
+              }}
+            />
             <button
-              onClick={() => setOpen((v) => !v)}
-              disabled={busy}
-              className="inline-flex items-center gap-2 h-9 px-3.5 rounded-[var(--r)] border border-[var(--line)] bg-[var(--panel)] hover:bg-[var(--hover)] text-[13px] font-[550] text-[var(--t1)] shadow-[var(--shadow)] transition-colors disabled:opacity-60"
+              onClick={() => navigate('/profiles/new')}
+              className="inline-flex items-center gap-2 h-9 px-3.5 rounded-[var(--r)] bg-[var(--red)] hover:bg-[var(--red-hover)] text-[13px] font-[550] text-white shadow-[var(--shadow)] transition-colors"
             >
-              <Download className="w-4 h-4" />
-              {busy ? 'Importing…' : 'Import'}
-              <ChevronDown className="w-3.5 h-3.5 opacity-60" />
+              <Plus className="w-4 h-4" />
+              Create profile
             </button>
-            {open && (
-              <div className="import-pop">
-                <div className="import-sec">Migrate from another browser</div>
-                {MIGRATIONS.map((m) => (
-                  <div className="import-item" key={m.vendor} onClick={() => pickFile(m.vendor)}>
+            <div className="import-wrap" ref={wrapRef}>
+              <button
+                onClick={() => setOpen((v) => !v)}
+                disabled={busy}
+                className="inline-flex items-center gap-2 h-9 px-3.5 rounded-[var(--r)] border border-[var(--line)] bg-[var(--panel)] hover:bg-[var(--hover)] text-[13px] font-[550] text-[var(--t1)] shadow-[var(--shadow)] transition-colors disabled:opacity-60"
+              >
+                <Download className="w-4 h-4" />
+                {busy ? 'Importing…' : 'Import'}
+                <ChevronDown className="w-3.5 h-3.5 opacity-60" />
+              </button>
+              {open && (
+                <div className="import-pop">
+                  <div className="import-sec">Migrate from another browser</div>
+                  {MIGRATIONS.map((m) => (
+                    <div className="import-item" key={m.vendor} onClick={() => pickFile(m.vendor)}>
+                      <div className="import-id">
+                        <div className="import-name">{m.name}</div>
+                        <div className="import-sub">{m.sub}</div>
+                      </div>
+                      <ChevronRight />
+                    </div>
+                  ))}
+                  <div className="import-sep" />
+                  <div className="import-sec">From a file</div>
+                  <div className="import-item" onClick={() => pickFile('tubeghost')}>
                     <div className="import-id">
-                      <div className="import-name">{m.name}</div>
-                      <div className="import-sub">{m.sub}</div>
+                      <div className="import-name">Profile file (.json)</div>
+                      <div className="import-sub">A TubeGhost profile export</div>
                     </div>
                     <ChevronRight />
                   </div>
-                ))}
-                <div className="import-sep" />
-                <div className="import-sec">From a file</div>
-                <div className="import-item" onClick={() => pickFile('tubeghost')}>
-                  <div className="import-id">
-                    <div className="import-name">Profile file (.json)</div>
-                    <div className="import-sub">A TubeGhost profile export</div>
+                  <div className="import-item" onClick={() => pickFile('csv')}>
+                    <div className="import-id">
+                      <div className="import-name">CSV / Excel</div>
+                      <div className="import-sub">
+                        .csv or .xlsx — columns auto-mapped to profile fields
+                      </div>
+                    </div>
+                    <ChevronRight />
                   </div>
-                  <ChevronRight />
-                </div>
-                <div className="import-item" onClick={() => pickFile('csv')}>
-                  <div className="import-id">
-                    <div className="import-name">CSV / Excel</div>
-                    <div className="import-sub">.csv or .xlsx — columns auto-mapped to profile fields</div>
+                  <div className="import-item" onClick={() => pickFile('cookies')}>
+                    <div className="import-id">
+                      <div className="import-name">Cookies (JSON / TXT)</div>
+                      <div className="import-sub">Netscape or JSON cookie files</div>
+                    </div>
+                    <ChevronRight />
                   </div>
-                  <ChevronRight />
                 </div>
-                <div className="import-item" onClick={() => pickFile('cookies')}>
-                  <div className="import-id">
-                    <div className="import-name">Cookies (JSON / TXT)</div>
-                    <div className="import-sub">Netscape or JSON cookie files</div>
-                  </div>
-                  <ChevronRight />
-                </div>
-              </div>
-            )}
+              )}
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </header>
   )
 }

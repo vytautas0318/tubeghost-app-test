@@ -1,0 +1,472 @@
+/* ═══════════════════════════════════════════════════════════════════
+   Profiles · Simple view (card grid)
+
+   Ported from the TubeGhost Design System's ui_kits/browser/cards.css
+   (`.pc-*`, `.ar-*`, `.vw-*`), with that kit's audit-pass spacing
+   overrides folded into the base rules — the prototype ships them on.
+   Kept in its own file rather than appended to ds-kit.css because it is
+   one screen's worth of styles and reads better next to the components
+   that use it.
+   ═══════════════════════════════════════════════════════════════════ */
+
+.pc-wrap {
+  padding-bottom: 32px;
+}
+
+/* Pager footer. The shared Pagination component is shaped as a TABLE footer
+   (top hairline, flat, panel-2 fill) — inside the bordered table panel that
+   reads right, but the card grid has no panel around it. This gives it one:
+   a full hairline box with the component's own top border neutralised. */
+.pc-foot {
+  flex-shrink: 0;
+  margin-top: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+.pc-foot > div {
+  border-top: 0;
+}
+
+/* ── search + filter bar ──────────────────────────────────────────── */
+.pc-bars {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 4px 0 20px;
+  flex-wrap: wrap;
+}
+.pc-search {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  height: 44px;
+  width: 300px;
+  flex-shrink: 0;
+  padding: 0 12px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+.pc-search:focus-within {
+  border-color: var(--red);
+}
+.pc-search svg {
+  width: 15px;
+  height: 15px;
+  color: var(--t3);
+  flex-shrink: 0;
+}
+.pc-search input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  border: 0;
+  background: transparent;
+  font-family: var(--sans);
+  font-size: 13.5px;
+  color: var(--t1);
+  outline: none;
+}
+.pc-search input::placeholder {
+  color: var(--t3);
+}
+.pc-clear {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--hover);
+  color: var(--t2);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.pc-clear svg {
+  width: 12px;
+  height: 12px;
+}
+.pc-clear:hover {
+  color: var(--t1);
+}
+.pc-count {
+  font-family: var(--sans);
+  font-size: 12.5px;
+  color: var(--t2);
+  margin: -8px 0 14px;
+}
+.pc-empty {
+  padding: 48px 0;
+  text-align: center;
+  font-family: var(--sans);
+  font-size: 13.5px;
+  color: var(--t3);
+}
+@media (max-width: 1000px) {
+  .pc-search {
+    width: 100%;
+  }
+}
+
+/* ── grid ─────────────────────────────────────────────────────────── */
+.pc-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  align-items: stretch;
+}
+
+/* ── shared card controls ─────────────────────────────────────────── */
+.pc-pic {
+  display: block;
+  object-fit: cover;
+  flex-shrink: 0;
+  border-radius: 999px;
+}
+.pc-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 8px;
+  background: #16181d;
+  color: #fff;
+  font-family: var(--sans);
+  font-size: 13px;
+  font-weight: 650;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition-property: background-color, color, opacity;
+  transition-duration: 0.13s;
+}
+.pc-btn svg {
+  width: 13px;
+  height: 13px;
+}
+.pc-btn:hover {
+  background: #23262d;
+}
+.pc-btn:active {
+  transform: scale(0.98);
+}
+.pc-btn.stop {
+  background: var(--red-soft);
+  color: var(--red);
+}
+.pc-btn.stop:hover {
+  background: var(--red-soft-2);
+}
+.pc-btn.wide {
+  width: 100%;
+}
+.pc-btn:disabled {
+  background: var(--hover);
+  color: var(--t3);
+  cursor: not-allowed;
+}
+.pc-btn:disabled:active {
+  transform: none;
+}
+[data-theme='dark'] .pc-btn {
+  background: #fff;
+  color: #14151a;
+}
+[data-theme='dark'] .pc-btn:hover {
+  background: #e8e9ec;
+}
+[data-theme='dark'] .pc-btn:disabled {
+  background: rgba(255, 255, 255, 0.09);
+  color: var(--t2);
+}
+[data-theme='dark'] .pc-btn.stop {
+  background: rgba(230, 0, 1, 0.18);
+  color: #ff6b6b;
+}
+
+/* ── the card ─────────────────────────────────────────────────────── */
+.ar {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  padding: 20px 18px 16px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  text-align: center;
+  transition-property: border-color, box-shadow, transform;
+  transition-duration: 0.16s;
+}
+.ar:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 24px rgba(12, 14, 20, 0.09);
+}
+[data-theme='dark'] .ar:hover {
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.4);
+}
+.ar-halo {
+  position: relative;
+  display: grid;
+  place-items: center;
+  margin-bottom: 12px;
+}
+.ar-name {
+  display: block;
+  max-width: 100%;
+  margin-bottom: 4px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font-family: var(--sans);
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: -0.25px;
+  color: var(--t1);
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ar-name:hover {
+  color: var(--red);
+}
+/* Fixed height so a card with a linked channel and one without are the
+   same size — grid rows would otherwise stagger. */
+.ar-chan {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  box-sizing: border-box;
+  height: 18px;
+  min-height: 18px;
+  margin: 0 0 14px;
+  padding: 0 6px;
+  max-width: 100%;
+  border: 0;
+  background: transparent;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  line-height: 18px;
+  color: var(--t3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ar-chan span {
+  color: var(--t4);
+}
+.ar-chan.link {
+  border-radius: 6px;
+  font-family: var(--sans);
+  color: var(--t4);
+  cursor: pointer;
+}
+.ar-chan.link:hover {
+  color: var(--red);
+  background: var(--red-soft);
+}
+.ar-chan.link svg {
+  width: 11px;
+  height: 11px;
+}
+.ar-chips {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+  margin-bottom: 6px;
+  max-width: 100%;
+}
+.ar-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 22px;
+  max-width: 100%;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: var(--hover);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--t2);
+  font-variant-numeric: tabular-nums;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ar-chip svg {
+  width: 11px;
+  height: 11px;
+  flex-shrink: 0;
+}
+.ar-chip.none {
+  font-family: var(--sans);
+  color: var(--t3);
+}
+.ar-seen {
+  margin-bottom: 16px;
+  font-family: var(--sans);
+  font-size: 11.5px;
+  color: var(--t3);
+}
+.ar-seen.inuse-note {
+  color: var(--t2);
+  font-weight: 600;
+}
+.ar .pc-btn {
+  margin-top: auto;
+}
+/* "in use by" badge on the avatar */
+.ar-user {
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  border: 2px solid var(--panel);
+  background: linear-gradient(135deg, var(--amber), #a06a08);
+  color: #fff;
+  font-family: var(--sans);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+/* Wraps the shared RowMenu so it lands where the design's kebab sits. */
+.ar-menu {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 2;
+}
+
+/* ── link-a-channel popover (viewport-anchored, portalled to body) ── */
+.ar-linkpop {
+  position: fixed;
+  z-index: 200;
+  width: 268px;
+  max-width: calc(100vw - 24px);
+  padding: 12px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: var(--shadow-pop);
+  text-align: left;
+  animation: ar-linkpop-in 0.2s cubic-bezier(0.2, 0.7, 0.25, 1) both;
+}
+@keyframes ar-linkpop-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ar-linkpop {
+    animation: none;
+  }
+}
+.ar-linkpop-k {
+  font-family: var(--sans);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--t3);
+  margin-bottom: 8px;
+}
+.ar-linkpop-row {
+  display: flex;
+  gap: 6px;
+}
+.ar-linkpop-row input {
+  flex: 1;
+  min-width: 0;
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg);
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--t1);
+  outline: none;
+}
+.ar-linkpop-row input:focus {
+  border-color: var(--red);
+}
+.ar-linkpop-go {
+  flex-shrink: 0;
+  height: 34px;
+  padding: 0 13px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--red);
+  font-family: var(--sans);
+  font-size: 12.5px;
+  font-weight: 650;
+  color: #fff;
+  cursor: pointer;
+}
+.ar-linkpop-go:hover:not(:disabled) {
+  background: var(--red-hover);
+}
+.ar-linkpop-go:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.ar-linkpop-h {
+  font-family: var(--sans);
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--t3);
+  margin-top: 8px;
+}
+.ar-linkpop-h.err {
+  color: var(--red);
+}
+
+/* ── Simple ⇄ Advanced switch ─────────────────────────────────────── */
+.vw-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  background: var(--hover);
+  border-radius: 9px;
+}
+.vw-btn {
+  height: 26px;
+  padding: 0 11px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  font-family: var(--sans);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--t2);
+  cursor: pointer;
+  transition-property: background-color, color, box-shadow;
+  transition-duration: 0.13s;
+}
+.vw-btn:hover {
+  color: var(--t1);
+}
+.vw-btn.on {
+  background: var(--panel);
+  color: var(--t1);
+  box-shadow: 0 1px 2px rgba(12, 14, 20, 0.1);
+}

@@ -74,17 +74,19 @@ export function applyFiltersAndSort(args: {
     })
   }
 
-  // Free-text search (name, tag, proxy IP, group name)
+  // Free-text search (name, tag, proxy IP, group name, linked channel)
   if (filters.search.trim()) {
     const q = filters.search.toLowerCase()
     out = out.filter((p) => {
       const raw = rowById.get(p.id)
-      const gname = raw?.group_id ? groupName.get(raw.group_id) ?? '' : ''
+      const gname = raw?.group_id ? (groupName.get(raw.group_id) ?? '') : ''
+      const ch = raw?.youtube_channel
       return (
         p.name.toLowerCase().includes(q) ||
         p.proxyIp.toLowerCase().includes(q) ||
         p.tags.some((t) => t.toLowerCase().includes(q)) ||
-        gname.toLowerCase().includes(q)
+        gname.toLowerCase().includes(q) ||
+        (ch ? ch.handle.toLowerCase().includes(q) || ch.title.toLowerCase().includes(q) : false)
       )
     })
   }

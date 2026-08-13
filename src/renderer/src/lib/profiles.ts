@@ -1,6 +1,7 @@
 // Supabase profile data layer. Replaces DEMO_PROFILES.
 
 import { getSupabase, type GhostClient } from '@/lib/supabase'
+import type { LinkedChannel } from '@/lib/youtube'
 
 export interface ProfileRow {
   id: string
@@ -92,6 +93,10 @@ export interface ProfileRow {
   // reopened on next launch. Mirror of the per-device local file owned by
   // the main process; never mixed with user `tags`.
   session_urls: string[] | null
+  // The YouTube channel this profile operates (migration 0045). Shown on
+  // the profile card in the Simple view. Null = no channel linked, which
+  // is normal — plenty of profiles run IG, TikTok or a store instead.
+  youtube_channel: LinkedChannel | null
 }
 
 function client(): GhostClient {
@@ -126,7 +131,11 @@ export async function listProfiles(workspaceId: string): Promise<ProfileRow[]> {
 }
 
 export async function getProfile(id: string): Promise<ProfileRow | null> {
-  const { data, error } = await client().from('browser_profiles').select('*').eq('id', id).maybeSingle()
+  const { data, error } = await client()
+    .from('browser_profiles')
+    .select('*')
+    .eq('id', id)
+    .maybeSingle()
   if (error) throw error
   return (data as ProfileRow | null) ?? null
 }
@@ -329,6 +338,7 @@ export async function updateProfile(
       | 'proxy_source'
       | 'proxy_id'
       | 'tubeproxies_ip_id'
+      | 'youtube_channel'
     >
   >
 ): Promise<ProfileRow> {
@@ -694,7 +704,11 @@ export async function importProfile(json: string, workspaceId: string): Promise<
   if (typeof insert.fingerprint_seed !== 'number') {
     insert.fingerprint_seed = Math.floor(Math.random() * 2_147_483_647)
   }
-  const { data, error } = await client().from('browser_profiles').insert(insert).select('*').single()
+  const { data, error } = await client()
+    .from('browser_profiles')
+    .insert(insert)
+    .select('*')
+    .single()
   if (error) throw error
   return data as ProfileRow
 }

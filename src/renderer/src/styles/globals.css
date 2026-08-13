@@ -6,6 +6,7 @@
    Tailwind's --color-* theme tokens. */
 @import './ds-tokens.css';
 @import './ds-kit.css';
+@import './profiles-cards.css';
 @import './assistant.css';
 
 /* Dark mode is driven off BOTH signals so Tailwind `dark:` utilities and the
