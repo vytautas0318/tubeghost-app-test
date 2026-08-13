@@ -14,6 +14,7 @@ import { handleCors, jsonResponse } from '../_shared/cors.ts'
 import { getUserIdFromRequest } from '../_shared/auth.ts'
 import { sendMessage, type Turn } from './provider.ts'
 import { assistantSystem } from './knowledge.ts'
+import { profilePatchSystem } from './profile-patch.ts'
 
 interface ChatTurn {
   role?: 'user' | 'assistant'
@@ -32,6 +33,11 @@ interface RequestBody {
   // Which model the user picked in the Copilot UI ('haiku-4.5' | 'minimax-m3').
   // Defaults to Haiku inside the provider layer if absent/unknown.
   model?: string
+  // Which assistant this request is for. Absent/'chat' = the global Copilot
+  // (prose reply or confirmable action plan). 'profile-patch' = the profile
+  // editor's AskBar, which edits the ONE open profile and needs a different
+  // prompt and output shape entirely — see profile-patch.ts.
+  mode?: string
 }
 
 // Cap history so a runaway transcript can't blow the token budget.
@@ -74,8 +80,15 @@ Deno.serve(async (req) => {
   // The SAME system prompt + grounding is used for every model. assistantSystem
   // already merges the app context into the knowledge base + tool catalog; we
   // pass appContext through the abstraction too for full model-agnostic parity.
+  //
+  // profile-patch swaps the prompt entirely: it is a different assistant with a
+  // different output contract, not the chat one with extra instructions bolted
+  // on. Sharing the endpoint keeps one provider/key/auth path.
   const result = await sendMessage({
-    systemPrompt: assistantSystem(appContext, toolCatalog),
+    systemPrompt:
+      body.mode === 'profile-patch'
+        ? profilePatchSystem(appContext)
+        : assistantSystem(appContext, toolCatalog),
     history: priorHistory,
     userMessage,
     model: body.model as never

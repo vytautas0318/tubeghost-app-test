@@ -13,7 +13,19 @@
 
 import * as React from 'react'
 import { useEffect, useState } from 'react'
-import { Check, HelpCircle, Loader2, Plus, RefreshCw, Search, X } from 'lucide-react'
+import {
+  Check,
+  Fingerprint,
+  HelpCircle,
+  Loader2,
+  Monitor,
+  Play,
+  Plus,
+  RefreshCw,
+  Search,
+  Tag,
+  X
+} from 'lucide-react'
 import { Badge, PlatformIcon, Toggle } from '@/components/ui'
 import { GhostAvatar } from '@/components/GhostAvatar'
 import { NavIcon } from '@/components/sidebar/navIcons'
@@ -33,6 +45,7 @@ import { lookupChannel } from '@/lib/youtube'
 import { groupColor, profileFace } from '@/pages/profiles-list/cardVisuals'
 import { OsMark } from '@/pages/profiles-list/osFlag'
 import { browserVersionsFor, userAgentFor } from './randomize'
+import { AskBar } from './AskBar'
 import { SimpleCredentials } from './SimpleCredentials'
 import { newFingerprintPatch, optimizedPatch, osLabel } from './simpleFingerprint'
 import { GUIDE_STEPS } from './simpleEditorState'
@@ -69,6 +82,20 @@ export function SimpleEditor({
 }): React.ReactElement {
   const workspace = useWorkspace((s) => s.current)
   const [busy, setBusy] = useState<Busy>(null)
+  // One proxy fetch for the whole screen: the Proxy tile lists them and the
+  // AskBar resolves "the Dallas one" against the same rows.
+  const [proxies, setProxies] = useState<ProxyRow[]>([])
+  useEffect(() => {
+    const ws = workspace?.workspace_id
+    if (!ws) return
+    let cancelled = false
+    listProxies(ws)
+      .then((p) => !cancelled && setProxies(p))
+      .catch(() => undefined)
+    return () => {
+      cancelled = true
+    }
+  }, [workspace?.workspace_id, profile.proxy_host, profile.proxy_port])
 
   const groupName = groups.find((g) => g.id === form.group_id)?.name ?? ''
 
@@ -161,12 +188,28 @@ export function SimpleEditor({
         </div>
       )}
 
+      {/* Sits under the hero so Simple mode's "don't touch 40 fields"
+          promise has a natural entry point — the design's words. */}
+      <AskBar
+        profile={profile}
+        form={form}
+        setForm={setForm}
+        groups={groups}
+        groupName={groupName}
+        proxies={proxies}
+        allTags={form.tags}
+        workspaceId={workspace?.workspace_id ?? ''}
+        canEdit={canEdit}
+        onProfileSaved={onProfileSaved}
+        onToast={onToast}
+      />
+
       <div className="sa-grid">
         <ProxyTile
           profile={profile}
           canEdit={canEdit}
           busy={busy === 'proxy'}
-          workspaceId={workspace?.workspace_id ?? null}
+          proxies={proxies}
           onBusy={(b) => setBusy(b ? 'proxy' : null)}
           onSaved={onProfileSaved}
           onToast={onToast}
@@ -177,7 +220,7 @@ export function SimpleEditor({
         {/* ── fingerprint ────────────────────────────────────────── */}
         <div className="sa-tile">
           <div className="sa-tk">
-            <NavIcon name="shield" size={15} />
+            <Fingerprint size={15} />
             Fingerprint
           </div>
           <div className="sa-seedrow">
@@ -186,19 +229,13 @@ export function SimpleEditor({
               type="button"
               className="sa-reroll"
               disabled={!canEdit || busy === 'fp'}
-              onClick={() => {
-                if (
-                  !confirm(
-                    'Generate a new fingerprint?\n\nThis profile will look like a different device on its next launch. Sites that already know the old one may ask it to verify again.'
-                  )
-                )
-                  return
+              onClick={() =>
                 void apply(
                   'fp',
                   newFingerprintPatch(profile.platform, profile.brand_version),
                   'New fingerprint generated'
                 )
-              }}
+              }
             >
               <RefreshCw className={busy === 'fp' ? 'animate-spin' : undefined} />
               New
@@ -274,7 +311,7 @@ function ProxyTile({
   profile,
   canEdit,
   busy,
-  workspaceId,
+  proxies,
   onBusy,
   onSaved,
   onToast
@@ -282,26 +319,14 @@ function ProxyTile({
   profile: ProfileRow
   canEdit: boolean
   busy: boolean
-  workspaceId: string | null
+  // Fetched once by SimpleEditor and shared with the AskBar.
+  proxies: ProxyRow[]
   onBusy: (b: boolean) => void
   onSaved: (p: ProfileRow) => void
   onToast: (kind: 'error' | 'info', text: string) => void
 }): React.ReactElement {
   const [open, setOpen] = useState(false)
   const [q, setQ] = useState('')
-  const [proxies, setProxies] = useState<ProxyRow[]>([])
-
-  useEffect(() => {
-    if (!workspaceId) return
-    let cancelled = false
-    listProxies(workspaceId)
-      .then((p) => !cancelled && setProxies(p))
-      .catch(() => undefined)
-    return () => {
-      cancelled = true
-    }
-  }, [workspaceId, profile.proxy_id])
-
   useEffect(() => {
     if (!open) return
     const close = (e: MouseEvent): void => {
@@ -510,13 +535,8 @@ function DeviceTile({
     if (next === currentOs) return
     // NOT a bare `platform` write — see newFingerprintPatch. The whole
     // device is regenerated so user-agent, GPU, CPU/RAM and resolution
-    // stay consistent with the new OS.
-    if (
-      !confirm(
-        `Switch this profile to ${next}?\n\nIts device details (user agent, GPU, CPU, screen) are regenerated to match — a ${currentOs} device can't keep its identity on ${next} without looking fake.`
-      )
-    )
-      return
+    // stay consistent with the new OS. No confirm: the design has none,
+    // and the toast reports what happened.
     void onApply(
       'os',
       newFingerprintPatch(next === 'macOS' ? 'macos' : 'windows', profile.brand_version),
@@ -540,7 +560,7 @@ function DeviceTile({
   return (
     <div className="sa-tile">
       <div className="sa-tk">
-        <NavIcon name="profiles" size={15} />
+        <Monitor size={15} />
         Device &amp; engine
       </div>
       <div className="sa-pick">
@@ -630,7 +650,7 @@ function ChannelTile({
   return (
     <div className="sa-tile wide">
       <div className="sa-tk">
-        <PlatformIcon platform="yt" size={16} />
+        <Play size={15} />
         YouTube channel
       </div>
       {channel ? (
@@ -754,7 +774,7 @@ function TagsTile({
   return (
     <div className="sa-tile wide">
       <div className="sa-tk">
-        <NavIcon name="briefcase" size={15} />
+        <Tag size={15} />
         Tags
       </div>
       <div className="sm-tags">
