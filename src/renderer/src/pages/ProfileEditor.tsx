@@ -13,6 +13,13 @@ import { EditorPanels, type EditorTab } from './profile-editor/EditorPanels'
 import { OverviewSidebar, type OverviewState } from './profile-editor/OverviewSidebar'
 import { DirtyProvider, useDirtyGuard, useDirtyParent } from './profile-editor/DirtyContext'
 import { rowToForm } from './profile-editor/types'
+import { SimpleEditor } from './profile-editor/SimpleEditor'
+import {
+  readEditorMode,
+  storeEditorMode,
+  type EditorMode
+} from './profile-editor/simpleEditorState'
+import { listGroups, type GroupRow } from '@/lib/groups'
 import { ToastView, useToast } from '@/components/Toast'
 
 export function ProfileEditor(): React.ReactElement {
@@ -56,7 +63,37 @@ function ProfileEditorInner(): React.ReactElement {
   // Fingerprint card on every keystroke so the sidebar reflects
   // pending edits before save.
   const [overview, setOverview] = useState<OverviewState | null>(null)
-  const { toast } = useToast()
+  const { toast, show: showToast } = useToast()
+
+  // Simple ⇄ Advanced, persisted. Creation stays on the tabbed flow: Simple
+  // applies its picks straight to a saved row, and on /profiles/new there is
+  // no row yet to apply them to. The switch is hidden there rather than
+  // shown-but-broken.
+  const [mode, setModeRaw] = useState<EditorMode>(readEditorMode)
+  const editorMode: EditorMode = isNew ? 'advanced' : mode
+  const setMode = (m: EditorMode): void => {
+    setModeRaw(m)
+    storeEditorMode(m)
+  }
+
+  // Simple mode colours the avatar by GROUP NAME (the row carries only
+  // group_id), the same way the profile cards do. Fetched once per
+  // workspace and resolved during render — no state write in the effect
+  // body, so a group_id change doesn't cascade a re-render.
+  const [groups, setGroups] = useState<GroupRow[]>([])
+  useEffect(() => {
+    if (!workspace) return
+    let cancelled = false
+    listGroups(workspace.workspace_id)
+      .then((gs) => !cancelled && setGroups(gs))
+      .catch(() => undefined)
+    return () => {
+      cancelled = true
+    }
+  }, [workspace])
+  const groupName = profile?.group_id
+    ? (groups.find((g) => g.id === profile.group_id)?.name ?? '')
+    : ''
 
   // Cards register their dirty state via useDirtyGuard so we can warn
   // on route-leave, and register savers via useRegisterSaver so the
@@ -76,9 +113,8 @@ function ProfileEditorInner(): React.ReactElement {
 
   // Track the General-tab (IdentityCard) form's dirty state. The
   // FingerprintCard + AdvancedCard register their own via useDirtyGuard.
-  const generalDirty = !isNew && profile
-    ? JSON.stringify(form) !== JSON.stringify(rowToForm(profile))
-    : false
+  const generalDirty =
+    !isNew && profile ? JSON.stringify(form) !== JSON.stringify(rowToForm(profile)) : false
   useDirtyGuard('General', generalDirty)
 
   // Browser/window close warning. beforeunload only triggers if the
@@ -137,8 +173,10 @@ function ProfileEditorInner(): React.ReactElement {
   }
 
   // The right sidebar (Browser session / Overview / Danger zone) belongs to the
-  // Fingerprint tab only; General / Proxy / Advanced go single-column.
-  const showAside = activeTab === 'fingerprint' && !isNew && !!profile
+  // Fingerprint tab only; General / Proxy / Advanced go single-column. Simple
+  // mode is one column by design.
+  const showAside = editorMode === 'advanced' && activeTab === 'fingerprint' && !isNew && !!profile
+  const simple = editorMode === 'simple' && !!profile
 
   return (
     <div className="relative flex-1 min-h-0 flex flex-col overflow-hidden">
@@ -149,26 +187,50 @@ function ProfileEditorInner(): React.ReactElement {
         canSave={canSave}
         onSave={onSave}
         onLeave={guardedNavigate}
+        leading={
+          !isNew && (
+            <div className="vw-switch" role="group" aria-label="Editor detail level">
+              {(['simple', 'advanced'] as EditorMode[]).map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  className={'vw-btn' + (editorMode === m ? ' on' : '')}
+                  aria-pressed={editorMode === m}
+                  onClick={() => setMode(m)}
+                >
+                  {m === 'simple' ? 'Simple' : 'Advanced'}
+                </button>
+              ))}
+            </div>
+          )
+        }
       />
 
-      <div className="flex border-b border-[var(--line)] px-6 gap-1">
-        <Tab active={activeTab === 'general'} onClick={() => setActiveTab('general')}>
-          General
-        </Tab>
-        <Tab active={activeTab === 'proxy'} onClick={() => setActiveTab('proxy')}>
-          Proxy
-        </Tab>
-        <Tab active={activeTab === 'fingerprint'} onClick={() => setActiveTab('fingerprint')}>
-          Fingerprint
-        </Tab>
-        <Tab active={activeTab === 'advanced'} onClick={() => setActiveTab('advanced')}>
-          Advanced
-        </Tab>
-      </div>
+      {!simple && (
+        <div className="flex border-b border-[var(--line)] px-6 gap-1">
+          <Tab active={activeTab === 'general'} onClick={() => setActiveTab('general')}>
+            General
+          </Tab>
+          <Tab active={activeTab === 'proxy'} onClick={() => setActiveTab('proxy')}>
+            Proxy
+          </Tab>
+          <Tab active={activeTab === 'fingerprint'} onClick={() => setActiveTab('fingerprint')}>
+            Fingerprint
+          </Tab>
+          <Tab active={activeTab === 'advanced'} onClick={() => setActiveTab('advanced')}>
+            Advanced
+          </Tab>
+        </div>
+      )}
 
       <div className="flex-1 min-h-0 overflow-auto px-6 py-5">
         {error && (
-          <div className={(showAside ? 'max-w-5xl' : 'max-w-[860px]') + ' mx-auto mb-5 text-xs text-[var(--red)] bg-[var(--red-soft)] border border-[var(--red)]/20 rounded-[var(--r)] px-3 py-2 flex items-start gap-2'}>
+          <div
+            className={
+              (showAside ? 'max-w-5xl' : 'max-w-[860px]') +
+              ' mx-auto mb-5 text-xs text-[var(--red)] bg-[var(--red-soft)] border border-[var(--red)]/20 rounded-[var(--r)] px-3 py-2 flex items-start gap-2'
+            }
+          >
             <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
             <span>{error}</span>
           </div>
@@ -180,24 +242,38 @@ function ProfileEditorInner(): React.ReactElement {
           }
         >
           <div className={showAside ? 'col-span-2 space-y-5' : 'space-y-5'}>
-            <EditorPanels
-              activeTab={activeTab}
-              visitedTabs={visitedTabs}
-              isNew={isNew}
-              profile={profile}
-              form={form}
-              setForm={setForm}
-              canEdit={canEdit}
-              canSave={canSave}
-              saving={saving}
-              proxyState={proxyState}
-              onSave={onSave}
-              onProfileSaved={(p) => data.setProfile(p)}
-              onReload={() => void data.reload?.()}
-              onOverviewChange={setOverview}
-              setActiveTab={setActiveTab}
-              navigateGuarded={guardedNavigate}
-            />
+            {simple && profile ? (
+              <SimpleEditor
+                profile={profile}
+                form={form}
+                setForm={setForm}
+                canEdit={canEdit}
+                groupName={groupName}
+                onProfileSaved={(p) => data.setProfile(p)}
+                onToast={showToast}
+                onGoAdvanced={() => setMode('advanced')}
+                onNavigate={guardedNavigate}
+              />
+            ) : (
+              <EditorPanels
+                activeTab={activeTab}
+                visitedTabs={visitedTabs}
+                isNew={isNew}
+                profile={profile}
+                form={form}
+                setForm={setForm}
+                canEdit={canEdit}
+                canSave={canSave}
+                saving={saving}
+                proxyState={proxyState}
+                onSave={onSave}
+                onProfileSaved={(p) => data.setProfile(p)}
+                onReload={() => void data.reload?.()}
+                onOverviewChange={setOverview}
+                setActiveTab={setActiveTab}
+                navigateGuarded={guardedNavigate}
+              />
+            )}
           </div>
           {showAside && profile && (
             <aside className="space-y-5 sticky top-0 self-start">

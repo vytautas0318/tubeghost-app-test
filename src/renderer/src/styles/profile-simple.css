@@ -1,0 +1,487 @@
+/* ═══════════════════════════════════════════════════════════════════
+   Profile editor · Simple mode
+
+   Ported from the TubeGhost Design System's ui_kits/browser/cards.css
+   (`.sa-*`, `.sm-link`) — the one-screen editor that replaces the four
+   tabs. Only the rules the app's Simple mode actually renders are
+   carried over; the prototype's inline authenticator/phone forms are
+   not, because those flows live on their own pages here and the tile
+   links out to them instead.
+   ═══════════════════════════════════════════════════════════════════ */
+
+.sa {
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── hero ─────────────────────────────────────────────────────────── */
+.sa-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0 26px;
+}
+.sa-face {
+  display: grid;
+  place-items: center;
+}
+.sa-name {
+  width: 100%;
+  max-width: 420px;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  text-align: center;
+  font-family: var(--sans);
+  font-size: 21px;
+  font-weight: 700;
+  letter-spacing: -0.4px;
+  color: var(--t1);
+  outline: none;
+}
+.sa-name:hover,
+.sa-name:focus {
+  background: var(--hover);
+}
+.sa-name:disabled {
+  cursor: default;
+}
+.sa-id {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--sans);
+  font-size: 12.5px;
+  color: var(--t3);
+}
+/* The shared GroupSelect renders its own control; keep it compact and
+   unboxed so the hero line reads as text, per the design. */
+.sa-grp-wrap {
+  min-width: 160px;
+  max-width: 240px;
+}
+.sa-code {
+  font-family: var(--mono);
+}
+
+/* ── plain-words guide ────────────────────────────────────────────── */
+.sa-guide {
+  margin-bottom: 16px;
+  padding: 18px 20px 16px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--hover);
+}
+.sa-guide-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.sa-guide-t {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--sans);
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--t1);
+}
+.sa-guide-t svg {
+  width: 15px;
+  height: 15px;
+  color: var(--red);
+}
+.sa-guide-x {
+  height: 28px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--t1);
+  color: var(--panel);
+  font-family: var(--sans);
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.sa-guide-x:hover {
+  opacity: 0.85;
+}
+.sa-guide-l {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0 0 0 22px;
+  list-style: decimal;
+}
+.sa-guide-l li {
+  font-family: var(--sans);
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--t2);
+  text-wrap: pretty;
+}
+.sa-guide-l li b {
+  color: var(--t1);
+  font-weight: 650;
+  margin-right: 6px;
+}
+.sa-guide-f {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  font-family: var(--sans);
+  font-size: 12px;
+  color: var(--t2);
+}
+
+/* ── tiles ────────────────────────────────────────────────────────── */
+.sa-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr));
+  gap: 14px;
+}
+.sa-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  padding: 18px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+}
+.sa-tile.wide {
+  grid-column: 1 / -1;
+}
+.sa-tk {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-family: var(--sans);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--t3);
+}
+.sa-tk svg {
+  width: 14px;
+  height: 14px;
+  color: var(--t3);
+  flex-shrink: 0;
+}
+.sa-hint {
+  font-family: var(--sans);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--t3);
+  text-wrap: pretty;
+  overflow-wrap: anywhere;
+}
+.sa-none {
+  font-family: var(--sans);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--t3);
+  text-wrap: pretty;
+}
+
+/* ── controls ─────────────────────────────────────────────────────── */
+.sa-sel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg);
+  font-family: var(--mono);
+  font-size: 12.5px;
+  color: var(--t1);
+  cursor: pointer;
+}
+.sa-sel:hover:not(:disabled) {
+  border-color: var(--t4);
+}
+.sa-sel:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+.sa-sel .none {
+  font-family: var(--sans);
+  color: var(--t3);
+}
+.sa-sel > span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sa-sel svg {
+  color: var(--t3);
+  flex-shrink: 0;
+}
+
+/* The pool picker is rendered INLINE (not as a popover): it carries its
+   own search + filter chips and is far taller than a dropdown should be. */
+.sa-px-inline {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px;
+  background: var(--panel-2);
+}
+.sa-px-clear {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  margin-top: 10px;
+  padding: 9px 10px;
+  border: 0;
+  border-top: 1px solid var(--line);
+  border-radius: 0 0 8px 8px;
+  background: transparent;
+  font-family: var(--sans);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--t2);
+  cursor: pointer;
+}
+.sa-px-clear:hover {
+  color: var(--red);
+}
+
+.sa-pick {
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+}
+.sa-opt {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  flex: 1 1 0;
+  min-width: 0;
+  height: 40px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg);
+  font-family: var(--sans);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--t2);
+  cursor: pointer;
+  transition-property: background-color, color, border-color;
+  transition-duration: 0.13s;
+}
+.sa-opt:hover:not(:disabled) {
+  color: var(--t1);
+}
+.sa-opt.on {
+  background: var(--red);
+  border-color: var(--red);
+  color: #fff;
+}
+.sa-opt:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.sa-seedrow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+.sa-seed {
+  font-family: var(--mono);
+  font-size: 15px;
+  color: var(--t1);
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+}
+.sa-reroll {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg);
+  font-family: var(--sans);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--t1);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.sa-reroll:hover:not(:disabled) {
+  background: var(--hover);
+}
+.sa-reroll:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+.sa-reroll svg {
+  color: var(--t2);
+}
+.sa-switch {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+}
+.sa-switch input {
+  accent-color: var(--red);
+  cursor: pointer;
+}
+.sa-switch span {
+  font-family: var(--sans);
+  font-size: 12.5px;
+  color: var(--t2);
+}
+
+/* ── channel tile ─────────────────────────────────────────────────── */
+.sa-chan {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 44px;
+  padding: 0 8px 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg);
+}
+.sa-chan-ic {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  color: var(--red);
+}
+.sa-chan-pic {
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+.sa-chan-i {
+  flex: 1;
+  min-width: 0;
+}
+.sa-chan-t {
+  font-family: var(--sans);
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--t1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sa-chan-s {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--t3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sa-link-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 40px;
+  padding: 0 12px;
+  min-width: 0;
+  border: 1px dashed var(--line);
+  border-radius: 10px;
+  background: transparent;
+  font-family: var(--sans);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--t2);
+  cursor: pointer;
+}
+.sa-link-btn:hover {
+  border-style: solid;
+  border-color: var(--red);
+  color: var(--red);
+  background: var(--red-soft);
+}
+.sa-lk-x {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--t3);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.sa-lk-x:hover {
+  background: var(--red-soft);
+  color: var(--red);
+}
+
+/* The credentials tile hosts the shared LinkedCredentials panel, which
+   brings its own .ecard chrome — strip it so the tile isn't a box in a box. */
+.sa-tile > .ecard {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+/* ── footer note ──────────────────────────────────────────────────── */
+.sa-note {
+  margin-top: 18px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: var(--hover);
+  font-family: var(--sans);
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--t2);
+  text-wrap: pretty;
+}
+.sm-link {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  font-family: var(--sans);
+  font-size: 12.5px;
+  font-weight: 650;
+  color: var(--red);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.sa-guide-x:focus-visible,
+.sa-link-btn:focus-visible,
+.sa-lk-x:focus-visible,
+.sa-reroll:focus-visible,
+.sa-opt:focus-visible,
+.sa-sel:focus-visible,
+.sm-link:focus-visible {
+  outline: 2px solid var(--red);
+  outline-offset: 2px;
+}

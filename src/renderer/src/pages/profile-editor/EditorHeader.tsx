@@ -13,7 +13,8 @@ export function EditorHeader({
   saving,
   canSave,
   onSave,
-  onLeave
+  onLeave,
+  leading
 }: {
   isNew: boolean
   profile: ProfileRow | null
@@ -23,6 +24,9 @@ export function EditorHeader({
   // Parent injects a guarded navigation so dirty-state confirms can
   // intercept before the user loses unsaved edits.
   onLeave: (to: string) => void
+  // Rendered before Cancel — the Simple/Advanced switch, and anything
+  // else that belongs to the editor rather than to one card.
+  leading?: React.ReactNode
 }): React.ReactElement {
   const os: OS | undefined =
     profile?.platform === 'macos' ? 'mac' : profile?.platform === 'windows' ? 'win' : undefined
@@ -51,6 +55,7 @@ export function EditorHeader({
         </div>
       </div>
       <div className="editor-top-r">
+        {leading}
         <Button variant="ghost" onClick={() => onLeave('/profiles')}>
           Cancel
         </Button>
