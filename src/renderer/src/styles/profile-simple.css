@@ -58,10 +58,6 @@
 }
 /* The shared GroupSelect renders its own control; keep it compact and
    unboxed so the hero line reads as text, per the design. */
-.sa-grp-wrap {
-  min-width: 160px;
-  max-width: 240px;
-}
 .sa-code {
   font-family: var(--mono);
 }
@@ -232,25 +228,125 @@
   flex-shrink: 0;
 }
 
-/* The pool picker is rendered INLINE (not as a popover): it carries its
-   own search + filter chips and is far taller than a dropdown should be. */
-.sa-px-inline {
+/* ── proxy / group / authenticator popover ────────────────────────── */
+.sa-px {
+  position: relative;
+  min-width: 0;
+}
+.sa-px-pop {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  min-width: 240px;
+  background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 12px;
-  padding: 12px;
-  background: var(--panel-2);
+  box-shadow: var(--shadow-pop);
+  overflow: hidden;
 }
-.sa-px-clear {
+.sa-px-pop.wide {
+  width: 306px;
+  right: auto;
+}
+.sa-px-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--line);
+}
+.sa-px-search svg {
+  width: 14px;
+  height: 14px;
+  color: var(--t3);
+  flex-shrink: 0;
+}
+.sa-px-search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--t1);
+  outline: none;
+}
+.sa-px-list {
+  max-height: 220px;
+  overflow-y: auto;
+  padding: 5px;
+}
+.sa-px-opt {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 9px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+.sa-px-opt.col {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+.sa-px-opt:hover {
+  background: var(--hover);
+}
+.sa-px-opt.on {
+  background: var(--red-soft);
+}
+.sa-px-ip {
+  font-family: var(--mono);
+  font-size: 12.5px;
+  color: var(--t1);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+.sa-px-ip.sans {
+  font-family: var(--sans);
+}
+.sa-px-loc {
+  font-family: var(--sans);
+  font-size: 11.5px;
+  color: var(--t3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sa-px-ck {
+  margin-inline-start: auto;
+  display: grid;
+  place-items: center;
+  color: var(--red);
+}
+.sa-px-ck svg {
+  width: 13px;
+  height: 13px;
+}
+.sa-px-empty {
+  padding: 14px 10px;
+  text-align: center;
+  font-family: var(--sans);
+  font-size: 12.5px;
+  color: var(--t3);
+}
+.sa-px-clear,
+.sa-px-new {
   display: flex;
   align-items: center;
   gap: 7px;
   width: 100%;
-  margin-top: 10px;
-  padding: 9px 10px;
+  padding: 10px 12px;
   border: 0;
   border-top: 1px solid var(--line);
-  border-radius: 0 0 8px 8px;
   background: transparent;
+  text-align: left;
   font-family: var(--sans);
   font-size: 12.5px;
   font-weight: 600;
@@ -258,7 +354,62 @@
   cursor: pointer;
 }
 .sa-px-clear:hover {
+  background: var(--hover);
   color: var(--red);
+}
+.sa-px-new {
+  background: var(--hover);
+  color: var(--t1);
+}
+.sa-px-new:hover {
+  background: var(--red-soft);
+  color: var(--red);
+}
+.sa-px-new svg,
+.sa-px-clear svg {
+  width: 13px;
+  height: 13px;
+  flex-shrink: 0;
+}
+
+/* one-click "use a spare proxy" shortcut */
+.sa-assign {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  height: 38px;
+  padding: 0 12px;
+  border: 1px dashed var(--line);
+  border-radius: 10px;
+  background: transparent;
+  font-family: var(--sans);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--t1);
+  cursor: pointer;
+  transition-property: background-color, border-color;
+  transition-duration: 0.13s;
+}
+.sa-assign:hover:not(:disabled) {
+  border-style: solid;
+  background: var(--hover);
+}
+.sa-assign:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+.sa-assign svg {
+  color: var(--t3);
+  flex-shrink: 0;
+}
+.sa-assign > span {
+  margin-left: auto;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--t3);
+  flex-shrink: 0;
 }
 
 .sa-pick {
@@ -441,13 +592,385 @@
   color: var(--red);
 }
 
-/* The credentials tile hosts the shared LinkedCredentials panel, which
-   brings its own .ecard chrome — strip it so the tile isn't a box in a box. */
-.sa-tile > .ecard {
-  padding: 0;
+/* ── linked credentials: three fields side by side ────────────────── */
+.sa-cred {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+@media (max-width: 720px) {
+  .sa-cred {
+    grid-template-columns: 1fr;
+  }
+}
+.sa-cred-f {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  position: relative;
+}
+.sa-cred-f label {
+  font-family: var(--sans);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--t2);
+}
+.sa-grp-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg);
+  cursor: pointer;
+}
+.sa-grp-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+.sa-grp-v {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  font-family: var(--sans);
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--t1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sa-grp-btn svg {
+  width: 14px;
+  height: 14px;
+  color: var(--t3);
+  flex-shrink: 0;
+}
+.sa-linked {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 8px 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg);
+}
+.sa-lk-ic {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+.sa-lk-ic svg {
+  width: 13px;
+  height: 13px;
+}
+.sa-lk-ic.au {
+  background: var(--green-soft, rgba(22, 160, 106, 0.12));
+  color: var(--green, #16a06a);
+}
+.sa-lk-v {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--sans);
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--t1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* link/add popover: tabs + inline form */
+.sa-ptabs {
+  display: flex;
+  gap: 2px;
+  padding: 6px;
+  background: var(--hover);
+  border-bottom: 1px solid var(--line);
+}
+.sa-ptab {
+  flex: 1;
+  height: 28px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  font-family: var(--sans);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--t3);
+  cursor: pointer;
+}
+.sa-ptab:hover {
+  color: var(--t1);
+}
+.sa-ptab.on {
+  background: var(--panel);
+  color: var(--t1);
+  box-shadow: var(--shadow);
+}
+.sa-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 13px;
+}
+.sa-ff {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.sa-ff label {
+  font-family: var(--sans);
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--t2);
+}
+.sa-inp {
+  height: 36px;
+  padding: 0 11px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--bg);
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--t1);
+  outline: none;
+}
+.sa-inp:focus {
+  border-color: var(--red);
+}
+.sa-inp.mono {
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+}
+.sa-inp.flex {
+  flex: 1;
+  min-width: 0;
+  height: 40px;
+}
+.sa-sel.plain {
+  height: 36px;
+  border-radius: 9px;
+  font-family: var(--sans);
+  font-size: 13px;
+}
+.sa-fhint {
+  font-family: var(--sans);
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--t3);
+}
+.sa-form-go {
+  height: 38px;
+  border: 0;
+  border-radius: 9px;
+  background: var(--red);
+  color: #fff;
+  font-family: var(--sans);
+  font-size: 13px;
+  font-weight: 650;
+  cursor: pointer;
+}
+.sa-form-go:hover:not(:disabled) {
+  background: var(--red-hover);
+}
+.sa-form-go:disabled {
+  background: var(--hover);
+  color: var(--t4);
+  cursor: not-allowed;
+}
+.sa-form-go.inline {
+  height: 40px;
+  padding: 0 16px;
+  flex-shrink: 0;
+}
+.sa-chan-add {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ── tags: loose chips + add popover ──────────────────────────────── */
+.sm-tags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.sm-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.sm-tag button {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--t3);
+  cursor: pointer;
+}
+.sm-tag button:hover {
+  background: var(--red-soft);
+  color: var(--red);
+}
+.sm-tag button svg {
+  width: 11px;
+  height: 11px;
+}
+.sm-tag-add {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 10px;
+  border: 1px dashed var(--line);
+  border-radius: 999px;
+  background: transparent;
+  font-family: var(--sans);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--t3);
+  cursor: pointer;
+}
+.sm-tag-add:hover {
+  border-style: solid;
+  border-color: var(--red);
+  color: var(--red);
+  background: var(--red-soft);
+}
+.sm-tag-add svg {
+  width: 12px;
+  height: 12px;
+}
+.sa-tg {
+  position: relative;
+  display: inline-flex;
+}
+.sa-tg-pop {
+  position: absolute;
+  z-index: 60;
+  top: calc(100% + 6px);
+  left: 0;
+  width: 244px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: var(--shadow-pop);
+  overflow: hidden;
+}
+.sa-tg-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 10px;
+  max-height: 168px;
+  overflow-y: auto;
+}
+.sa-tg-opt {
   border: 0;
   background: transparent;
-  box-shadow: none;
+  padding: 0;
+  cursor: pointer;
+  border-radius: 999px;
+}
+.sa-tg-opt:hover {
+  opacity: 0.75;
+}
+.sa-tg-new {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 0;
+  border-top: 1px solid var(--line);
+  background: var(--hover);
+  font-family: var(--sans);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--t1);
+  text-align: left;
+  cursor: pointer;
+}
+.sa-tg-new:hover {
+  background: var(--red-soft);
+  color: var(--red);
+}
+.sa-tg-new svg {
+  width: 13px;
+  height: 13px;
+  flex-shrink: 0;
+}
+.sa-tg-tones {
+  display: inline-flex;
+  gap: 4px;
+  margin-left: auto;
+}
+.sa-tg-tone {
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  box-shadow: inset 0 0 0 10px currentColor;
+  cursor: pointer;
+}
+.sa-tg-tone.on {
+  border-color: var(--t1);
+}
+
+/* ── "New here?" header button ────────────────────────────────────── */
+.sa-help-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel);
+  font-family: var(--sans);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--t2);
+  cursor: pointer;
+}
+.sa-help-btn:hover {
+  color: var(--red);
+  border-color: var(--red);
+  background: var(--red-soft);
+}
+.sa-help-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* ── hero group select ────────────────────────────────────────────── */
+.sa-grp {
+  border: 0;
+  background: transparent;
+  font-family: var(--sans);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--t2);
+  cursor: pointer;
+  padding: 3px 6px;
+  border-radius: 6px;
+}
+.sa-grp:hover {
+  background: var(--hover);
+  color: var(--t1);
 }
 
 /* ── footer note ──────────────────────────────────────────────────── */

@@ -1,7 +1,7 @@
 import * as React from 'react'
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { AlertCircle } from 'lucide-react'
+import { AlertCircle, HelpCircle } from 'lucide-react'
 import { useWorkspace } from '@/store/workspace'
 import { useHasPermission } from '@/lib/permissions'
 import { Tab } from './profile-editor/parts'
@@ -16,7 +16,9 @@ import { rowToForm } from './profile-editor/types'
 import { SimpleEditor } from './profile-editor/SimpleEditor'
 import {
   readEditorMode,
+  readGuideSeen,
   storeEditorMode,
+  storeGuideSeen,
   type EditorMode
 } from './profile-editor/simpleEditorState'
 import { listGroups, type GroupRow } from '@/lib/groups'
@@ -91,9 +93,14 @@ function ProfileEditorInner(): React.ReactElement {
       cancelled = true
     }
   }, [workspace])
-  const groupName = profile?.group_id
-    ? (groups.find((g) => g.id === profile.group_id)?.name ?? '')
-    : ''
+  // The plain-words guide shows until dismissed once; the header's
+  // "New here?" button brings it back on demand, which is why the state
+  // lives here rather than inside SimpleEditor.
+  const [guideOpen, setGuideOpen] = useState(() => !readGuideSeen())
+  const onGuideChange = (open: boolean): void => {
+    setGuideOpen(open)
+    if (!open) storeGuideSeen()
+  }
 
   // Cards register their dirty state via useDirtyGuard so we can warn
   // on route-leave, and register savers via useRegisterSaver so the
@@ -189,19 +196,33 @@ function ProfileEditorInner(): React.ReactElement {
         onLeave={guardedNavigate}
         leading={
           !isNew && (
-            <div className="vw-switch" role="group" aria-label="Editor detail level">
-              {(['simple', 'advanced'] as EditorMode[]).map((m) => (
+            <>
+              {simple && (
                 <button
-                  key={m}
                   type="button"
-                  className={'vw-btn' + (editorMode === m ? ' on' : '')}
-                  aria-pressed={editorMode === m}
-                  onClick={() => setMode(m)}
+                  className="sa-help-btn"
+                  aria-expanded={guideOpen}
+                  aria-controls="sa-guide-panel"
+                  onClick={() => onGuideChange(!guideOpen)}
                 >
-                  {m === 'simple' ? 'Simple' : 'Advanced'}
+                  <HelpCircle />
+                  New here?
                 </button>
-              ))}
-            </div>
+              )}
+              <div className="vw-switch" role="group" aria-label="Editor detail level">
+                {(['simple', 'advanced'] as EditorMode[]).map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    className={'vw-btn' + (editorMode === m ? ' on' : '')}
+                    aria-pressed={editorMode === m}
+                    onClick={() => setMode(m)}
+                  >
+                    {m === 'simple' ? 'Simple' : 'Advanced'}
+                  </button>
+                ))}
+              </div>
+            </>
           )
         }
       />
@@ -248,7 +269,9 @@ function ProfileEditorInner(): React.ReactElement {
                 form={form}
                 setForm={setForm}
                 canEdit={canEdit}
-                groupName={groupName}
+                groups={groups}
+                guideOpen={guideOpen}
+                onGuideChange={onGuideChange}
                 onProfileSaved={(p) => data.setProfile(p)}
                 onToast={showToast}
                 onGoAdvanced={() => setMode('advanced')}
