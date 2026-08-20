@@ -83,8 +83,14 @@ export function AskBar({
   // Applies validated intents in order and returns a human list of what
   // changed. Row writes are sequential on purpose: they all UPDATE the same
   // row, so running them in parallel would race and the last write would win.
-  const applyIntents = async (intents: PatchIntent[]): Promise<string[]> => {
+  // Returns both what changed and what was already true — "asked for macOS,
+  // nothing happened" is indistinguishable from a broken feature unless the
+  // bar can say which it was.
+  const applyIntents = async (
+    intents: PatchIntent[]
+  ): Promise<{ changes: string[]; noops: string[] }> => {
     const changes: string[] = []
+    const noops: string[] = []
     let nextForm = form
     let row = profile
 
@@ -93,7 +99,12 @@ export function AskBar({
         case 'set_os': {
           const label = it.os === 'macos' ? 'macOS' : 'Windows'
           const already = (row.platform ?? '').includes('mac') === (it.os === 'macos')
-          if (already) break
+          // Say so rather than silently doing nothing — "asked for macOS,
+          // nothing happened" is indistinguishable from a broken feature.
+          if (already) {
+            noops.push(`Device is already ${label}`)
+            break
+          }
           // Same path as the Device tile — never a bare platform write.
           row = await updateProfile(row.id, newFingerprintPatch(it.os, row.brand_version))
           changes.push(`Device → ${label}`)
@@ -119,7 +130,10 @@ export function AskBar({
           break
         }
         case 'clear_proxy': {
-          if (!row.proxy_host) break
+          if (!row.proxy_host) {
+            noops.push('There is no proxy to remove')
+            break
+          }
           row = await clearProfileProxy(row.id)
           changes.push('Proxy → none')
           break
@@ -130,7 +144,10 @@ export function AskBar({
           break
         }
         case 'set_optimized': {
-          if (row.google_optimized === it.on) break
+          if (row.google_optimized === it.on) {
+            noops.push(`Optimized for YouTube is already ${it.on ? 'on' : 'off'}`)
+            break
+          }
           row = await updateProfile(row.id, optimizedPatch(it.on))
           changes.push(`Optimized for YouTube → ${it.on ? 'on' : 'off'}`)
           break
@@ -168,7 +185,7 @@ export function AskBar({
 
     if (nextForm !== form) setForm(nextForm)
     if (row !== profile) onProfileSaved(row)
-    return changes
+    return { changes, noops }
   }
 
   const run = async (text: string): Promise<void> => {
@@ -195,12 +212,23 @@ export function AskBar({
         tags: allTags
       })
       const parsed = await askProfilePatch(t, context)
-      const changes = await applyIntents(parsed.intents)
+      const { changes, noops } = await applyIntents(parsed.intents)
       setQ('')
       if (changes.length) {
         setDone({ changes, snap })
         setOpen(false)
         onToast('info', `${changes.length} change${changes.length === 1 ? '' : 's'} applied`)
+      } else if (noops.length) {
+        // Understood, but the profile is already in that state.
+        onToast('info', noops.join(' · '))
+      } else if (parsed.chatModeResponse) {
+        // The endpoint answered in chat shape, which means the assistant
+        // function is deployed WITHOUT profile-patch mode. Name the cause —
+        // otherwise this is indistinguishable from "the bar ignores me".
+        onToast(
+          'error',
+          'The assistant is answering in chat mode. Deploy the updated assistant function (supabase functions deploy assistant) to enable the AskBar.'
+        )
       } else {
         onToast(
           'info',

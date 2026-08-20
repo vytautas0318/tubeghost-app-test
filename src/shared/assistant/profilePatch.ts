@@ -41,6 +41,11 @@ export interface ParsedPatch {
   // it could not turn the request into changes.
   reply?: string
   errors: string[]
+  // True when the response is shaped like the CHAT assistant's (a "plan" or
+  // a bare "reply", no "changes" key at all). That is the signature of the
+  // edge function running without the profile-patch mode deployed, which
+  // would otherwise look like "the AskBar just ignores me".
+  chatModeResponse?: boolean
 }
 
 const str = (v: unknown): string => (typeof v === 'string' ? v.trim() : '')
@@ -72,8 +77,9 @@ export function parsePatchResponse(raw: unknown): ParsedPatch {
   if (raw == null || typeof raw !== 'object') {
     return { intents: [], errors: ['The assistant returned nothing usable.'] }
   }
-  const r = raw as { changes?: unknown; reply?: unknown }
+  const r = raw as { changes?: unknown; reply?: unknown; plan?: unknown }
   const reply = str(r.reply) || undefined
+  const chatModeResponse = !('changes' in (r as object)) && ('plan' in (r as object) || !!reply)
   const rawList = Array.isArray(r.changes) ? r.changes.slice(0, MAX_INTENTS) : []
   const intents: PatchIntent[] = []
 
@@ -146,5 +152,5 @@ export function parsePatchResponse(raw: unknown): ParsedPatch {
     }
   })
 
-  return { intents, reply, errors }
+  return { intents, reply, errors, chatModeResponse }
 }

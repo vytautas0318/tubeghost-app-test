@@ -45,9 +45,9 @@ describe('parsePatchResponse', () => {
     expect(parsePatchResponse({ changes: [{ kind: 'set_optimized' }] }).intents).toEqual([
       { kind: 'set_optimized', on: true }
     ])
-    expect(
-      parsePatchResponse({ changes: [{ kind: 'set_optimized', on: false }] }).intents
-    ).toEqual([{ kind: 'set_optimized', on: false }])
+    expect(parsePatchResponse({ changes: [{ kind: 'set_optimized', on: false }] }).intents).toEqual(
+      [{ kind: 'set_optimized', on: false }]
+    )
   })
 
   it('caps runaway names and de-duplicates tags', () => {
@@ -79,5 +79,24 @@ describe('parsePatchResponse', () => {
     expect(parsePatchResponse(null).errors.length).toBe(1)
     expect(parsePatchResponse('nope').errors.length).toBe(1)
     expect(parsePatchResponse({ changes: 'not-an-array' }).intents).toEqual([])
+  })
+})
+
+describe('chat-mode detection', () => {
+  it('flags a plan-shaped response (function deployed without profile-patch)', () => {
+    const r = parsePatchResponse({ plan: { summary: 'x', steps: [] } })
+    expect(r.chatModeResponse).toBe(true)
+    expect(r.intents).toEqual([])
+  })
+
+  it('flags a bare prose reply', () => {
+    expect(parsePatchResponse({ reply: 'Sure, I can help.' }).chatModeResponse).toBe(true)
+  })
+
+  it('does NOT flag a real patch response, even an empty one', () => {
+    expect(parsePatchResponse({ changes: [] }).chatModeResponse).toBe(false)
+    expect(parsePatchResponse({ changes: [], reply: 'Nothing matched.' }).chatModeResponse).toBe(
+      false
+    )
   })
 })

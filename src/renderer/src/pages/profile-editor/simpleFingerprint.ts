@@ -32,11 +32,17 @@ export type FingerprintPatch = Parameters<typeof updateProfile>[1]
  */
 export function newFingerprintPatch(
   platform: string,
-  brandVersionMajor?: string | null
+  brandVersion?: string | null
 ): FingerprintPatch {
+  // Callers hand us profile.brand_version, which is the full quad
+  // ("150.0.0.0"), but the generator wants the MAJOR — it appends ".0.0.0"
+  // itself. Passing the quad through produced "150.0.0.0.0.0.0" and stamped
+  // that into the user agent. Narrow it here so no call site can get it
+  // wrong.
+  const major = (brandVersion ?? '').split('.')[0] || undefined
   const r = generateRandomFingerprint({
     platform,
-    brand_version_major: brandVersionMajor ?? undefined
+    brand_version_major: major
   })
   return {
     fingerprint_seed: r.fingerprint_seed,

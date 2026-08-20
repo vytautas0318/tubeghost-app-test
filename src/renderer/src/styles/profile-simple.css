@@ -136,10 +136,27 @@
 }
 
 /* ── tiles ────────────────────────────────────────────────────────── */
+/* Three narrow tiles across (Proxy · Device & engine · Fingerprint), with
+   the wide tiles spanning the row.
+   NOT the design's `repeat(auto-fit, minmax(min(100%, 200px), 1fr))`: at this
+   layout's 860px that resolves to FOUR 204px tracks, and because the wide
+   tiles span `1 / -1` the empty fourth track is occupied — so auto-fit can't
+   collapse it and row one ends in a dead cell with the tiles squeezed. Fixing
+   the count keeps the row full at every width. */
 .sa-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 14px;
+}
+@media (max-width: 760px) {
+  .sa-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 520px) {
+  .sa-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 .sa-tile {
   display: flex;
