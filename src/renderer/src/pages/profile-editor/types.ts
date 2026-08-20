@@ -17,4 +17,3 @@ export function rowToForm(row: ProfileRow | null): FormState {
     tags: row?.tags ?? []
   }
 }
-

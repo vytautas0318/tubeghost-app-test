@@ -4,10 +4,17 @@
 // config so the marketing copy can never drift from what the toggle does.
 //
 // Goal: a profile whose fingerprint is internally consistent with its
-// proxy IP and never leaks the real device — no field left on "Real".
+// proxy IP.
+//
+// DELIBERATELY EXCLUDES webgl_mode. Forcing WebGL to Custom writes a spoofed
+// GPU string while the real GPU still renders canvas/WebGL pixels and reports
+// the real WebGPU adapter — a string-vs-hardware contradiction that reads as
+// "browser tampering" on a same-platform profile. The launcher already refuses
+// to apply a same-platform Custom GPU for this reason; the preset must not ask
+// for one either. Custom GPU remains a cross-platform, opt-in Advanced choice.
 //
 // Launch-consumption reality (see [audio/timezone geo] memory notes):
-//   • WebRTC=forward, WebGL=custom, timezone=based_on_ip → fully consumed.
+//   • WebRTC=forward, timezone=based_on_ip → fully consumed.
 //   • language=based_on_ip → coarse country→language, renderer path only.
 //   • location=based_on_ip → stored, but NOT yet emitted as a chromium
 //     flag (flag-builder.ts has no geolocation surface — explicit TODO).
@@ -23,8 +30,7 @@ export interface OptimizedPresetFields {
   language_mode: 'based_on_ip'
   location_mode: 'based_on_ip'
   display_language_mode: 'based_on_language'
-  webgl_mode: 'custom'
-  // WebGPU follows WebGL so the GPU surface stays coherent and off "Real".
+  // WebGPU follows WebGL so the GPU surface stays coherent.
   webgpu_mode: 'based_on_webgl'
 }
 
@@ -34,7 +40,6 @@ export const OPTIMIZED_PRESET: OptimizedPresetFields = {
   language_mode: 'based_on_ip',
   location_mode: 'based_on_ip',
   display_language_mode: 'based_on_language',
-  webgl_mode: 'custom',
   webgpu_mode: 'based_on_webgl'
 }
 
@@ -46,7 +51,6 @@ const PRESET_EXPLAIN: Record<keyof OptimizedPresetFields, string> = {
   location_mode: 'Geolocation matched to your proxy IP',
   display_language_mode: 'Display language follows the language setting',
   webrtc_mode: 'WebRTC forwarded so only the proxy IP leaks',
-  webgl_mode: 'WebGL / GPU masked (never the real device)',
   webgpu_mode: 'WebGPU kept coherent with WebGL'
 }
 
@@ -68,11 +72,35 @@ export const OPTIMIZED_TOOLTIP =
 // Short bullet list for a richer help surface if needed.
 export const OPTIMIZED_BULLETS = Object.values(PRESET_EXPLAIN)
 
-// True when `form` currently matches every preset-controlled field. Used to
-// derive the toggle's on/off state so the label never misrepresents reality:
-// a manual edit to any controlled field immediately flips it off/partial.
+// True when `form` currently matches every preset-controlled field.
+//
+// NOTE: this is NOT sufficient on its own to drive the toggle. Since the
+// preset stopped controlling webgl_mode its fields are identical to the app's
+// safe defaults, so a brand-new profile matches without the user ever having
+// opted in — and "off" would have no state to express, leaving the switch
+// stuck on. Callers must AND this with the stored `google_optimized` flag
+// (see isOptimizedOn) so turning it off is expressible and survives a save.
 export function matchesOptimized(
   form: Pick<Record<keyof OptimizedPresetFields, string>, keyof OptimizedPresetFields>
 ): boolean {
   return OPTIMIZED_CONTROLLED_FIELDS.every((k) => form[k] === OPTIMIZED_PRESET[k])
+}
+
+/**
+ * The toggle's true on/off state: the user opted in AND no controlled field
+ * has since been hand-edited away from the preset.
+ *
+ * Two conditions because they answer different questions — the stored flag is
+ * intent ("did the user ask for this?"), the field match is reality ("is it
+ * still true?"). Either alone misrepresents the profile: intent alone would
+ * keep claiming "optimized" after someone changed the timezone by hand, and
+ * reality alone can't distinguish "opted in" from "happens to match the
+ * defaults", which is what made the switch impossible to turn off.
+ */
+export function isOptimizedOn(
+  form: Pick<Record<keyof OptimizedPresetFields, string>, keyof OptimizedPresetFields> & {
+    google_optimized?: boolean | null
+  }
+): boolean {
+  return form.google_optimized === true && matchesOptimized(form)
 }

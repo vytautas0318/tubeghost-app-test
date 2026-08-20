@@ -41,7 +41,8 @@ export function ProxyCustomMode({
     <>
       {testResult?.ok && (
         <div className="mb-3 px-3 py-2 text-xs bg-[var(--green-soft)] text-[var(--green)] rounded-md">
-          ✓ Proxy works · egress <span className="mono">{testResult.egress}</span> · {testResult.ms}ms
+          ✓ Proxy works · egress <span className="mono">{testResult.egress}</span> · {testResult.ms}
+          ms
         </div>
       )}
       {testResult && !testResult.ok && (

@@ -56,13 +56,26 @@ export const ACCENTS: Accent[] = [
   }
 ]
 
+// Which Profiles view the app opens on. 'simple' is the card grid (the default
+// — non-technical users are the majority), 'advanced' the full table. This is
+// the STORED DEFAULT only: toggling the view inside a session is held in React
+// state and deliberately never written back here, so a temporary look at the
+// table doesn't silently change what the app opens on next launch.
+export type ProfileView = 'simple' | 'advanced'
+
 interface PrefsState {
   accent: string // Accent.key
   compactDensity: boolean
   desktopNotifications: boolean
+  defaultProfileView: ProfileView
+  // Simple editor's "New here?" explainer. Shown until the user dismisses it;
+  // the header button re-opens it afterwards. Per-device, like the rest here.
+  simpleGuideDismissed: boolean
   setAccent: (key: string) => void
   setCompactDensity: (v: boolean) => void
   setDesktopNotifications: (v: boolean) => void
+  setDefaultProfileView: (v: ProfileView) => void
+  setSimpleGuideDismissed: (v: boolean) => void
 }
 
 function applyAccent(key: string): void {
@@ -92,6 +105,8 @@ export const usePrefs = create<PrefsState>()(
       accent: 'red',
       compactDensity: false,
       desktopNotifications: true,
+      defaultProfileView: 'simple',
+      simpleGuideDismissed: false,
       setAccent: (key): void => {
         applyAccent(key)
         set({ accent: key })
@@ -102,6 +117,12 @@ export const usePrefs = create<PrefsState>()(
       },
       setDesktopNotifications: (v): void => {
         set({ desktopNotifications: v })
+      },
+      setDefaultProfileView: (v): void => {
+        set({ defaultProfileView: v })
+      },
+      setSimpleGuideDismissed: (v): void => {
+        set({ simpleGuideDismissed: v })
       }
     }),
     {

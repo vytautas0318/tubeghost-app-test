@@ -9,6 +9,8 @@ export default defineConfig({
     environment: 'node',
     include: [
       'src/renderer/src/lib/__tests__/**/*.test.ts',
+      // Pure-logic suites that live beside their page module (batch naming).
+      'src/renderer/src/pages/**/__tests__/**/*.test.ts',
       'src/shared/**/*.test.ts',
       // MCP relay: contract (pure) + api server-libs (crypto, fake-Redis integ).
       'lib/mcp/__tests__/**/*.test.ts',

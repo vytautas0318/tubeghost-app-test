@@ -62,9 +62,7 @@ export function OverviewSidebar({ state }: { state: OverviewState | null }): Rea
   if (!state) {
     return (
       <Section title="Overview">
-        <div className="text-xs text-[var(--t3)]">
-          Loading…
-        </div>
+        <div className="text-xs text-[var(--t3)]">Loading…</div>
       </Section>
     )
   }
@@ -76,17 +74,37 @@ export function OverviewSidebar({ state }: { state: OverviewState | null }): Rea
         ? 'Real'
         : 'Disabled'
   const rows: Array<[string, React.ReactNode]> = [
-    ['Browser', `${state.brand}${state.brand_version_major ? ` ${state.brand_version_major}` : ''}`],
+    [
+      'Browser',
+      `${state.brand}${state.brand_version_major ? ` ${state.brand_version_major}` : ''}`
+    ],
     ['Platform', state.platform],
     ['User-Agent', state.user_agent || 'Auto-derived'],
     ['WebRTC', WEBRTC_LABEL[state.webrtc_mode]],
     ['Timezone', modeValue(state.timezone_mode, state.timezone)],
     ['Language', modeValue(state.language_mode, state.language)],
     ['Screen Resolution', state.screen_resolution || '—'],
-    ['CPU cores', state.cpu_mode === 'real' ? 'Real' : state.hardware_concurrency === '' ? '—' : String(state.hardware_concurrency)],
-    ['RAM', state.ram_mode === 'real' ? 'Real' : state.device_memory === '' ? '—' : `${state.device_memory} GB`],
+    [
+      'CPU cores',
+      state.cpu_mode === 'real'
+        ? 'Real'
+        : state.hardware_concurrency === ''
+          ? '—'
+          : String(state.hardware_concurrency)
+    ],
+    [
+      'RAM',
+      state.ram_mode === 'real'
+        ? 'Real'
+        : state.device_memory === ''
+          ? '—'
+          : `${state.device_memory} GB`
+    ],
     ['WebGL vendor', state.webgl_mode === 'real' ? 'Real (host GPU)' : state.webgl_vendor || '—'],
-    ['WebGL renderer', state.webgl_mode === 'real' ? 'Real (host GPU)' : state.webgl_renderer || '—'],
+    [
+      'WebGL renderer',
+      state.webgl_mode === 'real' ? 'Real (host GPU)' : state.webgl_renderer || '—'
+    ],
     ['WebGPU', webgpuLabel],
     // These rows reflect the (interactive) per-profile toggles. NOTE: for Canvas
     // / WebGL Image / AudioContext / ClientRects the toggle is COSMETIC — the
@@ -105,15 +123,16 @@ export function OverviewSidebar({ state }: { state: OverviewState | null }): Rea
   return (
     <Section
       title="Overview"
-      subtitle={
-        <span className="mono text-[10px]">seed {state.fingerprint_seed}</span>
-      }
+      subtitle={<span className="mono text-[10px]">seed {state.fingerprint_seed}</span>}
     >
       <div className="space-y-1.5 text-[11px]">
         {rows.map(([label, value]) => (
           <div key={label} className="flex justify-between gap-3">
             <span className="text-[var(--t3)] shrink-0">{label}</span>
-            <span className="text-[var(--t1)] text-right truncate min-w-0" title={typeof value === 'string' ? value : undefined}>
+            <span
+              className="text-[var(--t1)] text-right truncate min-w-0"
+              title={typeof value === 'string' ? value : undefined}
+            >
               {value}
             </span>
           </div>

@@ -27,7 +27,6 @@ export { WEBGL_VENDORS, VENDORS_BY_PLATFORM } from './gpu-options'
 export type { WebGLVendor } from './gpu-options'
 export type { DevicePreset } from './devices-catalog'
 
-
 // Build a UA for a platform + version pair. Used by the editor to
 // regenerate user_agent when the user switches platform — without this,
 // a Mac UA can survive a switch to Windows and the resulting
@@ -108,8 +107,22 @@ export function randomRendererFor(vendor: WebGLVendor): string {
 // only (browsers don't expose hostname to JS) — but matches AdsPower's
 // "Akeem's MacBook Pro" default so users see something sensible.
 const FIRST_NAMES = [
-  'Alex', 'Sam', 'Jordan', 'Taylor', 'Morgan', 'Casey', 'Jamie', 'Riley',
-  'Avery', 'Quinn', 'Cameron', 'Drew', 'Reese', 'Skyler', 'Devon', 'Parker'
+  'Alex',
+  'Sam',
+  'Jordan',
+  'Taylor',
+  'Morgan',
+  'Casey',
+  'Jamie',
+  'Riley',
+  'Avery',
+  'Quinn',
+  'Cameron',
+  'Drew',
+  'Reese',
+  'Skyler',
+  'Devon',
+  'Parker'
 ]
 const DEVICE_KINDS_BY_PLATFORM: Record<string, readonly string[]> = {
   windows: ['Desktop', 'PC', 'Laptop', 'ThinkPad', 'XPS', 'Surface'],
@@ -185,12 +198,9 @@ export function generateRandomFingerprint(opts?: {
   // device's platform.
   brand_version_major?: string
 }): RandomFingerprint {
-  const pool = opts?.platform
-    ? DEVICES.filter((d) => d.platform === opts.platform)
-    : DEVICES
+  const pool = opts?.platform ? DEVICES.filter((d) => d.platform === opts.platform) : DEVICES
   const device = pick(pool.length > 0 ? pool : DEVICES)
-  const major =
-    opts?.brand_version_major ?? browserVersionsFor(device.platform)[0] ?? '150'
+  const major = opts?.brand_version_major ?? browserVersionsFor(device.platform)[0] ?? '150'
   // Real Chrome reports the full quad version. We lock the upstream
   // patch to .0.0.0 so all profiles in a workspace look identical
   // for that field — sites can't fingerprint by exact patch.

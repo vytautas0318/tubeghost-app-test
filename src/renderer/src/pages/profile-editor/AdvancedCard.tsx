@@ -43,7 +43,11 @@ function Seg({ value, onChange }: { value: Tri; onChange: (v: Tri) => void }): R
   return (
     <div className="seg">
       {TRISTATE.map((o) => (
-        <button key={o.value} className={'seg-opt' + (value === o.value ? ' on' : '')} onClick={() => onChange(o.value)}>
+        <button
+          key={o.value}
+          className={'seg-opt' + (value === o.value ? ' on' : '')}
+          onClick={() => onChange(o.value)}
+        >
           {o.label}
         </button>
       ))}
@@ -120,13 +124,21 @@ export function AdvancedCard({
           </div>
         </div>
         <div className="ecard-actions">
-          <Button variant="primary" size="sm" icon={<Check size={15} />} onClick={onSave} disabled={!dirty || saving}>
+          <Button
+            variant="primary"
+            size="sm"
+            icon={<Check size={15} />}
+            onClick={onSave}
+            disabled={!dirty || saving}
+          >
             {saving ? 'Saving…' : 'Save'}
           </Button>
         </div>
       </div>
 
-      {error && <div style={{ marginBottom: '12px', fontSize: '12px', color: 'var(--red)' }}>{error}</div>}
+      {error && (
+        <div style={{ marginBottom: '12px', fontSize: '12px', color: 'var(--red)' }}>{error}</div>
+      )}
 
       <div className="fp-row">
         <div className="fp-row-l">Do Not Track</div>
@@ -137,14 +149,20 @@ export function AdvancedCard({
       <div className="fp-row">
         <div className="fp-row-l">Hardware acceleration</div>
         <div className="fp-row-c">
-          <Seg value={form.hardware_acceleration} onChange={(v) => update({ hardware_acceleration: v })} />
+          <Seg
+            value={form.hardware_acceleration}
+            onChange={(v) => update({ hardware_acceleration: v })}
+          />
         </div>
       </div>
       <div className="fp-row">
         <div className="fp-row-l">TLS features</div>
         <div className="fp-row-c">
           <div className="hw-tog">
-            <Toggle checked={form.disable_tls_features} onChange={(v) => update({ disable_tls_features: v })} />
+            <Toggle
+              checked={form.disable_tls_features}
+              onChange={(v) => update({ disable_tls_features: v })}
+            />
             Disable TLS features
           </div>
         </div>
@@ -169,7 +187,9 @@ export function AdvancedCard({
             style={{ minHeight: '92px' }}
             value={form.launch_args}
             onChange={(e) => update({ launch_args: e.target.value })}
-            placeholder={'Extra Chromium args, one per line. e.g.\n--disable-notifications\n--blink-settings=imagesEnabled=false'}
+            placeholder={
+              'Extra Chromium args, one per line. e.g.\n--disable-notifications\n--blink-settings=imagesEnabled=false'
+            }
             spellCheck={false}
           />
         </div>

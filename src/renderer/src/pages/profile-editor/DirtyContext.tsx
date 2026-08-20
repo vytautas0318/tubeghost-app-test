@@ -28,18 +28,12 @@ interface DirtyContextValue {
   dirtyKeys: () => string[]
   registerSaver: (key: string, saver: Saver) => void
   unregisterSaver: (key: string) => void
-  runAllSavers: () => Promise<
-    { ok: true } | { ok: false; key: string; error: string }
-  >
+  runAllSavers: () => Promise<{ ok: true } | { ok: false; key: string; error: string }>
 }
 
 const Ctx = React.createContext<DirtyContextValue | null>(null)
 
-export function DirtyProvider({
-  children
-}: {
-  children: React.ReactNode
-}): React.ReactElement {
+export function DirtyProvider({ children }: { children: React.ReactNode }): React.ReactElement {
   // Refs so we don't re-render the whole tree on every keystroke / save
   // registration.
   const dirtyRef = React.useRef<DirtyMap>({})
@@ -115,21 +109,16 @@ export function useRegisterSaver(key: string, saver: Saver): void {
 export function useDirtyParent(): {
   confirmIfDirty: (action?: string) => boolean
   isAnyDirty: () => boolean
-  runAllSavers: () => Promise<
-    { ok: true } | { ok: false; key: string; error: string }
-  >
+  runAllSavers: () => Promise<{ ok: true } | { ok: false; key: string; error: string }>
 } {
   const ctx = React.useContext(Ctx)
   return {
     confirmIfDirty: (action = 'leave this view') => {
       if (!ctx || !ctx.isAnyDirty()) return true
       const where = ctx.dirtyKeys().join(', ')
-      return window.confirm(
-        `You have unsaved changes in: ${where}.\n\nDiscard them and ${action}?`
-      )
+      return window.confirm(`You have unsaved changes in: ${where}.\n\nDiscard them and ${action}?`)
     },
     isAnyDirty: () => ctx?.isAnyDirty() ?? false,
-    runAllSavers: () =>
-      ctx?.runAllSavers() ?? Promise.resolve({ ok: true } as const)
+    runAllSavers: () => ctx?.runAllSavers() ?? Promise.resolve({ ok: true } as const)
   }
 }

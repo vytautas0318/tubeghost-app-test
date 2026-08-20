@@ -54,12 +54,7 @@ export const VENDORS_BY_PLATFORM: Record<string, readonly WebGLVendor[]> = {
 }
 
 export const WEBGL_RENDERERS_BY_VENDOR: Record<WebGLVendor, string[]> = {
-  'Apple Inc.': [
-    'Apple GPU',
-    'Apple M1',
-    'Apple M2',
-    'Apple M3'
-  ],
+  'Apple Inc.': ['Apple GPU', 'Apple M1', 'Apple M2', 'Apple M3'],
   'Google Inc. (AMD)': [
     'ANGLE (AMD, AMD Radeon RX 7700 XT Direct3D11 vs_5_0 ps_5_0, D3D11)',
     'ANGLE (AMD, AMD Radeon RX 7600 Direct3D11 vs_5_0 ps_5_0, D3D11)',
@@ -110,17 +105,8 @@ export const WEBGL_RENDERERS_BY_VENDOR: Record<WebGLVendor, string[]> = {
     'Intel(R) Iris(TM) Graphics 6100',
     'Intel(R) HD Graphics 4000'
   ],
-  Qualcomm: [
-    'Adreno (TM) 640',
-    'Adreno (TM) 730',
-    'Adreno (TM) 750'
-  ],
-  ARM: [
-    'Mali-G78',
-    'Mali-G710',
-    'Mali-G57',
-    'Mali-G76'
-  ],
+  Qualcomm: ['Adreno (TM) 640', 'Adreno (TM) 730', 'Adreno (TM) 750'],
+  ARM: ['Mali-G78', 'Mali-G710', 'Mali-G57', 'Mali-G76'],
   Mesa: [
     'Mesa Intel(R) UHD Graphics 620 (KBL GT2)',
     'Mesa Intel(R) HD Graphics 530 (SKL GT2)',

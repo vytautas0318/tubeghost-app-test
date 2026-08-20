@@ -76,13 +76,7 @@ export function Field({
   )
 }
 
-export function FpField({
-  label,
-  value
-}: {
-  label: string
-  value: string
-}): React.ReactElement {
+export function FpField({ label, value }: { label: string; value: string }): React.ReactElement {
   return (
     <div>
       <span className="text-[var(--t3)]">{label}</span>

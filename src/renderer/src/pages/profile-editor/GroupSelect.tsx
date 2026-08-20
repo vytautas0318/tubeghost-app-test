@@ -6,7 +6,7 @@
 
 import * as React from 'react'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ChevronDown, Pencil, Plus, Trash2 } from 'lucide-react'
+import { Search, ChevronDown, Pencil, Plus, Trash2 } from 'lucide-react'
 import { createGroup, deleteGroup, listGroups, updateGroup, type GroupRow } from '@/lib/groups'
 import { useHasPermission } from '@/lib/permissions'
 import { GroupCreateRow } from '../profiles-list/GroupCreateRow'
@@ -15,11 +15,19 @@ import { GroupEditRow } from '../profiles-list/GroupEditRow'
 export function GroupSelect({
   workspaceId,
   value,
-  onChange
+  onChange,
+  variant = 'field',
+  searchable = false
 }: {
   workspaceId: string | null
   value: string | null
   onChange: (groupId: string | null) => void
+  // 'field' — boxed input (Advanced + the Simple credentials column).
+  // 'inline' — borderless, sits in the Simple hero's identity line.
+  variant?: 'field' | 'inline'
+  // Simple mode shows a search field in the dropdown (the design's behaviour).
+  // Advanced keeps the plain list, so this defaults off.
+  searchable?: boolean
 }): React.ReactElement {
   const canManage = useHasPermission('groups.create')
   const canEdit = useHasPermission('groups.edit')
@@ -27,6 +35,7 @@ export function GroupSelect({
   const [groups, setGroups] = useState<GroupRow[]>([])
   const [open, setOpen] = useState(false)
   const [creating, setCreating] = useState(false)
+  const [query, setQuery] = useState('')
   const [editingId, setEditingId] = useState<string | null>(null)
   const wrapRef = useRef<HTMLDivElement>(null)
 
@@ -48,12 +57,17 @@ export function GroupSelect({
       if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) {
         setOpen(false)
         setCreating(false)
+        setQuery('')
         setEditingId(null)
       }
     }
     document.addEventListener('mousedown', onDown)
     return () => document.removeEventListener('mousedown', onDown)
   }, [open])
+
+  const visible = query.trim()
+    ? groups.filter((g) => g.name.toLowerCase().includes(query.trim().toLowerCase()))
+    : groups
 
   const selected = value ? (groups.find((g) => g.id === value) ?? null) : null
 
@@ -95,8 +109,12 @@ export function GroupSelect({
     'w-full px-3 py-2 text-sm bg-[var(--panel-2)] border border-[var(--line)] rounded-lg text-[var(--t1)] focus:outline-none focus:ring-2 focus:ring-[var(--red)]/30 flex items-center gap-2 cursor-pointer'
 
   return (
-    <div ref={wrapRef} className="relative">
-      <button type="button" onClick={() => setOpen((v) => !v)} className={inputCls}>
+    <div ref={wrapRef} className={variant === 'inline' ? 'relative sa-grp-wrap' : 'relative'}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className={variant === 'inline' ? 'sa-grp' : inputCls}
+      >
         {selected && (
           <span
             className="w-2 h-2 rounded-full shrink-0"
@@ -113,6 +131,18 @@ export function GroupSelect({
 
       {open && (
         <div className="absolute left-0 right-0 top-full mt-1 z-20 max-h-72 overflow-auto bg-[var(--panel)] border border-[var(--line)] rounded-lg shadow-lg py-1">
+          {searchable && (
+            <div className="sa-px-search">
+              <Search />
+              <input
+                autoFocus
+                value={query}
+                placeholder="Search or create a group…"
+                aria-label="Search groups"
+                onChange={(e) => setQuery(e.target.value)}
+              />
+            </div>
+          )}
           <MenuRow
             label="No group"
             active={value === null}
@@ -121,8 +151,8 @@ export function GroupSelect({
               setOpen(false)
             }}
           />
-          {groups.length > 0 && <div className="my-1 border-t border-[var(--line-2)]" />}
-          {groups.map((g) =>
+          {visible.length > 0 && <div className="my-1 border-t border-[var(--line-2)]" />}
+          {visible.map((g) =>
             editingId === g.id ? (
               <GroupEditRow
                 key={g.id}
