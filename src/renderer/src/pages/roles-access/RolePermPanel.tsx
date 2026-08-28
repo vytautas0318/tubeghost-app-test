@@ -10,7 +10,7 @@ import {
   Zap,
   Users
 } from 'lucide-react'
-import { Button, Toggle } from '@/components/ui'
+import { Button, Toggle } from '@tubeghost/ui'
 import { PERM_SCHEMA, type Level } from './permSchema'
 import { LEVEL_ORDER } from './permMap'
 import { roleIcon, roleTone, toneSoft, toneVar } from './roleVisuals'

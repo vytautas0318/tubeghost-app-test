@@ -1,8 +1,7 @@
+import { Badge, PlatformIcon, AuthTokenRow } from '@tubeghost/ui'
 import * as React from 'react'
 import { MoreVertical, Copy, Check, ChevronDown } from 'lucide-react'
-import { Badge, PlatformIcon } from '@/components/ui'
 import { NavIcon } from '@/components/sidebar/navIcons'
-import type { AuthTokenRow } from '@/lib/authenticator'
 
 // One 2FA account card: platform + handle, live code (click-to-copy), tags,
 // and the assigned-profile chip + countdown ring. Code is computed server-

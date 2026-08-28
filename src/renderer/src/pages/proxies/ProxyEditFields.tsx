@@ -2,11 +2,12 @@ import * as React from 'react'
 import { DrawerSection } from './drawer-parts'
 
 const inputCls =
-  'flex-1 px-3 py-1.5 text-sm bg-[var(--panel)] border border-[var(--line)] rounded-lg text-[var(--t1)] focus:outline-none focus:ring-2 focus:ring-[var(--red)]/30'
-const lblCls =
-  'block text-[10px] font-semibold uppercase tracking-wider text-[var(--t3)] mb-1'
+  'flex-1 min-w-0 px-3 py-1.5 text-sm bg-[var(--panel)] border border-[var(--line)] rounded-lg text-[var(--t1)] focus:outline-none focus:ring-2 focus:ring-[var(--red)]/30'
+const textareaCls =
+  'block w-full px-3 py-1.5 text-sm bg-[var(--panel)] border border-[var(--line)] rounded-lg text-[var(--t1)] focus:outline-none focus:ring-2 focus:ring-[var(--red)]/30 resize-none'
+const lblCls = 'block text-[10px] font-semibold uppercase tracking-wider text-[var(--t3)] mb-1'
 const saveBtn =
-  'px-3 py-1.5 text-xs font-medium bg-[var(--red)] text-white rounded-lg hover:bg-[var(--red-hover)] disabled:opacity-50'
+  'shrink-0 px-3 py-1.5 text-xs font-medium bg-[var(--red)] text-white rounded-lg hover:bg-[var(--red-hover)] disabled:opacity-50'
 
 export function ProxyEditFields({
   label,
@@ -56,12 +57,14 @@ export function ProxyEditFields({
             value={notes}
             onChange={(e) => onNotesChange(e.target.value)}
             rows={3}
-            className={`${inputCls} resize-none`}
+            className={textareaCls}
           />
           {notesDirty && (
-            <button onClick={onSaveNotes} disabled={savingNotes} className={`mt-1.5 ${saveBtn}`}>
-              {savingNotes ? 'Saving…' : 'Save notes'}
-            </button>
+            <div className="mt-2 flex justify-end">
+              <button onClick={onSaveNotes} disabled={savingNotes} className={saveBtn}>
+                {savingNotes ? 'Saving…' : 'Save notes'}
+              </button>
+            </div>
           )}
         </div>
       </div>

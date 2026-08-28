@@ -13,7 +13,7 @@ import {
   type GhostGlasses,
   type GhostHat,
   type GhostHand
-} from '@/components/ghost-avatar-parts'
+} from '@tubeghost/ui'
 
 export interface AvatarConfig {
   color: string

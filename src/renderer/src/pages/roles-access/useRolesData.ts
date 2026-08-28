@@ -20,7 +20,7 @@ import {
   removeRolePermission,
   updateRole,
   type AppRoleRow
-} from '@/lib/roles'
+} from '@tubeghost/ui'
 import { PERM_SCHEMA, seedRole, type PermVal } from './permSchema'
 import { PERM_MAP, diffForRow, keysToCatalog, ladderKeys } from './permMap'
 

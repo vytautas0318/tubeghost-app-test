@@ -3,13 +3,12 @@
 // Mutations delegate to the MemberService (lib/members.ts) — RLS is the
 // source of truth; these callbacks apply optimistic local updates.
 
+import { avatarConfigFrom, MemberResult } from '@tubeghost/ui'
 import { useEffect, useMemo, useState } from 'react'
 import { formatDistanceToNow } from 'date-fns'
 import { getSupabase } from '@/lib/supabase'
 import { getWorkspaceUserDetailsMap, type WorkspaceUserDetails } from '@/lib/users'
-import { avatarConfigFrom } from '@/lib/avatar'
-import * as MemberService from '@/lib/members'
-import type { MemberResult } from '@/lib/members'
+import * as MemberService from '@tubeghost/ui'
 import type { AppRoleRow, MemberRow, MemberStatus, UserRoleRow, ViewMember } from './types'
 
 export interface UseMembersDataResult {

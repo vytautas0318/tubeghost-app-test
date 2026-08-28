@@ -19,7 +19,7 @@ import { useHasPermission } from '@/lib/permissions'
 import { listProfiles, type ProfileRow } from '@/lib/profiles'
 import { listProxies } from '@/lib/proxies'
 import { ChevronLeft, Check } from 'lucide-react'
-import { Button } from '@/components/ui'
+import { Button } from '@tubeghost/ui'
 import { Tab } from './profile-editor/parts'
 import { batchNames, type BatchSpec } from './bulk/batchSpec'
 import { BatchTab, FingerprintTab } from './bulk/BulkTabs'
@@ -49,6 +49,9 @@ export function BulkCreate(): React.ReactElement {
   const [freeProxies, setFreeProxies] = useState(0)
   const { fpBase, updateFpBase, fpPatch } = useSharedFingerprint(spec.platform)
   const [running, setRunning] = useState(false)
+  // Latches once the batch has run. Guards against creating the same batch
+  // twice — the run is not repeatable, so the buttons stay disabled after it.
+  const [done, setDone] = useState(false)
   const [progress, setProgress] = useState(0)
   const [results, setResults] = useState<{
     created: ProfileRow[]
@@ -91,20 +94,25 @@ export function BulkCreate(): React.ReactElement {
   }
 
   const onRun = async (): Promise<void> => {
-    if (!workspace || !canCreate || running) return
+    if (!workspace || !canCreate || running || done) return
     setRunning(true)
     setProgress(0)
-    setResults(
-      await runBulkCreate({
-        rows,
-        workspaceId: workspace.workspace_id,
-        mode,
-        spec,
-        fpPatch,
-        onProgress: () => setProgress((n) => n + 1)
-      })
-    )
+    const r = await runBulkCreate({
+      rows,
+      workspaceId: workspace.workspace_id,
+      mode,
+      spec,
+      fpPatch,
+      onProgress: () => setProgress((n) => n + 1)
+    })
+    setResults(r)
     setRunning(false)
+    // A clean run is finished: leave for the profiles list the way the single
+    // editor does. Staying put invites a second click that silently creates
+    // the same batch again. If anything failed, stay so the per-row errors
+    // stay readable — `done` still blocks a duplicate run of the whole batch.
+    setDone(true)
+    if (r.errors.length === 0) navigate('/profiles')
   }
 
   return (
@@ -142,10 +150,14 @@ export function BulkCreate(): React.ReactElement {
           <Button
             variant="primary"
             icon={<Check size={15} />}
-            disabled={running || rows.length === 0}
+            disabled={running || done || rows.length === 0}
             onClick={() => void onRun()}
           >
-            {running ? `Creating… ${progress}/${rows.length}` : `Create ${rows.length} profiles`}
+            {running
+              ? `Creating… ${progress}/${rows.length}`
+              : done
+                ? 'Created'
+                : `Create ${rows.length} profiles`}
           </Button>
         </div>
       </div>
@@ -193,7 +205,7 @@ export function BulkCreate(): React.ReactElement {
               </span>
               <button
                 onClick={onRun}
-                disabled={running || rows.length === 0}
+                disabled={running || done || rows.length === 0}
                 className="px-3 py-1.5 text-sm font-medium bg-[var(--red)] text-white rounded-lg hover:bg-[var(--red-hover)] disabled:opacity-40 inline-flex items-center gap-1.5"
               >
                 {running ? (

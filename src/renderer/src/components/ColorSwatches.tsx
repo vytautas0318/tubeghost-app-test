@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { TAG_PRESET_COLORS } from '@/lib/tags'
+import { TAG_PRESET_COLORS } from '@tubeghost/ui'
 
 // Preset color swatch row for the tag color picker (shared by the Profiles
 // TagsCell and the Authenticator TagManager). Matches the Groups recolor UI.

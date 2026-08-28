@@ -1,123 +1,168 @@
+// Upgrade configurator — the same graduated plan/cycle math as the marketing
+// pricing page, driven by the shared pricing module, but pre-seeded from live
+// workspace usage and wired to the billing-checkout Edge Function.
+//
+// The plan cards live in UpgradeCards.tsx; this file is the modal shell,
+// accessibility behaviour, and the submit/guard logic.
+
 import * as React from 'react'
 import { useEffect, useRef, useState } from 'react'
-import { Check, X } from 'lucide-react'
-import { Button } from '@/components/ui'
-import {
-  ADDONS_IN_CHECKOUT_ENABLED,
-  money,
-  PLANS,
-  type Cycle,
-  type GhostPlanKey
-} from '@shared/pricing'
-import { startSingleCheckout } from '@/lib/billing-api'
-import { CountStepper, ProfileStepper } from './Steppers'
-import { BundlePicker } from './BundlePicker'
-import { PHONE_BUNDLES, purchasableProxyBundles } from '@shared/addons'
-import { useOwnedProxies } from './useOwnedProxies'
-import { useOrderValidation } from './useOrderValidation'
-import { SEAT_RATE, useUpgradeConfig, type UpgradeUsage } from './useUpgradeConfig'
+import { X, AlertTriangle } from 'lucide-react'
+import type { PlanCycle } from '@shared/pricing'
+import { useUpgradeConfig, type Quote } from './useUpgradeConfig'
+import { StarterCard, TeamCard, EnterpriseCard, AddonNote } from './UpgradeCards'
+import { billingApi, type UpgradePayload } from './billingApi'
+import type { BillingPlan, BillingUsage } from './types'
+import { formatDate, type CurrentSubscription } from './currentPlan'
 
-const CYCLES: [Cycle, string, string | null][] = [
-  ['monthly', 'Monthly', null],
-  ['quarterly', 'Quarterly', '−10%'],
-  ['annual', 'Annual', '2 months free']
+// All three cycles, matching the marketing pricing table.
+// Wording matches the Proxies and Phone ladders exactly — "Save 10%", not
+// "−10%" — so the same discount never reads two ways across the app.
+const CYCLES: [PlanCycle, string, string][] = [
+  ['monthly', 'Monthly', ''],
+  ['quarterly', 'Quarterly', 'Save 10%'],
+  ['annual', 'Annual', 'Save 20%']
 ]
 
-// Copy mirrors TubeGhostMarketing/app/components/PricingTable.tsx so the app
-// and the site describe the same plans. Update both together.
-const STARTER_FEATURES = [
-  '10 anti-detect profiles',
-  'Built-in 2FA authenticator (replaces Google Authenticator)',
-  'Add proxies & numbers'
-]
-const TEAM_FEATURES = [
-  'Profiles that scale with you',
-  `${PLANS.team.seatsIncluded} team members included, add more anytime`,
-  'Roles & access control',
-  'Shared proxies, numbers & authenticators',
-  'Automation & API'
-]
-const ENTERPRISE_FEATURES = ['Unlimited profiles', 'SSO & audit log', 'Dedicated manager']
-
-/** Where "Talk to sales" goes. Enterprise is quoted manually, not self-serve. */
-const SALES_URL = 'https://tubeghost.com/#pricing'
-
-/**
- * Plan chooser + checkout hand-off.
- *
- * Quotes come from the shared pricing module so they match the marketing
- * site exactly, but they are DISPLAY ONLY — the checkout endpoint recomputes
- * from the same module and Stripe charges from its own price objects. A
- * number shown here never determines what someone pays.
- */
 export function UpgradeModal({
   usage,
+  plan,
   workspaceId,
-  currentPlan,
+  currentProfileCount,
   onManageBilling,
   onClose
 }: {
-  usage: UpgradeUsage
+  usage: BillingUsage
+  /** Active subscription, or null while loading / on free. */
+  plan: BillingPlan | null
   workspaceId: string | null
-  /** ghost.workspaces.plan — 'free' | 'starter' | 'team'. */
-  currentPlan?: string | null
-  /** Opens Stripe's portal, where an existing plan is changed. */
-  onManageBilling?: () => void
+  /** null when the live count failed — the local guard is then skipped. */
+  currentProfileCount: number | null
+  /** Opens Stripe's billing portal — where an existing subscription changes. */
+  onManageBilling: () => void
   onClose: () => void
 }): React.ReactElement {
   const cfg = useUpgradeConfig(usage)
-  const { active: ownedProxies } = useOwnedProxies(workspaceId)
-
-  // Checked before payment so predictable failures — out-of-stock proxies, a
-  // bundle that would assign nothing — surface while the selection can still
-  // be changed, rather than after the card is charged.
-  const validation = useOrderValidation({
-    workspaceId,
-    plan: 'team',
-    cycle: cfg.cycle,
-    profiles: cfg.team.profiles,
-    seats: cfg.team.seats,
-    proxies: cfg.addOns.proxies,
-    numbers: cfg.addOns.numbers
-  })
-  const [busy, setBusy] = useState<GhostPlanKey | null>(null)
+  // What the workspace already pays for, in the shape the cards compare
+  // against. A lapsed subscription is not "current" — those customers need to
+  // be able to re-subscribe to the same plan.
+  const current: CurrentSubscription | null =
+    plan && plan.status !== 'canceled'
+      ? {
+          planId: plan.id,
+          profiles: plan.profileLimit,
+          seats: plan.seats,
+          cycle: plan.cycle
+        }
+      : null
+  const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const ref = useRef<HTMLDivElement>(null)
+  const restoreTo = useRef<HTMLElement | null>(null)
 
-  // Escape closes, matching every other modal in the app.
+  // Focus trap + Esc to close + focus restore on unmount.
   useEffect(() => {
+    restoreTo.current = document.activeElement as HTMLElement | null
+    const node = ref.current
+    node?.querySelector<HTMLElement>('button, input')?.focus()
+
     const onKey = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') onClose()
+      if (e.key === 'Escape') {
+        e.stopPropagation()
+        onClose()
+        return
+      }
+      if (e.key !== 'Tab' || !node) return
+      const items = node.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), input:not([disabled]), a[href]'
+      )
+      if (!items.length) return
+      const first = items[0]
+      const last = items[items.length - 1]
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault()
+        last.focus()
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault()
+        first.focus()
+      }
     }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
+    document.addEventListener('keydown', onKey, true)
+    return () => {
+      document.removeEventListener('keydown', onKey, true)
+      restoreTo.current?.focus?.()
+    }
   }, [onClose])
 
-  const start = async (plan: GhostPlanKey): Promise<void> => {
-    if (!workspaceId) {
-      setError('No workspace selected.')
+  /**
+   * Downgrade guard: block a plan the workspace does not fit, on either
+   * profiles or seats, naming exactly what has to change.
+   *
+   * UX only — billing-checkout enforces the same rules server-side. When a
+   * count is unknown (null) we let the request through rather than block on a
+   * guess; the server refuses with an accurate message if it truly doesn't fit.
+   *
+   * Team's steppers floor at the workspace's own usage so they can't produce a
+   * blocked configuration, but Starter is fixed at 10 profiles / 1 seat — so
+   * without this a 4-member workspace clicks "Choose Starter" and gets a bare
+   * 409 from the server with no way to act on it.
+   */
+  const blockedBy = (targetProfiles: number, targetSeats: number): string | null => {
+    if (currentProfileCount != null && currentProfileCount > targetProfiles) {
+      return `You're using ${currentProfileCount} profiles. Delete ${
+        currentProfileCount - targetProfiles
+      } to fit this plan's limit of ${targetProfiles}.`
+    }
+    const seatsUsed = usage.seatsUsed
+    if (seatsUsed != null && seatsUsed > targetSeats) {
+      return targetSeats === 1
+        ? `This is a single-operator plan and your workspace has ${seatsUsed} members. ` +
+            `Remove ${seatsUsed - 1}, or choose Team instead.`
+        : `Your workspace has ${seatsUsed} members but this configuration seats ${targetSeats}.`
+    }
+    return null
+  }
+
+  /**
+   * A workspace that already pays for a plan cannot buy another — Stripe would
+   * create a SECOND subscription and bill for both. Changing an existing one is
+   * what the billing portal is for: it handles proration, upgrades, downgrades
+   * and cancellation, which a fresh Checkout session cannot.
+   *
+   * Free (and lapsed) workspaces still go through checkout, since there is no
+   * subscription to amend.
+   */
+  const hasActivePlan = current != null && current.planId !== 'free'
+
+  const submit = async (
+    planId: string,
+    profiles: number,
+    members: number,
+    q: Quote
+  ): Promise<void> => {
+    if (hasActivePlan) {
+      onManageBilling()
+      onClose()
+      return
+    }
+    const blocked = blockedBy(profiles, members)
+    if (blocked) {
+      setError(blocked)
       return
     }
     setError(null)
-    setBusy(plan)
+    setBusy(planId)
+    const payload: UpgradePayload = {
+      workspaceId: workspaceId ?? '',
+      planId,
+      cycle: cfg.cycle,
+      members,
+      profiles,
+      // Display-only; the server recomputes and refuses on mismatch.
+      quotedCharged: q.charged
+    }
     try {
-      // ONE checkout page. Stripe saves the card without charging; the
-      // webhook then creates a subscription per product (three tables each
-      // need their own subscription id, so one session cannot cover them).
-      await startSingleCheckout({
-        workspaceId,
-        plan,
-        cycle: cfg.cycle,
-        // Ignored for Starter, which has fixed allowances.
-        profiles: cfg.team.profiles,
-        seats: cfg.team.seats,
-        // The add-on selectors live on the Team card only, so a Starter
-        // purchase must not silently carry whatever was configured there.
-        proxies: plan === 'team' ? cfg.addOns.proxies : 0,
-        numbers: plan === 'team' ? cfg.addOns.numbers : 0
-      })
-      // startSingleCheckout navigates to Stripe on success; reaching here
-      // means it resolved without redirecting, so release the button.
+      await billingApi.startUpgrade(payload)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not start checkout.')
     } finally {
@@ -125,294 +170,88 @@ export function UpgradeModal({
     }
   }
 
-  /**
-   * The CTA for a plan card.
-   *
-   * A subscriber's CURRENT plan can't be re-bought — checkout rejects a
-   * second subscription (409 subscription_exists), so offering "Choose" would
-   * dead-end. Changing an existing plan goes through Stripe's portal, which
-   * handles proration; we never build a second subscription alongside the
-   * first.
-   */
-  const planCta = (plan: GhostPlanKey, label: string): React.ReactElement => {
-    if (currentPlan === plan) {
-      return (
-        <Button
-          style={{ width: '100%', justifyContent: 'center', marginTop: '16px' }}
-          disabled
-        >
-          Current plan
-        </Button>
-      )
-    }
-    const subscribed = currentPlan != null && currentPlan !== 'free'
-    // Only Team carries add-ons, so only Team is gated on their validation.
-    const blocked = plan === 'team' && validation.blocked
-    return (
-      <Button
-        variant="primary"
-        style={{ width: '100%', justifyContent: 'center', marginTop: '16px' }}
-        disabled={busy !== null || blocked}
-        title={blocked ? 'Resolve the issues above to continue' : undefined}
-        onClick={() => (subscribed ? onManageBilling?.() : void start(plan))}
-      >
-        {busy === plan ? 'Starting…' : subscribed ? 'Switch plan' : label}
-      </Button>
-    )
-  }
-
-  const priceBlock = (
-    q: { listMonthly: number; monthly: number; billed: number },
-    addOnList: number
-  ): React.ReactElement => (
-    <div className="bill-up-price">
-      {cfg.cycle !== 'monthly' && <s>{money(q.listMonthly)}/mo</s>}
-      <strong>
-        {money(q.monthly)}
-        <i>/mo</i>
-      </strong>
-      <p>
-        {cfg.cycle === 'annual'
-          ? `${money(q.billed)} billed yearly`
-          : cfg.cycle === 'quarterly'
-            ? `${money(q.billed)} billed quarterly`
-            : 'billed monthly'}
-      </p>
-      {/* Make it explicit that the headline figure already includes the
-          add-ons, so the Stripe total is never a surprise. */}
-      {addOnList > 0 && <p className="bill-up-incl">includes add-ons</p>}
-
-      {/* The commitment, stated where the decision is made.
-          Stripe's page is in SETUP mode: its button says "Save", not "Pay",
-          and the amount appears only as small grey text that is easy to
-          miss. This is the last clear chance to show what will be charged,
-          so it must be unmissable here. */}
-      <p className="bill-up-charge">
-        You&apos;ll be charged <strong>{money(q.billed || q.monthly)}</strong>
-        {cfg.cycle === 'annual'
-          ? ' today, then yearly'
-          : cfg.cycle === 'quarterly'
-            ? ' today, then every 3 months'
-            : ' today, then monthly'}
-      </p>
-    </div>
-  )
-
   return (
     <div className="bill-up-backdrop" onClick={onClose}>
       <div
         className="bill-up"
         role="dialog"
         aria-modal="true"
-        aria-label="Choose a plan"
+        aria-labelledby="bill-up-title"
         ref={ref}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="bill-up-head">
           <div>
-            <h2>Choose a plan</h2>
-            <p>Proxies and phone numbers are billed separately by TubeProxies.</p>
+            <h2 id="bill-up-title">Change plan</h2>
+            {/* When a plan is set to cancel, say when access ends — otherwise
+                "Change plan" gives no hint that the current one is expiring. */}
+            <p>Configured from your current workspace usage.</p>
           </div>
           <button className="bill-up-x" onClick={onClose} aria-label="Close">
-            <X size={18} />
+            <X size={17} />
           </button>
         </div>
 
-        <div className="bill-up-cycles">
-          {CYCLES.map(([c, label, save]) => (
-            <button
-              key={c}
-              className={cfg.cycle === c ? 'on' : ''}
-              onClick={() => cfg.setCycle(c)}
-            >
-              {label}
-              {save && <span>{save}</span>}
-            </button>
-          ))}
+        {/* A scheduled cancellation is easy to forget, and "Change plan" gives
+            no hint the current one is ending — so say the date outright. */}
+        {plan?.cancelAtPeriodEnd && plan.currentPeriodEnd && (
+          <div className="bill-up-notice">
+            <AlertTriangle size={15} />
+            <span>
+              Your {plan.name} plan ends on {formatDate(plan.currentPeriodEnd)} — you keep access
+              until then.
+            </span>
+          </div>
+        )}
+
+        {/* Same control as the Proxies and Phone ladders (buy-toggle), so the
+            three pricing surfaces read as one system. */}
+        <div className="buy-toggle-row">
+          <div className="buy-toggle" role="group" aria-label="Billing cycle">
+            {CYCLES.map(([id, label, save]) => (
+              <button
+                key={id}
+                className={'bt-opt' + (cfg.cycle === id ? ' on' : '')}
+                aria-pressed={cfg.cycle === id}
+                onClick={() => cfg.setCycle(id)}
+              >
+                {label}
+                {save && <span className="bt-off">{save}</span>}
+              </button>
+            ))}
+          </div>
         </div>
 
-        {error && <div className="bill-up-err">{error}</div>}
-
-        {/* Add-ons apply to whichever plan is chosen below, so they sit
-            outside the plan cards. Hidden on annual — TubeProxies sells no
-            annual price and one Checkout session can't mix intervals. */}
-        {cfg.addOns.available ? (
-          <div className="bill-up-addons">
-            <div className="bill-up-addons-h">
-              Add proxies &amp; numbers
-              <em>From TubeProxies · billed together with your plan</em>
-            </div>
-            <div className="bill-up-row">
-              <span>
-                Proxies
-                <em>
-                  {ownedProxies > 0
-                    ? `US static residential · you have ${ownedProxies}`
-                    : 'US static residential'}
-                </em>
-              </span>
-              {/* Bundles at or below what they already hold are omitted:
-                  TubeProxies assigns greatest(0, limit − owned), so those
-                  charge the customer and assign nothing. */}
-              <BundlePicker
-                value={cfg.addOns.proxies}
-                onChange={cfg.addOns.setProxies}
-                options={purchasableProxyBundles(ownedProxies).map((b) => ({
-                  value: b.proxies,
-                  label: `${b.proxies} IP${b.proxies > 1 ? 's' : ''} — ${money(b.monthly)}/mo`
-                }))}
-                label="Proxies"
-              />
-            </div>
-            {validation.issues
-              .filter((i) => i.item === 'proxies')
-              .map((i) => (
-                <div key={i.message} className={'bill-up-issue' + (i.blocking ? ' blocking' : '')}>
-                  {i.message}
-                </div>
-              ))}
-
-            <div className="bill-up-row">
-              <span>
-                Phone numbers<em>US non-VoIP, for 2FA</em>
-              </span>
-              <BundlePicker
-                value={cfg.addOns.numbers}
-                onChange={cfg.addOns.setNumbers}
-                options={PHONE_BUNDLES.map((b) => ({
-                  value: b.numbers,
-                  label: `${b.numbers} number${b.numbers > 1 ? 's' : ''} — ${money(b.monthly)}/mo`
-                }))}
-                label="Phone numbers"
-              />
-            </div>
-
-            {validation.issues
-              .filter((i) => i.item === 'numbers')
-              .map((i) => (
-                <div key={i.message} className={'bill-up-issue' + (i.blocking ? ' blocking' : '')}>
-                  {i.message}
-                </div>
-              ))}
+        {error && (
+          <div className="bill-up-err" role="alert">
+            <AlertTriangle size={14} />
+            <span>{error}</span>
           </div>
-        ) : ADDONS_IN_CHECKOUT_ENABLED ? (
-          // Switch is on, so this is the annual-cycle exclusion.
-          <div className="bill-up-addons muted">
-            Proxies and phone numbers aren&apos;t available on annual billing — choose monthly or
-            quarterly to add them, or buy them separately any time.
-          </div>
-        ) : null}
+        )}
 
         <div className="bill-up-grid">
-          {/* STARTER — fixed allowances, nothing to configure. */}
-          <div className={'bill-up-card' + (currentPlan === 'starter' ? ' current' : '')}>
-            <h3>
-              Starter
-              {currentPlan === 'starter' && <span className="bill-up-now">Current</span>}
-            </h3>
-            <p className="bill-up-tag">To get going. One operator, ten clean channels.</p>
-            <div className="bill-up-row">
-              <span>
-                Profiles<em>1 seat · solo</em>
-              </span>
-              <span className="bill-up-fixed">10</span>
-            </div>
-            {priceBlock(cfg.total('starter'), cfg.addOns.list)}
-            {planCta('starter', 'Choose Starter')}
-            <ul className="bill-up-feats">
-              {STARTER_FEATURES.map((f) => (
-                <li key={f}>
-                  <Check size={14} />
-                  {f}
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          {/* TEAM — configurable profiles + seats. */}
-          <div
-            className={'bill-up-card featured' + (currentPlan === 'team' ? ' current' : '')}
-          >
-            {currentPlan !== 'team' && <span className="pg-sticker">★ CROWD FAVOURITE</span>}
-            <h3>
-              Team
-              {currentPlan === 'team' && <span className="bill-up-now">Current</span>}
-            </h3>
-            <p className="bill-up-tag">For growing creators &amp; teams. Profiles that scale.</p>
-            <div className="bill-up-row">
-              <span>
-                Profiles
-                <em>
-                  {cfg.team.atMax
-                    ? 'Need more? Talk to sales'
-                    : `${money(cfg.team.perProfile)}/profile · scales with volume`}
-                </em>
-              </span>
-              <ProfileStepper value={cfg.team.profiles} onChange={cfg.team.setProfiles} />
-            </div>
-            <div className="bill-up-row">
-              <span>
-                Team members
-                <em>
-                  {PLANS.team.seatsIncluded} included · {money(SEAT_RATE)}/ea after
-                </em>
-              </span>
-              <CountStepper
-                value={cfg.team.seats}
-                onChange={cfg.team.setSeats}
-                label="Team members"
-                min={PLANS.team.seatsIncluded}
-              />
-            </div>
-            {priceBlock(cfg.total('team'), cfg.addOns.list)}
-            {planCta('team', 'Choose Team')}
-            <ul className="bill-up-feats">
-              {TEAM_FEATURES.map((f) => (
-                <li key={f}>
-                  <Check size={14} />
-                  {f}
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          {/* ENTERPRISE — above PF_MAX there is no self-serve price, so this
-              card quotes nothing and hands off to sales. */}
-          <div className="bill-up-card">
-            <h3>Enterprise</h3>
-            <p className="bill-up-tag">For agencies &amp; networks running fleets.</p>
-            <div className="bill-up-row">
-              <span>
-                Profiles<em>Custom seats &amp; volume pricing</em>
-              </span>
-              <span className="bill-up-fixed">1,000+</span>
-            </div>
-            <div className="bill-up-price">
-              <strong>Let&apos;s talk</strong>
-              <p>Tailored to your volume.</p>
-            </div>
-            <Button
-              style={{ width: '100%', justifyContent: 'center', marginTop: '16px' }}
-              onClick={() => window.open(SALES_URL, '_blank', 'noopener,noreferrer')}
-            >
-              Talk to sales
-            </Button>
-            <ul className="bill-up-feats">
-              {ENTERPRISE_FEATURES.map((f) => (
-                <li key={f}>
-                  <Check size={14} />
-                  {f}
-                </li>
-              ))}
-            </ul>
-          </div>
+          <StarterCard
+            cfg={cfg}
+            busy={busy}
+            current={current}
+            hasActivePlan={hasActivePlan}
+            onChoose={() =>
+              void submit('starter', cfg.starter.profiles, cfg.starter.members, cfg.starter.quote)
+            }
+          />
+          <TeamCard
+            cfg={cfg}
+            busy={busy}
+            current={current}
+            hasActivePlan={hasActivePlan}
+            onChoose={() =>
+              void submit('team', cfg.team.profiles, cfg.team.members, cfg.team.quote)
+            }
+          />
+          <EnterpriseCard />
         </div>
 
-        <p className="bill-up-foot">
-          The next page saves your card — you&apos;ll see the amount there before confirming.
-          Profiles and team seats are billed by TubeGhost; proxies and phone numbers come from
-          TubeProxies and appear as separate charges.
-        </p>
+        <AddonNote />
       </div>
     </div>
   )

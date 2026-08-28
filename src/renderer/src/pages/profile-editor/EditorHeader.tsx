@@ -1,6 +1,6 @@
 import * as React from 'react'
 import { ChevronLeft, Check } from 'lucide-react'
-import { Button, PlatformIcon, type OS } from '@/components/ui'
+import { Button, PlatformIcon, type OS } from '@tubeghost/ui'
 import type { ProfileRow } from '@/lib/profiles'
 
 // Full-width editor top bar (DS `.editor-top`): back chevron + platform badge +
@@ -14,19 +14,22 @@ export function EditorHeader({
   canSave,
   onSave,
   onLeave,
-  leading
+  modeToggle,
+  helpButton
 }: {
   isNew: boolean
   profile: ProfileRow | null
   saving: boolean
   canSave: boolean
   onSave: () => void
+  // Simple/Advanced switch, rendered before Cancel/Save. Passed in as a slot
+  // so this header stays presentational and the editor keeps owning the mode.
+  modeToggle?: React.ReactNode
+  // "New here?" toggle, shown left of the mode switch in Simple.
+  helpButton?: React.ReactNode
   // Parent injects a guarded navigation so dirty-state confirms can
   // intercept before the user loses unsaved edits.
   onLeave: (to: string) => void
-  // Rendered before Cancel — the Simple/Advanced switch, and anything
-  // else that belongs to the editor rather than to one card.
-  leading?: React.ReactNode
 }): React.ReactElement {
   const os: OS | undefined =
     profile?.platform === 'macos' ? 'mac' : profile?.platform === 'windows' ? 'win' : undefined
@@ -55,7 +58,8 @@ export function EditorHeader({
         </div>
       </div>
       <div className="editor-top-r">
-        {leading}
+        {helpButton}
+        {modeToggle}
         <Button variant="ghost" onClick={() => onLeave('/profiles')}>
           Cancel
         </Button>

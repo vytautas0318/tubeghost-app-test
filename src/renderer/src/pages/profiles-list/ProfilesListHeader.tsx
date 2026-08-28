@@ -1,9 +1,9 @@
 import * as React from 'react'
 import { useEffect, useRef, useState } from 'react'
-import { Download, ChevronDown, ChevronRight, Plus } from 'lucide-react'
+import { Download, ChevronDown, ChevronRight, Plus, LayoutGrid, Rows3 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useHasPermission } from '@/lib/permissions'
-import { importProfile } from '@/lib/profiles'
+import { importProfilesBundle } from '@/lib/profiles'
 import {
   importCookiesFile,
   importForeignFile,
@@ -11,8 +11,8 @@ import {
   type ImportVendor
 } from '@/lib/importers'
 import { useWorkspace } from '@/store/workspace'
-import { ViewSwitch } from './ViewSwitch'
-import type { ProfilesView } from './cardViewState'
+import { SegmentedControl } from '@tubeghost/ui'
+import type { ProfileView } from '@/store/prefs'
 
 // What the hidden file input is currently picking for.
 type ImportSource = ImportVendor | 'tubeghost' | 'cookies'
@@ -37,17 +37,20 @@ export function ProfilesListHeader({
   openCount: number
   onImported?: () => void
   onToast?: (kind: 'error' | 'info', text: string) => void
-  // Simple ⇄ Advanced. Omitted on the loading/error headers, which have no
-  // profiles to show either way.
-  view?: ProfilesView
-  onViewChange?: (v: ProfilesView) => void
+  // Simple/Advanced view toggle. Optional so the header's other call sites
+  // (the loading + error states) can render without it.
+  view?: ProfileView
+  onViewChange?: (v: ProfileView) => void
 }): React.ReactElement {
   const workspace = useWorkspace((s) => s.current)
   const navigate = useNavigate()
   const canCreate = useHasPermission('profiles.create')
   const fileInputRef = useRef<HTMLInputElement>(null)
   const wrapRef = useRef<HTMLDivElement>(null)
-  const [open, setOpen] = useState(false)
+  const [openRaw, setOpen] = useState(false)
+  // Simple hides the Import control entirely, so its popover can never be
+  // open there. Derived rather than synced in an effect (no cascading render).
+  const open = openRaw && view !== 'simple'
   const [source, setSource] = useState<ImportSource>('tubeghost')
   const [busy, setBusy] = useState(false)
 
@@ -86,8 +89,18 @@ export function ProfilesListHeader({
     setBusy(true)
     try {
       if (source === 'tubeghost') {
-        await importProfile(await file.text(), workspace.workspace_id)
-        toast('info', 'Profile imported')
+        // A TubeGhost export may hold one profile or a whole bulk bundle.
+        const s = await importProfilesBundle(await file.text(), workspace.workspace_id)
+        if (s.created === 0) {
+          toast('error', `Import failed: ${s.errors[0] ?? 'no profiles created'}`)
+        } else {
+          toast(
+            'info',
+            s.failed > 0
+              ? `Imported ${s.created} of ${s.created + s.failed} profiles`
+              : `Imported ${s.created} ${s.created === 1 ? 'profile' : 'profiles'}`
+          )
+        }
       } else if (source === 'cookies') {
         const { name, count: n } = await importCookiesFile(file, workspace.workspace_id)
         toast('info', `Imported ${n} cookies into new profile “${name}”`)
@@ -120,7 +133,6 @@ export function ProfilesListHeader({
         </p>
       </div>
       <div className="phead-right flex items-center gap-2.5">
-        {view && onViewChange && <ViewSwitch view={view} onChange={onViewChange} />}
         {canCreate && (
           <div className="phead-actions flex items-center gap-2.5">
             <input
@@ -140,57 +152,77 @@ export function ProfilesListHeader({
               <Plus className="w-4 h-4" />
               Create profile
             </button>
-            <div className="import-wrap" ref={wrapRef}>
-              <button
-                onClick={() => setOpen((v) => !v)}
-                disabled={busy}
-                className="inline-flex items-center gap-2 h-9 px-3.5 rounded-[var(--r)] border border-[var(--line)] bg-[var(--panel)] hover:bg-[var(--hover)] text-[13px] font-[550] text-[var(--t1)] shadow-[var(--shadow)] transition-colors disabled:opacity-60"
-              >
-                <Download className="w-4 h-4" />
-                {busy ? 'Importing…' : 'Import'}
-                <ChevronDown className="w-3.5 h-3.5 opacity-60" />
-              </button>
-              {open && (
-                <div className="import-pop">
-                  <div className="import-sec">Migrate from another browser</div>
-                  {MIGRATIONS.map((m) => (
-                    <div className="import-item" key={m.vendor} onClick={() => pickFile(m.vendor)}>
+            {/* Import is an Advanced affordance: bulk migration from other
+                browsers isn't part of Simple's "just the essentials" surface. */}
+            {view !== 'simple' && (
+              <div className="import-wrap" ref={wrapRef}>
+                <button
+                  onClick={() => setOpen((v) => !v)}
+                  disabled={busy}
+                  className="inline-flex items-center gap-2 h-9 px-3.5 rounded-[var(--r)] border border-[var(--line)] bg-[var(--panel)] hover:bg-[var(--hover)] text-[13px] font-[550] text-[var(--t1)] shadow-[var(--shadow)] transition-colors disabled:opacity-60"
+                >
+                  <Download className="w-4 h-4" />
+                  {busy ? 'Importing…' : 'Import'}
+                  <ChevronDown className="w-3.5 h-3.5 opacity-60" />
+                </button>
+                {open && (
+                  <div className="import-pop">
+                    <div className="import-sec">Migrate from another browser</div>
+                    {MIGRATIONS.map((m) => (
+                      <div
+                        className="import-item"
+                        key={m.vendor}
+                        onClick={() => pickFile(m.vendor)}
+                      >
+                        <div className="import-id">
+                          <div className="import-name">{m.name}</div>
+                          <div className="import-sub">{m.sub}</div>
+                        </div>
+                        <ChevronRight />
+                      </div>
+                    ))}
+                    <div className="import-sep" />
+                    <div className="import-sec">From a file</div>
+                    <div className="import-item" onClick={() => pickFile('tubeghost')}>
                       <div className="import-id">
-                        <div className="import-name">{m.name}</div>
-                        <div className="import-sub">{m.sub}</div>
+                        <div className="import-name">Profile file (.json)</div>
+                        <div className="import-sub">A TubeGhost profile export</div>
                       </div>
                       <ChevronRight />
                     </div>
-                  ))}
-                  <div className="import-sep" />
-                  <div className="import-sec">From a file</div>
-                  <div className="import-item" onClick={() => pickFile('tubeghost')}>
-                    <div className="import-id">
-                      <div className="import-name">Profile file (.json)</div>
-                      <div className="import-sub">A TubeGhost profile export</div>
-                    </div>
-                    <ChevronRight />
-                  </div>
-                  <div className="import-item" onClick={() => pickFile('csv')}>
-                    <div className="import-id">
-                      <div className="import-name">CSV / Excel</div>
-                      <div className="import-sub">
-                        .csv or .xlsx — columns auto-mapped to profile fields
+                    <div className="import-item" onClick={() => pickFile('csv')}>
+                      <div className="import-id">
+                        <div className="import-name">CSV / Excel</div>
+                        <div className="import-sub">
+                          .csv or .xlsx — columns auto-mapped to profile fields
+                        </div>
                       </div>
+                      <ChevronRight />
                     </div>
-                    <ChevronRight />
-                  </div>
-                  <div className="import-item" onClick={() => pickFile('cookies')}>
-                    <div className="import-id">
-                      <div className="import-name">Cookies (JSON / TXT)</div>
-                      <div className="import-sub">Netscape or JSON cookie files</div>
+                    <div className="import-item" onClick={() => pickFile('cookies')}>
+                      <div className="import-id">
+                        <div className="import-name">Cookies (JSON / TXT)</div>
+                        <div className="import-sub">Netscape or JSON cookie files</div>
+                      </div>
+                      <ChevronRight />
                     </div>
-                    <ChevronRight />
                   </div>
-                </div>
-              )}
-            </div>
+                )}
+              </div>
+            )}
           </div>
+        )}
+        {/* View toggle sits outside the canCreate gate: changing how you LOOK
+            at profiles isn't a mutation, so a view-only member gets it too. */}
+        {view && onViewChange && (
+          <SegmentedControl<ProfileView>
+            value={view}
+            onChange={onViewChange}
+            options={[
+              { value: 'simple', label: 'Simple', icon: <LayoutGrid size={14} /> },
+              { value: 'advanced', label: 'Advanced', icon: <Rows3 size={14} /> }
+            ]}
+          />
         )}
       </div>
     </header>

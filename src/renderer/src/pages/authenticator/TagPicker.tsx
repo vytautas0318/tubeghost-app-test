@@ -1,9 +1,8 @@
+import { Button, Input, Badge, DEFAULT_TAG_COLOR, type TagRow } from '@tubeghost/ui'
 import * as React from 'react'
 import { useState } from 'react'
 import { Plus } from 'lucide-react'
-import { Button, Input, Badge } from '@/components/ui'
 import { ColorSwatches } from '@/components/ColorSwatches'
-import { DEFAULT_TAG_COLOR, type TagRow } from '@/lib/tags'
 
 // Tag selector for the Add-account dialog: toggle existing workspace tags AND
 // create a brand-new one inline (name + color → workspace registry, then auto-

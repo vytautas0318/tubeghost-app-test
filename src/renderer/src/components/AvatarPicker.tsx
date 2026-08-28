@@ -1,13 +1,6 @@
+import { GHOST_COLORS, GHOST_FACES, GHOST_GLASSES, GHOST_HATS, GHOST_HANDS, AvatarConfig } from '@tubeghost/ui'
 import * as React from 'react'
 import { GhostAvatar } from '@/components/GhostAvatar'
-import {
-  GHOST_COLORS,
-  GHOST_FACES,
-  GHOST_GLASSES,
-  GHOST_HATS,
-  GHOST_HANDS
-} from '@/components/ghost-avatar-parts'
-import type { AvatarConfig } from '@/lib/avatar'
 
 // "Customize avatar" popover: pick color + expression + glasses + hat +
 // gesture, each shown as a live GhostAvatar preview. Controlled — the parent

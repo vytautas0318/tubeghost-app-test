@@ -1,7 +1,7 @@
 {
   "name": "tubeghost-web",
   "version": "0.1.1",
-  "description": "TubeGhost — React web app for managing browser profiles with TubeProxies integration",
+  "description": "TubeGhost \u2014 React web app for managing browser profiles with TubeProxies integration",
   "type": "module",
   "author": "TubeProxies",
   "homepage": "https://tubeproxies.com",
@@ -19,6 +19,7 @@
     "@hookform/resolvers": "^5.2.2",
     "@modelcontextprotocol/sdk": "^1.26.0",
     "@supabase/supabase-js": "^2.105.1",
+    "@tubeghost/ui": "file:../tubeghost-ui",
     "@upstash/ratelimit": "^2.0.5",
     "@upstash/redis": "^1.35.1",
     "class-variance-authority": "^0.7.1",

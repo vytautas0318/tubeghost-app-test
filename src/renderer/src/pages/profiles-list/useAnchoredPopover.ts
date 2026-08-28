@@ -16,7 +16,12 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 export function useAnchoredPopover(
   open: boolean,
   setOpen: (v: boolean) => void,
-  width: number
+  width: number,
+  // When true the panel is sized to the trigger instead of `width`, so a
+  // full-width field (e.g. the editor's Tags select) gets a menu that lines up
+  // with its box rather than a narrower fixed panel. `width` is still used as
+  // the horizontal-clamp hint until the trigger has been measured.
+  matchTriggerWidth = false
 ): {
   triggerRef: React.RefObject<HTMLButtonElement | null>
   panelRef: React.RefObject<HTMLDivElement | null>
@@ -39,27 +44,37 @@ export function useAnchoredPopover(
       const h = panelRef.current?.offsetHeight ?? 0
       const vw = window.innerWidth
       const vh = window.innerHeight
-      const left = Math.max(8, Math.min(r.left, vw - width - 8))
+      const w = matchTriggerWidth ? r.width : width
+      const left = Math.max(8, Math.min(r.left, vw - w - 8))
       let top = r.bottom + 4
       if (h && top + h > vh - 8) {
         // not enough room below → open above if it fits there, else clamp.
         top = r.top - h - 4 >= 8 ? r.top - h - 4 : Math.max(8, vh - h - 8)
       }
+      const next: React.CSSProperties = matchTriggerWidth
+        ? { position: 'fixed', left, top, width: w }
+        : { position: 'fixed', left, top }
       setStyle((prev) =>
-        prev.left === left && prev.top === top ? prev : { position: 'fixed', left, top }
+        prev.left === left && prev.top === top && prev.width === next.width ? prev : next
       )
     }
     place()
+    // On the first pass the panel has not painted yet, so offsetHeight is 0 and
+    // the flip-above branch is skipped — a trigger near the bottom of the
+    // viewport then opened downward off-screen. Re-place once the browser has
+    // laid the panel out and we can measure a real height.
+    const raf = requestAnimationFrame(place)
     const ro = new ResizeObserver(place)
     if (panelRef.current) ro.observe(panelRef.current)
     window.addEventListener('scroll', place, true)
     window.addEventListener('resize', place)
     return () => {
+      cancelAnimationFrame(raf)
       ro.disconnect()
       window.removeEventListener('scroll', place, true)
       window.removeEventListener('resize', place)
     }
-  }, [open, width])
+  }, [open, width, matchTriggerWidth])
 
   useEffect(() => {
     if (!open) return

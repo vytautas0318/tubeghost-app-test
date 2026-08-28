@@ -832,13 +832,20 @@ html[data-platform='darwin'] .builder-top .editor-back { -webkit-app-region: no-
 /* Grid tracks come from the active tab's column config via the inline
    --px-cols custom property (set in ProxyTable). Falls back to the original
    Custom-tab layout if unset. */
-.tbl.proxy .tbl-head, .tbl.proxy .tr { grid-template-columns: var(--px-cols, 34px 36px minmax(0,1.6fr) minmax(0,1.3fr) minmax(0,0.7fr) minmax(0,0.95fr) minmax(0,0.9fr) 44px); min-width: 820px; }
+/* --px-min is computed in ProxyTable from the columns' measured minPx: below it
+   the table scrolls horizontally (the .tbl wrapper is overflow-x:auto) rather
+   than compressing cells into "United States of…" / "expires in 29 …". */
+.tbl.proxy .tbl-head, .tbl.proxy .tr { grid-template-columns: var(--px-cols, 34px 36px minmax(0,1.6fr) minmax(0,1.3fr) minmax(0,0.7fr) minmax(0,0.95fr) minmax(0,0.9fr) 44px); min-width: var(--px-min, 820px); }
 .px-num { font-family: var(--mono); font-size: 12.5px; color: var(--t3); }
 .proto { width: 38px; height: 24px; border-radius: 6px; display: grid; place-items: center; font-family: var(--mono); font-size: 9px; font-weight: 600; flex-shrink: 0; }
 .proto.http { background: var(--green-soft); color: var(--green); }
 .proto.socks { background: var(--violet-soft); color: var(--violet); }
 .host { display: flex; align-items: center; gap: 11px; min-width: 0; }
-.host-addr { font-family: var(--mono); font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+/* Flex row so the copy button sits OUTSIDE the ellipsising address text —
+   as a plain inline box the button was clipped away with the overflow. */
+.host-addr { display: flex; align-items: center; min-width: 0; font-family: var(--mono); font-size: 13px; font-weight: 500; white-space: nowrap; max-width: 100%; }
+.host-addr > .port { overflow: hidden; text-overflow: ellipsis; }
+.host-addr > .copy-btn { flex: none; margin-left: 4px; }
 .host-addr .port { color: var(--t3); }
 .host-lbl { font-size: 11.5px; color: var(--t3); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .src-name { font-size: 13px; font-weight: 500; color: var(--t1); }
@@ -851,8 +858,12 @@ html[data-platform='darwin'] .builder-top .editor-back { -webkit-app-region: no-
 .country-cell > span:first-child { flex-shrink: 0; }
 .ctry-name { font-size: 13px; font-weight: 450; color: var(--t1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ctry-city { font-size: 11.5px; color: var(--t3); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.px-profiles { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 500; color: var(--t1); }
-.px-profiles svg { width: 14px; height: 14px; color: var(--t3); }
+.px-profiles { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 500; color: var(--t1); min-width: 0; max-width: 100%; }
+.px-profiles svg { width: 14px; height: 14px; color: var(--t3); flex-shrink: 0; }
+/* The profile-number list truncates rather than widening the column; the
+   "+N" counter stays pinned and legible beside it. */
+.px-profiles-nums { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.px-profiles-more { flex-shrink: 0; font-size: 11.5px; font-weight: 500; color: var(--t3); }
 .px-profiles.zero { color: var(--t4); }
 .exp-cell { font-size: 12.5px; color: var(--t2); }
 .exp-cell .exp-soon { color: var(--amber); font-weight: 550; }
@@ -1686,3 +1697,111 @@ html[data-platform='darwin'] .builder-top .editor-back { -webkit-app-region: no-
 .sync-console.widget .sync-console-head { border-bottom: none; }
 .sync-console-collapse { margin-left: auto; display: inline-flex; color: var(--t3); }
 .sync-color { width: 40px; height: 30px; padding: 0; border: 1px solid var(--line); border-radius: 8px; background: var(--panel-2); cursor: pointer; }
+
+/* ---- Ported from the desktop renderer -------------------------------------
+   Inline copy affordance. Always visible — a hover-only copy button is an
+   affordance users cannot discover. It sits at --t3 so it reads as secondary
+   until hovered. */
+.copy-btn { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; padding: 0; border: 0; border-radius: var(--r-sm, 6px); background: transparent; color: var(--t3); cursor: pointer; opacity: 1; transition: color .12s ease, background .12s ease; }
+.copy-btn svg { width: 13px; height: 13px; }
+.copy-btn:hover { background: var(--hover); color: var(--t1); }
+.copy-btn:focus-visible { outline: 2px solid var(--red); outline-offset: 1px; }
+.copy-btn.done { color: var(--ok, #3fb950); }
+
+/* Bulk-action bar, rendered INSIDE the table panel so it shares the panel's
+   border/background. Sticky at left:0 so it stays put while the table scrolls
+   horizontally. */
+.tbl.proxy .tp-bulkbar {
+  position: sticky;
+  left: 0;
+  width: 100%;
+  background: var(--panel-2);
+}
+
+/* ---- Profile cards (Simple view) — ported from the desktop renderer --------
+   The card layout is shared; the desktop-only session-sync badge is omitted,
+   and .pc-launch holds the web's "open in desktop app" button rather than a
+   real Launch control. */
+.pc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(232px, 1fr)); gap: 16px; align-content: start; padding-bottom: 4px; }
+.pc-card { position: relative; display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 20px 14px 14px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-lg); box-shadow: var(--shadow); transition: border-color 0.13s var(--ease), box-shadow 0.13s var(--ease); }
+.pc-card:hover { border-color: var(--t4); box-shadow: var(--shadow-lg); }
+.pc-card.sel { border-color: var(--red); background: var(--red-soft); }
+.pc-card.live { border-color: var(--green); }
+.pc-card-top { position: absolute; inset: 8px 8px auto 8px; display: flex; align-items: center; justify-content: space-between; height: 22px; }
+.pc-check { accent-color: var(--red); cursor: pointer; opacity: 0; transition: opacity 0.13s var(--ease); }
+.pc-card:hover .pc-check, .pc-card.sel .pc-check, .pc-check:focus-visible { opacity: 1; }
+.pc-name { max-width: 100%; font-size: 14px; font-weight: 700; letter-spacing: -0.2px; line-height: 1.25; color: var(--t1); text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pc-grp { margin-top: -6px; font-size: 11.5px; color: var(--t3); text-align: center; }
+.pc-name { display: flex; justify-content: center; overflow: visible; }
+.pc-name .name-text { margin: 0; padding: 2px 8px; max-width: 100%; text-align: center; }
+.pc-name .name-edit-in { width: 100%; text-align: center; font-size: 14px; font-weight: 700; }
+.pc-grp { overflow: visible; margin-top: -2px; }
+.pc-grp > div { display: flex; justify-content: center; }
+.pc-grp button { max-width: 100%; padding: 1px 8px !important; min-height: 0 !important; min-width: 0 !important; font-size: 11.5px; white-space: nowrap; }
+.pc-grp button > * { font-size: 11.5px !important; white-space: nowrap; }
+.pc-chip-px { padding: 0; overflow: visible; flex: 0 0 auto; min-width: auto; max-width: 100%; }
+.pc-chip-px button { padding: 3px 9px !important; margin: 0 !important; min-width: 0; }
+.pc-chip-px .mono, .pc-chip-px button > span { overflow: visible !important; text-overflow: clip !important; }
+.pc-chip-px .mono { font-size: 11px; }
+.pc-chip-px button > span > span:last-child:not(:first-child) { display: none; }
+.pc-chips { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 5px; max-width: 100%; }
+.pc-chip { display: inline-flex; align-items: center; gap: 4px; max-width: 100%; padding: 3px 8px; border-radius: var(--r-pill); background: var(--panel-2); border: 1px solid var(--line); font-size: 11px; color: var(--t2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pc-chip.none { color: var(--t3); }
+.pc-geo { font-size: 11px; color: var(--t3); text-align: center; }
+.pc-status { font-size: 11.5px; color: var(--t3); text-align: center; }
+.pc-status.on { color: var(--green); font-weight: 550; }
+.pc-launch { width: 100%; margin-top: auto; padding-top: 6px; display: flex; }
+.pc-launch > * { width: 100%; justify-content: center; }
+.pc-empty { padding: 48px 0; text-align: center; font-size: 13px; color: var(--t3); }
+.pc-avatar { width: 64px; height: 64px; border-radius: 999px; object-fit: cover; display: block; flex-shrink: 0; }
+.pc-chan { max-width: 100%; font-family: var(--mono); font-size: 11px; color: var(--t3); text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pc-card.selectable { cursor: pointer; }
+.pc-card.selectable:hover { border-color: var(--red); }
+
+/* Buy-proxies pricing cards: tighter scale.
+   With six packs on a 3-column grid each card got a third of the page width,
+   and the type/spacing (sized when the grid was 5-up) stretched to fill it —
+   the cards read as oversized squares. Cap the grid width, let it flow to
+   more columns when there's room, and pull the vertical rhythm in. Purely
+   dimensional: no colours, states or copy change. */
+.tpp-grid {
+  /* Always THREE per row. auto-fit (the previous attempt) let each column
+     expand to fill the window, so on a wide screen the cards ballooned again —
+     the exact thing this block exists to stop. A fixed 3-up count plus a cap on
+     the row width keeps the card proportions constant at any window size; the
+     grid centres itself and the extra space goes to the margins, not the
+     cards. */
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  max-width: 840px;
+  margin-inline: auto;
+  gap: 12px;
+}
+.tpp-grid.cols-3,
+.tpp-grid.cols-4,
+.tpp-grid.cols-5 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+/* Below the 3-up width, drop to 2 then 1 rather than crushing the columns. */
+@media (max-width: 720px) {
+  .tpp-grid,
+  .tpp-grid.cols-3,
+  .tpp-grid.cols-4,
+  .tpp-grid.cols-5 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 480px) {
+  .tpp-grid,
+  .tpp-grid.cols-3,
+  .tpp-grid.cols-4,
+  .tpp-grid.cols-5 {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.tpp-card { padding: 18px 14px; }
+.tpp-ips { font-size: 19px; margin-top: 12px; }
+.tpp-price { font-size: 26px; margin-top: 10px; }
+.tpp-price .per { font-size: 12.5px; }
+.tpp-vs { margin-top: 6px; min-height: 24px; }
+.tpp-buy { height: 38px; margin-top: 14px; font-size: 13px; }
+.tpp-list { margin: 12px 0 12px; gap: 7px; }

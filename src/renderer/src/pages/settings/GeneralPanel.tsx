@@ -1,11 +1,11 @@
 import * as React from 'react'
 import { useEffect, useState } from 'react'
-import { Sun, Moon, Check } from 'lucide-react'
+import { Sun, Moon, Check, LayoutGrid, Rows3 } from 'lucide-react'
 import { useTheme } from '@/store/theme'
-import { usePrefs, ACCENTS } from '@/store/prefs'
+import { usePrefs, ACCENTS, type ProfileView } from '@/store/prefs'
 import { useWorkspace } from '@/store/workspace'
 import { useHasPermission } from '@/lib/permissions'
-import { Button, Toggle, Input, Select, SegmentedControl } from '@/components/ui'
+import { Button, Toggle, Input, Select, SegmentedControl } from '@tubeghost/ui'
 import { updateWorkspaceGeneral, type LaunchBehavior } from '@/lib/settings'
 import { Srow, type Toast } from './settingsCommon'
 import { useSettingsData } from './useSettingsData'
@@ -14,6 +14,8 @@ import { DangerZone } from './DangerZone'
 export function GeneralPanel({ onToast }: { onToast: Toast }): React.ReactElement {
   const theme = useTheme((s) => s.theme)
   const setTheme = useTheme((s) => s.set)
+  const defaultProfileView = usePrefs((s) => s.defaultProfileView)
+  const setDefaultProfileView = usePrefs((s) => s.setDefaultProfileView)
   const accent = usePrefs((s) => s.accent)
   const setAccent = usePrefs((s) => s.setAccent)
   const compact = usePrefs((s) => s.compactDensity)
@@ -102,6 +104,19 @@ export function GeneralPanel({ onToast }: { onToast: Toast }): React.ReactElemen
         </Srow>
         <Srow n="Compact density" d="Tighter rows to fit more profiles on screen.">
           <Toggle checked={compact} onChange={setCompact} />
+        </Srow>
+        <Srow
+          n="Default profiles view"
+          d="Which view Profiles and the profile editor open on. Simple keeps it to the essentials; Advanced shows every setting."
+        >
+          <SegmentedControl<ProfileView>
+            value={defaultProfileView}
+            onChange={setDefaultProfileView}
+            options={[
+              { value: 'simple', label: 'Simple', icon: <LayoutGrid size={14} /> },
+              { value: 'advanced', label: 'Advanced', icon: <Rows3 size={14} /> }
+            ]}
+          />
         </Srow>
       </div>
 

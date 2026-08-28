@@ -16,7 +16,7 @@ import {
   updateAuthToken,
   type AuthTokenRow,
   type NewAuthTokenInput
-} from '@/lib/authenticator'
+} from '@tubeghost/ui'
 import { getSupabase } from '@/lib/supabase'
 
 export const PERIOD = 30

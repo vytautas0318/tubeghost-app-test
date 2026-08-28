@@ -3,7 +3,15 @@ import { getSupabase } from '@/lib/supabase'
 
 /**
  * Read-only profile-usage for the sidebar plan card: how many profiles the
- * workspace has vs. its plan's profile_limit. Display only — no mutations.
+ * workspace has vs. its EFFECTIVE cap. Display only — no mutations.
+ *
+ * The cap is `workspaces.purchased_profiles` when the workspace bought
+ * capacity, falling back to `plans.profile_limit` otherwise. Team is a
+ * configurator — you buy the profile count — so its plans row holds only the
+ * tier floor (25). Reading that alone showed "5/25" in the sidebar while
+ * Billing correctly showed "5 of 100" for the same workspace.
+ *
+ * Derived exactly as useBillingData/useBilling do so the surfaces agree.
  */
 export function usePlanUsage(
   workspaceId: string | null,
@@ -33,23 +41,25 @@ export function usePlanUsage(
 
   useEffect(() => {
     const c = getSupabase()
-    if (!plan || !c) {
+    if (!plan || !c || !workspaceId) {
       setLimit(null)
       return
     }
     let cancelled = false
-    void c
-      .from('plans')
-      .select('profile_limit')
-      .eq('plan_key', plan)
-      .single()
-      .then(({ data }) => {
-        if (!cancelled) setLimit((data as { profile_limit?: number } | null)?.profile_limit ?? null)
-      })
+    void Promise.all([
+      c.from('plans').select('profile_limit').eq('plan_key', plan).single(),
+      c.from('workspaces').select('purchased_profiles').eq('id', workspaceId).maybeSingle()
+    ]).then(([planResp, wsResp]) => {
+      if (cancelled) return
+      const tierFloor = (planResp.data as { profile_limit?: number } | null)?.profile_limit ?? null
+      const purchased =
+        (wsResp.data as { purchased_profiles?: number | null } | null)?.purchased_profiles ?? null
+      setLimit(purchased != null && purchased > 0 ? purchased : tierFloor)
+    })
     return () => {
       cancelled = true
     }
-  }, [plan])
+  }, [plan, workspaceId])
 
   return { used, limit }
 }

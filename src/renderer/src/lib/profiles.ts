@@ -97,6 +97,13 @@ export interface ProfileRow {
   // the profile card in the Simple view. Null = no channel linked, which
   // is normal — plenty of profiles run IG, TikTok or a store instead.
   youtube_channel: LinkedChannel | null
+  // True while the row exists only because the desktop editor is open on it
+  // (migration 00000000000020). The desktop app auto-creates a draft so every
+  // Advanced tab is editable before the first save, and clears the flag on
+  // save. Draft rows are hidden from the profiles list and must not count
+  // toward the plan limit — the web app never creates them, but it shares the
+  // database with the desktop app and so has to filter them out.
+  is_draft: boolean
 }
 
 function client(): GhostClient {
@@ -118,6 +125,8 @@ export async function listProfiles(workspaceId: string): Promise<ProfileRow[]> {
     .from('browser_profiles')
     .select('*', { count: 'estimated' })
     .eq('workspace_id', workspaceId)
+    // Drafts are desktop-editor scratch rows, not profiles the user made.
+    .eq('is_draft', false)
     .order('created_at', { ascending: false })
     .range(0, PROFILE_PAGE_LIMIT - 1)
   if (error) throw error
@@ -166,6 +175,9 @@ export interface NewProfileInput {
   // Optional proxy assigned in the same step as creation. Omit / null to
   // create the profile without a proxy (the pre-existing behaviour).
   proxy?: ProfileProxyFields | null
+  // Insert as a draft: the editor auto-creates a row on open so every tab is
+  // editable immediately, and commitProfileDraft() clears the flag on save.
+  is_draft?: boolean
 }
 
 export async function createProfile(input: NewProfileInput): Promise<ProfileRow> {
@@ -196,7 +208,17 @@ export async function createProfile(input: NewProfileInput): Promise<ProfileRow>
   // name + GPU vendor land coherently with the chosen OS.
   const { generateRandomFingerprint, randomDeviceName, randomMacAddress } =
     await import('@/pages/profile-editor/randomize')
-  const fp = generateRandomFingerprint(platform ? { platform } : undefined)
+  // Honour the workspace's Browser core setting.
+  //
+  // Previously this setting was read but never applied: browser_core was stored
+  // and shown in Settings while createProfile ignored it, so choosing
+  // "Chromium 148" silently still produced a 150 profile.
+  const core = fpDefaults.browser_core
+  const pinnedMajor = core && core !== 'latest' ? core : undefined
+  const fp = generateRandomFingerprint({
+    ...(platform ? { platform } : {}),
+    ...(pinnedMajor ? { brand_version_major: pinnedMajor } : {})
+  })
   const { data, error } = await client()
     .from('browser_profiles')
     .insert({
@@ -215,18 +237,19 @@ export async function createProfile(input: NewProfileInput): Promise<ProfileRow>
       brand: fp.brand,
       brand_version: fp.brand_version,
       user_agent: fp.user_agent,
-      // CPU cores / RAM default to Real (this machine's value): persist NULL, like
-      // WebGL below, so a fresh profile is a coherent real device. A non-null value
-      // means the user (or "New fingerprint") explicitly chose Custom.
-      hardware_concurrency: null,
-      device_memory: null,
-      // WebGL metadata defaults to Real (host GPU): persist NULL so the editor
-      // shows "Real" as the active state and the launcher reports the genuine
-      // GPU. A non-null vendor means the user explicitly picked Custom in the
-      // editor (which saves the strings). The randomizer's coherent vendor is
-      // only staged client-side for when the user switches to Custom.
-      webgl_vendor: null,
-      webgl_renderer: null,
+      // CPU cores / RAM / WebGL take the archetype's coherent values, matching
+      // what "New fingerprint" writes — a profile created here and one made by
+      // pressing that button are now identical in kind.
+      //
+      // These are Custom (not the real host values). Verified 2026-08-12 by the
+      // client on an arm64 DMG on Apple Silicon plus other platforms: passes.
+      // An earlier note claimed same-platform Custom GPU was detectable; that
+      // did not reproduce on re-test — note the topic reversed six times, so
+      // re-test rather than assume.
+      hardware_concurrency: fp.hardware_concurrency,
+      device_memory: fp.device_memory,
+      webgl_vendor: fp.webgl_vendor,
+      webgl_renderer: fp.webgl_renderer,
       // Use the device archetype's native resolution so a MacBook
       // gets a retina res and a Windows laptop gets 1920×1080.
       screen_resolution: fp.screen_resolution,
@@ -255,11 +278,12 @@ export async function createProfile(input: NewProfileInput): Promise<ProfileRow>
       port_scan_protection: true,
       // Engine-level WebGPU mirrors WebGL by default (most consistent)
       webgpu_mode: 'based_on_webgl',
-      // Not the full "Optimized" preset yet: new profiles ship WebGL=Real
-      // (host GPU) which the preset masks to Custom, so the toggle starts
-      // OFF and matchesOptimized() agrees. Flipping it on in the editor
-      // seeds a coherent Custom GPU.
-      google_optimized: false,
+      // ON by default: every field the preset controls (WebRTC forward,
+      // timezone/language/location from IP, display language, WebGPU) is
+      // already set above, so matchesOptimized() agrees. The preset does not
+      // include webgl_mode, so this stays true regardless of the GPU choice.
+      is_draft: input.is_draft ?? false,
+      google_optimized: true,
       // Fonts: keep system default — Custom is opt-in
       fonts_mode: 'default',
       // Auto-rotate on launch: when the workspace default is on, each launch
@@ -352,8 +376,42 @@ export async function updateProfile(
   return data as ProfileRow
 }
 
+// NOTE the .select(): a DELETE filtered out by RLS is NOT an error --
+// PostgREST returns 204 with no rows and no error, so a bare .delete()
+// reports success for a delete that removed nothing. Selecting the deleted
+// ids lets us tell "gone" from "never allowed", which the bulk path counts on.
 export async function deleteProfile(id: string): Promise<void> {
-  const { error } = await client().from('browser_profiles').delete().eq('id', id)
+  const { data, error } = await client().from('browser_profiles').delete().eq('id', id).select('id')
+  if (error) throw error
+  if (!data || data.length === 0) {
+    throw new Error('Not deleted — you may not have permission, or it no longer exists.')
+  }
+}
+
+// Promote an editor-created draft into a real profile. Called on the first
+// successful save; the enforce_profile_limit_on_commit trigger re-checks the
+// plan cap here, so this is where a user over their limit is told no — the
+// draft insert itself is deliberately uncapped.
+export async function commitProfileDraft(id: string): Promise<ProfileRow> {
+  const { data, error } = await client()
+    .from('browser_profiles')
+    .update({ is_draft: false })
+    .eq('id', id)
+    .select('*')
+    .single()
+  if (error) throw error
+  return data as ProfileRow
+}
+
+// Throw away an abandoned draft (Cancel, or leaving the editor without
+// saving). Guarded on is_draft so this can never delete a real profile even if
+// a stale id is passed.
+export async function discardProfileDraft(id: string): Promise<void> {
+  const { error } = await client()
+    .from('browser_profiles')
+    .delete()
+    .eq('id', id)
+    .eq('is_draft', true)
   if (error) throw error
 }
 
@@ -511,13 +569,62 @@ export async function renameTagInWorkspace(
 // Copy a profile's fingerprint + proxy + tags into a new row with a
 // fresh seed. Lock + audit columns are NOT copied — the new row
 // starts unopened.
+const PROFILE_NAME_MAX = 100
+
+// Build a name for a duplicate that doesn't collide with anything already in
+// the workspace: "X (copy)", then "X (copy 2)", "X (copy 3)", …
+//
+// Duplicating the same source twice used to yield two rows both literally named
+// "X (copy)" — indistinguishable in the list. We also strip any existing
+// "(copy N)" suffix first, so duplicating a copy gives "X (copy 2)" rather than
+// stacking up "X (copy) (copy) (copy)".
+//
+// Truncation trims the BASE, never the suffix: naive
+// `(name + ' (copy)').slice(0, 100)` cut into the suffix itself and produced
+// names ending in a dangling " (".
+export function nextCopyName(sourceName: string, taken: Iterable<string>): string {
+  const used = new Set<string>()
+  for (const t of taken) used.add(t.trim().toLowerCase())
+
+  const base = sourceName.replace(/\s*\((?:copy|copy \d+)\)\s*$/i, '').trim() || sourceName.trim()
+
+  const build = (n: number): string => {
+    const suffix = n === 1 ? ' (copy)' : ` (copy ${n})`
+    const room = PROFILE_NAME_MAX - suffix.length
+    return (base.length > room ? base.slice(0, room).trimEnd() : base) + suffix
+  }
+
+  let n = 1
+  let candidate = build(n)
+  // Bounded so a pathological workspace can't spin forever; past the cap we
+  // accept a collision rather than hang (names aren't unique-constrained).
+  while (used.has(candidate.trim().toLowerCase()) && n < 1000) {
+    n += 1
+    candidate = build(n)
+  }
+  return candidate
+}
+
 export async function duplicateProfile(id: string): Promise<ProfileRow> {
   const src = await getProfile(id)
   if (!src) throw new Error('Profile not found')
   const { generateRandomFingerprint } = await import('@/pages/profile-editor/randomize')
   const fp = generateRandomFingerprint({ platform: src.platform })
 
-  const newName = (src.name + ' (copy)').slice(0, 100)
+  // Name against the workspace's existing names so repeated duplicates are
+  // distinguishable. A failed read here must not block the duplicate — fall
+  // back to the plain "(copy)" form.
+  let existingNames: string[] = []
+  try {
+    const { data } = await client()
+      .from('browser_profiles')
+      .select('name')
+      .eq('workspace_id', src.workspace_id)
+    existingNames = ((data ?? []) as { name: string }[]).map((r) => r.name)
+  } catch {
+    existingNames = []
+  }
+  const newName = nextCopyName(src.name, existingNames)
   // Build the insert payload from the source row, but:
   //  - new fingerprint_seed (so canvas/audio noise differs)
   //  - new device_name + mac_address
@@ -582,15 +689,10 @@ export async function duplicateProfile(id: string): Promise<ProfileRow> {
   return data as ProfileRow
 }
 
-// Sanitized JSON export of a profile. Strips proxy_pass + lock +
-// audit columns by default; the includeSecrets flag opts those back
-// in for moves between user-trusted machines.
-export async function exportProfile(
-  id: string,
-  opts?: { includeSecrets?: boolean }
-): Promise<string> {
-  const p = await getProfile(id)
-  if (!p) throw new Error('Profile not found')
+// Strips lock + audit + workspace-local identifiers from a row so it can
+// travel to another workspace. Shared by the single-profile and bundle
+// exports so the two can never disagree about what leaves the machine.
+function toExportable(p: ProfileRow, includeSecrets?: boolean): Record<string, unknown> {
   const exportable: Record<string, unknown> = { ...p }
   // Always strip lock + audit + identifiers
   delete exportable.id
@@ -611,30 +713,65 @@ export async function exportProfile(
   // Workspace-local FK — meaningless in the importing workspace.
   delete exportable.proxy_id
   delete exportable.assigned_to
-  if (!opts?.includeSecrets) delete exportable.proxy_pass
+  if (!includeSecrets) delete exportable.proxy_pass
+  return exportable
+}
+
+// Sanitized JSON export of a profile. Strips proxy_pass + lock +
+// audit columns by default; the includeSecrets flag opts those back
+// in for moves between user-trusted machines.
+export async function exportProfile(
+  id: string,
+  opts?: { includeSecrets?: boolean }
+): Promise<string> {
+  const p = await getProfile(id)
+  if (!p) throw new Error('Profile not found')
   return JSON.stringify(
-    { _format: 'tubeproxies-profile', _version: 1, profile: exportable },
+    { _format: 'tubeproxies-profile', _version: 1, profile: toExportable(p, opts?.includeSecrets) },
     null,
     2
   )
 }
 
+// Export SEVERAL profiles as one re-importable bundle. Same envelope as the
+// single export but with a `profiles` array, so the importer can tell the two
+// apart. Rows that no longer exist are skipped rather than failing the batch.
+export async function exportProfiles(
+  ids: string[],
+  opts?: { includeSecrets?: boolean }
+): Promise<string> {
+  const rows = await Promise.all(ids.map((id) => getProfile(id)))
+  const profiles = rows
+    .filter((r): r is ProfileRow => r !== null)
+    .map((r) => toExportable(r, opts?.includeSecrets))
+  if (profiles.length === 0) throw new Error('No profiles to export')
+  return JSON.stringify({ _format: 'tubeproxies-profile', _version: 1, profiles }, null, 2)
+}
+
 // Import a previously-exported profile JSON into the given workspace.
 // Returns the new row. Validates the envelope; ignores unknown keys.
 export async function importProfile(json: string, workspaceId: string): Promise<ProfileRow> {
-  let parsed: { _format?: string; profile?: Record<string, unknown> }
+  let parsed: {
+    _format?: string
+    profile?: Record<string, unknown>
+    profiles?: Record<string, unknown>[]
+  }
   try {
     parsed = JSON.parse(json)
   } catch {
     throw new Error('Invalid JSON')
   }
-  if (parsed._format !== 'tubeproxies-profile' || !parsed.profile) {
+  // Accept BOTH shapes: the single-profile `profile` key and a bulk `profiles`
+  // array (exportProfiles). A one-profile bundle imports here unchanged; use
+  // importProfilesBundle() to bring in every profile from a multi-profile file.
+  const single = parsed.profile ?? parsed.profiles?.[0]
+  if (parsed._format !== 'tubeproxies-profile' || !single) {
     throw new Error(
       'Not a TubeGhost profile export — for a CSV or another browser’s export, ' +
         'use the matching entry in the Import menu'
     )
   }
-  const p = parsed.profile
+  const p = single
   // Whitelist insertable columns to avoid any sneaky overrides.
   const allowed: Array<keyof ProfileRow> = [
     'name',
@@ -711,6 +848,49 @@ export async function importProfile(json: string, workspaceId: string): Promise<
     .single()
   if (error) throw error
   return data as ProfileRow
+}
+
+// Import a profile export that may contain ONE profile or MANY.
+//
+// The bulk Export action writes a `profiles` array; the single-row export
+// writes a `profile` object. Both carry the same envelope, so this accepts
+// either and reports per-row outcomes instead of failing the whole file on
+// one bad entry.
+export async function importProfilesBundle(
+  json: string,
+  workspaceId: string
+): Promise<{ created: number; failed: number; errors: string[] }> {
+  let parsed: {
+    _format?: string
+    profile?: Record<string, unknown>
+    profiles?: Record<string, unknown>[]
+  }
+  try {
+    parsed = JSON.parse(json)
+  } catch {
+    throw new Error('Invalid JSON')
+  }
+  const list = parsed.profiles ?? (parsed.profile ? [parsed.profile] : null)
+  if (parsed._format !== 'tubeproxies-profile' || !list?.length) {
+    throw new Error('Not a TubeProxies profile export')
+  }
+
+  let created = 0
+  let failed = 0
+  const errors: string[] = []
+  for (const profile of list) {
+    try {
+      await importProfile(
+        JSON.stringify({ _format: 'tubeproxies-profile', _version: 1, profile }),
+        workspaceId
+      )
+      created += 1
+    } catch (e) {
+      failed += 1
+      if (errors.length < 5) errors.push((e as Error).message)
+    }
+  }
+  return { created, failed, errors }
 }
 
 // Distinct tags across all profiles in a workspace. Tags are an inline

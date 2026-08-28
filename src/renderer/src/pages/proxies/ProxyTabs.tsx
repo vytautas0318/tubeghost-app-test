@@ -3,7 +3,7 @@
 // the underlying proxies query is never refetched.
 
 import * as React from 'react'
-import { SegmentedControl } from '@/components/ui'
+import { SegmentedControl } from '@tubeghost/ui'
 import type { ProxyTab } from './proxy-tab'
 
 export function ProxyTabs({

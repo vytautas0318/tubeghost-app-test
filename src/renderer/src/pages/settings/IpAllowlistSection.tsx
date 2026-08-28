@@ -1,13 +1,7 @@
+import { Button, listIpAllowlist, parseAllowlistText, replaceIpAllowlist, wouldCoverCurrentIp } from '@tubeghost/ui'
 import * as React from 'react'
 import { useEffect, useState } from 'react'
 import { Check, AlertTriangle } from 'lucide-react'
-import { Button } from '@/components/ui'
-import {
-  listIpAllowlist,
-  parseAllowlistText,
-  replaceIpAllowlist,
-  wouldCoverCurrentIp
-} from '@/lib/ip-allowlist'
 import { type Toast } from './settingsCommon'
 
 // Best-effort current public IP for the self-lockout guard. Failure just

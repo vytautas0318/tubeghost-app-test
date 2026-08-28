@@ -265,6 +265,7 @@ function PageRoutes(): React.ReactElement {
             so existing links/bookmarks keep working. */}
         <Route path="/team/members" element={<TeamPage />} />
         <Route path="/team/roles" element={<TeamPage />} />
+        <Route path="/team/access" element={<TeamPage />} />
         <Route path="/team" element={<Navigate to="/team/members" replace />} />
         <Route path="/members" element={<Navigate to="/team/members" replace />} />
         <Route path="/roles" element={<Navigate to="/team/roles" replace />} />

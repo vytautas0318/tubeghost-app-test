@@ -111,9 +111,16 @@ export interface WorkspaceSettings {
 
 // ── Recommended baselines (the "Reset to recommended" targets) ──────────────
 
+// 'latest' is the DEFAULT browser core: new profiles follow whichever Chromium
+// major the app currently ships, so a shipped engine upgrade carries them
+// forward automatically. Pinning a specific major (e.g. '150') stays available
+// for anyone who needs to reproduce a fixed build — a pin is deliberately NOT
+// self-updating, which is the whole point of pinning.
+export const LATEST_BROWSER_CORE = 'latest'
+
 export const RECOMMENDED_FINGERPRINT: FingerprintDefaults = {
   os: 'win',
-  browser_core: '150',
+  browser_core: LATEST_BROWSER_CORE,
   webrtc_mode: 'forward',
   canvas_noise: true,
   auto_rotate: false

@@ -9,7 +9,7 @@
 
 import * as React from 'react'
 import { Sparkles } from 'lucide-react'
-import { Button } from '@/components/ui'
+import { Button } from '@tubeghost/ui'
 import { useAuth } from '@/store/auth'
 
 interface Details {

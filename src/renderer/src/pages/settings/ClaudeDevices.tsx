@@ -1,7 +1,7 @@
 import * as React from 'react'
 import { useState } from 'react'
 import { Trash2, Check, X, Pencil } from 'lucide-react'
-import { Toggle, Input } from '@/components/ui'
+import { Toggle, Input } from '@tubeghost/ui'
 import { formatDistanceToNow } from 'date-fns'
 import { type Toast } from './settingsCommon'
 import { revokeDevice, updateDevice, type BridgeDevice, type CommandLogEntry } from '@/lib/claude-bridge'

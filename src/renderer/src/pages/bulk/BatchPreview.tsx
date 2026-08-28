@@ -1,7 +1,7 @@
 import * as React from 'react'
 import { useState } from 'react'
 import { ChevronDown, Info } from 'lucide-react'
-import { PlatformIcon } from '@/components/ui'
+import { PlatformIcon } from '@tubeghost/ui'
 import type { SocialPlatform } from './batchSpec'
 
 const SHOWN = 8

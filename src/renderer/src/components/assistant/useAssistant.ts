@@ -8,6 +8,7 @@ import { useLocation } from 'react-router-dom'
 import { useWorkspace } from '@/store/workspace'
 import { useAuth } from '@/store/auth'
 import { useEffectivePermissions } from '@/lib/permissions'
+import { listProxies } from '@/lib/proxies'
 import { listProfiles } from '@/lib/profiles'
 import {
   askAssistant,
@@ -86,16 +87,30 @@ export function useAssistant(): AssistantState {
       // or a name into real targets. Cheap + best-effort. Profiles no longer
       // launch in the web app, so "running" is always false.
       let profiles: { name: string; running: boolean }[] = []
+      // Proxy pool size travels in the context too, so "how many proxies do I
+      // have?" is answerable directly. Left null (not 0) when unknown, so the
+      // assistant falls back to a list_proxies step rather than asserting zero.
+      let proxyCount: number | null = null
+      let activeProxyCount: number | null = null
       if (workspace) {
-        const rows = await listProfiles(workspace.workspace_id).catch(() => [])
+        const [rows, proxies] = await Promise.all([
+          listProfiles(workspace.workspace_id).catch(() => []),
+          listProxies(workspace.workspace_id).catch(() => null)
+        ])
         profiles = rows.map((r) => ({ name: r.name, running: false }))
+        if (proxies) {
+          proxyCount = proxies.length
+          activeProxyCount = proxies.filter((p) => p.status === 'active').length
+        }
       }
 
       const context = buildContext({
         pathname,
         workspaceName: workspace?.workspace_name,
         roleName: workspace?.role_name,
-        profiles
+        profiles,
+        proxyCount,
+        activeProxyCount
       })
 
       try {

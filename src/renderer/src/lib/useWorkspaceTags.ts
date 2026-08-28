@@ -11,7 +11,7 @@ import {
   deleteTag as deleteTagRow,
   makeTagColorMap,
   type TagRow
-} from '@/lib/tags'
+} from '@tubeghost/ui'
 
 export interface UseWorkspaceTags {
   tags: TagRow[]

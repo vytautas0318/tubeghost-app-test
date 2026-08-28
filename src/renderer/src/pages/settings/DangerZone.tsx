@@ -1,10 +1,9 @@
+import { Button, wipeWorkspaceCookies, leaveWorkspace, deleteWorkspace } from '@tubeghost/ui'
 import * as React from 'react'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useWorkspace } from '@/store/workspace'
 import { useHasPermission } from '@/lib/permissions'
-import { Button } from '@/components/ui'
-import { wipeWorkspaceCookies, leaveWorkspace, deleteWorkspace } from '@/lib/workspace-admin'
 import { Srow, redBtnStyle, type Toast } from './settingsCommon'
 import { ConfirmDialog } from './ConfirmDialog'
 

@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { MetricCard } from '@/components/ui'
+import { MetricCard } from '@tubeghost/ui'
 import { NavIcon } from '@/components/sidebar/navIcons'
 import type { ViewProxy } from './types'
 
@@ -34,7 +34,12 @@ export function ProxyMetrics({ view }: { view: ViewProxy[] }): React.ReactElemen
 
   return (
     <div className="cards">
-      <MetricCard icon={<NavIcon name="proxies" size={17} />} tone="green" value={live} label="Active proxies" />
+      <MetricCard
+        icon={<NavIcon name="proxies" size={17} />}
+        tone="green"
+        value={live}
+        label="Active proxies"
+      />
       <MetricCard icon={BOX_IC} tone="red" value={assignedProfiles} label="Assigned to profiles" />
       <MetricCard icon={SHIELD_IC} tone="blue" value={total} label="Tested & reachable" />
       <MetricCard icon={CLOCK_IC} tone="amber" value={checking} label="Expiring soon" />

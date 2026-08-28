@@ -5,13 +5,15 @@
 // source of truth as the Profiles list-page Tag filter. Creating a tag inserts
 // a real `tags` row; toggling a row adds/removes the tag name on the profile.
 
+import { Badge, DEFAULT_TAG_COLOR } from '@tubeghost/ui'
 import * as React from 'react'
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
+import { createPortal } from 'react-dom'
+import { useAnchoredPopover } from '../profiles-list/useAnchoredPopover'
 import { ChevronDown, Plus } from 'lucide-react'
 import { useWorkspaceTags } from '@/lib/useWorkspaceTags'
 import { useHasPermission } from '@/lib/permissions'
-import { Badge } from '@/components/ui'
-import { TagCreateRow, TagEditRow } from '../profiles-list/TagRows'
+import { TagEditRow } from '../profiles-list/TagRows'
 import { TagSuggestionRow } from './TagSuggestionRow'
 
 export function TagsField({
@@ -33,24 +35,28 @@ export function TagsField({
   const canCreate = useHasPermission('tags.create')
   const canEdit = useHasPermission('tags.edit')
   const canDelete = useHasPermission('tags.delete')
-  const [open, setOpen] = useState(false)
-  const [creating, setCreating] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
-  const wrapRef = useRef<HTMLDivElement>(null)
+  // The field is a combobox: type to filter the registry, and when nothing
+  // matches exactly, the same box offers to create what you typed. That
+  // replaces a separate "+ New tag" mode — one input, one flow.
+  const [query, setQuery] = useState('')
 
-  // Close on outside click.
-  useEffect(() => {
-    if (!open) return
-    const onDown = (e: MouseEvent): void => {
-      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) {
-        setOpen(false)
-        setCreating(false)
-        setEditingId(null)
-      }
+  // Tags is the LAST card on the General tab, so an in-flow `absolute` menu
+  // opened downward past the bottom of the page — unreachable, because the page
+  // would not scroll to it. This hook portals the panel to document.body with
+  // position:fixed, flips it above the trigger when there is no room below, and
+  // clamps it into the viewport. Same behaviour as the Profiles-list TagsCell.
+  const [open, setOpenRaw] = useState(false)
+  const setOpen = (v: boolean): void => {
+    setOpenRaw(v)
+    // Reset transient sub-states whenever the menu closes, matching what the
+    // old outside-click handler did.
+    if (!v) {
+      setQuery('')
+      setEditingId(null)
     }
-    document.addEventListener('mousedown', onDown)
-    return () => document.removeEventListener('mousedown', onDown)
-  }, [open])
+  }
+  const { triggerRef, panelRef, style } = useAnchoredPopover(open, setOpen, 320, true)
 
   const toggle = (name: string): void =>
     onChange({ tags: tags.includes(name) ? tags.filter((x) => x !== name) : [...tags, name] })
@@ -67,7 +73,7 @@ export function TagsField({
         return
       }
     }
-    setCreating(false)
+    setQuery('')
     const finalName = existing?.name ?? name
     if (!tags.includes(finalName)) onChange({ tags: [...tags, finalName] })
   }
@@ -102,14 +108,30 @@ export function TagsField({
     if (tags.includes(name)) onChange({ tags: tags.filter((x) => x !== name) })
   }
 
+  const trimmed = query.trim()
+  const visible = trimmed
+    ? registryTags.filter((t) => t.name.toLowerCase().includes(trimmed.toLowerCase()))
+    : registryTags
+  // Only offer creation for a genuinely new name — an exact (case-insensitive)
+  // match should select the existing tag, not make a near-duplicate.
+  const canCreateTyped =
+    canCreate &&
+    trimmed.length > 0 &&
+    !registryTags.some((t) => t.name.toLowerCase() === trimmed.toLowerCase())
+
   const triggerCls =
     'w-full px-3 py-2 text-sm bg-[var(--panel-2)] border border-[var(--line)] rounded-lg text-[var(--t1)] focus:outline-none focus:ring-2 focus:ring-[var(--red)]/30 flex items-center gap-1.5 flex-wrap cursor-pointer min-h-[40px]'
 
   return (
-    <div ref={wrapRef} className="relative">
-      <button type="button" onClick={() => setOpen((v) => !v)} className={triggerCls}>
+    <div className="relative">
+      <button
+        ref={triggerRef}
+        type="button"
+        onClick={() => setOpen(!open)}
+        className={triggerCls}
+      >
         {tags.length === 0 ? (
-          <span className="flex-1 text-left text-[var(--t3)]">Select or create tags…</span>
+          <span className="flex-1 text-left text-[var(--t3)]">Search or create tags…</span>
         ) : (
           <span className="flex-1 flex flex-wrap gap-1.5">
             {tags.map((t) => (
@@ -133,53 +155,74 @@ export function TagsField({
         <ChevronDown className="w-3.5 h-3.5 opacity-60 shrink-0" />
       </button>
 
-      {open && (
-        <div className="absolute left-0 right-0 top-full mt-1 z-20 max-h-72 overflow-auto bg-[var(--panel)] border border-[var(--line)] rounded-lg shadow-lg py-1">
-          {registryTags.length === 0 && !creating && (
-            <div className="px-3 py-2 text-[11px] text-[var(--t3)]">No tags yet</div>
-          )}
-          {registryTags.map((t) =>
-            editingId === t.id ? (
-              <TagEditRow
-                key={t.id}
-                initialName={t.name}
-                initialColor={t.color}
-                onSave={(name, color) => saveEdit(t.id, t.name, name, color)}
-                onCancel={() => setEditingId(null)}
+      {open &&
+        createPortal(
+          <div
+            ref={panelRef}
+            style={style}
+            className="z-50 max-h-72 overflow-auto bg-[var(--panel)] border border-[var(--line)] rounded-lg shadow-[var(--shadow-pop)] py-1"
+          >
+          <div className="p-2 border-b border-[var(--line)]">
+              <input
+                autoFocus
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  // Enter creates the typed tag when it is genuinely new, so the
+                  // whole flow is: type, Enter. Falls through to selecting the
+                  // single match when there is exactly one.
+                  if (e.key !== 'Enter') return
+                  e.preventDefault()
+                  if (canCreateTyped) void create(trimmed, DEFAULT_TAG_COLOR)
+                  else if (visible.length === 1) toggle(visible[0].name)
+                }}
+                placeholder="Search or create a tag…"
+                className="w-full px-2 py-1.5 text-xs bg-[var(--panel-2)] border border-[var(--line)] rounded-[var(--r-sm)] text-[var(--t1)] focus:outline-none focus:ring-2 focus:ring-[var(--red)]/30"
               />
-            ) : (
-              <TagSuggestionRow
-                key={t.id}
-                name={t.name}
-                color={colorFor(t.name)}
-                checked={tags.includes(t.name)}
-                canEdit={canEdit}
-                canDelete={canDelete}
-                onToggle={() => toggle(t.name)}
-                onEdit={() => setEditingId(t.id)}
-                onDelete={() => void del(t.id, t.name)}
-              />
-            )
-          )}
-          {canCreate && (
-            <>
-              <div className="my-1 border-t border-[var(--line-2)]" />
-              {creating ? (
-                <TagCreateRow onCreate={create} onCancel={() => setCreating(false)} />
+            </div>
+            {/* Create row sits FIRST when the query is new: it is the reason the
+                user typed something the list could not match. */}
+            {canCreateTyped && (
+              <button
+                type="button"
+                onClick={() => void create(trimmed, DEFAULT_TAG_COLOR)}
+                className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-[var(--t1)] hover:bg-[var(--hover)]"
+              >
+                <Plus className="w-3.5 h-3.5 text-[var(--red)]" />
+                Create <span className="font-semibold">“{trimmed}”</span>
+              </button>
+            )}
+            {visible.length === 0 && !canCreateTyped && (
+              <div className="px-3 py-2 text-[11px] text-[var(--t3)]">
+                {registryTags.length === 0 ? 'No tags yet — type to create one.' : 'No matches.'}
+              </div>
+            )}
+            {visible.map((t) =>
+              editingId === t.id ? (
+                <TagEditRow
+                  key={t.id}
+                  initialName={t.name}
+                  initialColor={t.color}
+                  onSave={(name, color) => saveEdit(t.id, t.name, name, color)}
+                  onCancel={() => setEditingId(null)}
+                />
               ) : (
-                <button
-                  type="button"
-                  onClick={() => setCreating(true)}
-                  className="w-full flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-[var(--t3)] hover:text-[var(--red)] hover:bg-[var(--hover)]"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  New tag
-                </button>
-              )}
-            </>
-          )}
-        </div>
-      )}
+                <TagSuggestionRow
+                  key={t.id}
+                  name={t.name}
+                  color={colorFor(t.name)}
+                  checked={tags.includes(t.name)}
+                  canEdit={canEdit}
+                  canDelete={canDelete}
+                  onToggle={() => toggle(t.name)}
+                  onEdit={() => setEditingId(t.id)}
+                  onDelete={() => void del(t.id, t.name)}
+                />
+              )
+            )}
+          </div>,
+          document.body
+        )}
     </div>
   )
 }

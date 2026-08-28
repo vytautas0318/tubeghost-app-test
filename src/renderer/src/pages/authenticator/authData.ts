@@ -2,7 +2,7 @@
 // lib/authenticator (Supabase + the totp Edge Function) via useAuthData; tag
 // colors now come from the shared workspace tag registry (lib/tags.ts +
 // useWorkspaceTags) so this file no longer holds a tag list.
-import type { AuthPlatform } from '@/lib/authenticator'
+import type { AuthPlatform } from '@tubeghost/ui'
 
 export { PERIOD } from './useAuthData'
 

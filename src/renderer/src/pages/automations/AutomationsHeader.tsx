@@ -3,7 +3,7 @@
 
 import * as React from 'react'
 import { Download, Plus, Zap, Clock } from 'lucide-react'
-import { Button, MetricCard } from '@/components/ui'
+import { Button, MetricCard } from '@tubeghost/ui'
 
 export function AutomationsHeader({
   activeCount,

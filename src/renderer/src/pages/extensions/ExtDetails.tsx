@@ -1,6 +1,6 @@
 import * as React from 'react'
 import { X } from 'lucide-react'
-import { Badge } from '@/components/ui'
+import { Badge } from '@tubeghost/ui'
 import type { ExtensionWithAssignment } from '@/lib/extensions'
 import { ExtTile } from './ExtTile'
 import { scopeMeta } from './extView'

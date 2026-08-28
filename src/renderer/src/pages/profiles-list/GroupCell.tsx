@@ -22,7 +22,8 @@ export function GroupCell({
   raw,
   groups,
   canEdit,
-  onChanged
+  onChanged,
+  alwaysShowEmpty = false
 }: {
   raw: ProfileRowType
   groups: GroupRow[]
@@ -30,6 +31,10 @@ export function GroupCell({
   // With an updated row → patched in place. Without → full refetch, which is
   // what group rename/delete need (they change every row's group label).
   onChanged: (updated?: ProfileRowType) => void
+  // The "Set group" placeholder is hover-only in the table, which keeps rows
+  // calm. A card has one group line and nothing else to reveal on hover, so
+  // hiding it there just looks like a missing line — cards pass true.
+  alwaysShowEmpty?: boolean
 }): React.ReactElement {
   const canGroupEdit = useHasPermission('groups.edit')
   const canGroupDelete = useHasPermission('groups.delete')
@@ -99,7 +104,12 @@ export function GroupCell({
             <span className="text-[var(--t1)] font-medium">{current.name}</span>
           </>
         ) : (
-          <span className="inline-flex items-center gap-1 text-[11px] text-[var(--t4)] hover:text-[var(--red)] opacity-0 group-hover:opacity-100 transition-opacity">
+          <span
+            className={
+              'inline-flex items-center gap-1 text-[11px] text-[var(--t4)] hover:text-[var(--red)] transition-opacity' +
+              (alwaysShowEmpty ? '' : ' opacity-0 group-hover:opacity-100')
+            }
+          >
             <FolderInput className="w-3 h-3" />
             Set group
           </span>

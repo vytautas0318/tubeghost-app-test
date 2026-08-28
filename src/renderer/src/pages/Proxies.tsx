@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useWorkspace } from '@/store/workspace'
 import { useHasPermission } from '@/lib/permissions'
@@ -13,11 +13,14 @@ import { ProxyMetrics } from './proxies/ProxyMetrics'
 import { AddProxiesPanel } from './proxies/AddProxiesPanel'
 import { ProxiesOverlays } from './proxies/ProxiesOverlays'
 import { ProxyTabs } from './proxies/ProxyTabs'
+import { ProxyBulkActionBar } from './proxies/ProxyBulkActionBar'
 import { isProxyTab, type ProxyTab } from './proxies/proxy-tab'
 import { TubeproxiesToolbar } from './proxies/TubeproxiesToolbar'
 import { TUBEPROXIES_COLUMNS, CUSTOM_COLUMNS } from './proxies/columns'
 import { useProxiesData } from './proxies/useProxiesData'
 import { useProxyTest } from './proxies/useProxyTest'
+import { useProxyActions } from './proxies/useProxyActions'
+import { useProxyRows } from './proxies/useProxyRows'
 import { useProxySort } from './proxies/useProxySort'
 import { CenterMessage, ErrorState, NoPermissionState } from './proxies/ProxiesStates'
 import { Pagination } from './profiles-list/Pagination'
@@ -48,36 +51,14 @@ export function Proxies(): React.ReactElement {
   const { toast, show: showToast } = useToast()
   const proxyTest = useProxyTest()
 
-  // ONE query, split in memory by source. Switching tabs never refetches.
-  const bySource = useMemo(
-    () => ({
-      tubeproxies: view.filter((p) => p.source === 'tubeproxies'),
-      custom: view.filter((p) => p.source !== 'tubeproxies')
-    }),
-    [view]
-  )
+  const { onDelete, onDeleteRaw, onRefresh, refreshing } = useProxyActions({
+    removeRow,
+    refresh,
+    showToast,
+    onDeleted: () => setSelectedRow(null)
+  })
 
-  const tabRows = tab === 'tubeproxies' ? bySource.tubeproxies : bySource.custom
-
-  // Sort by workspace ordinal; TubeProxies tab also filters by IP or tag(label).
-  const filtered = useMemo(() => {
-    const sign = sortDir === 'asc' ? 1 : -1
-    const needle = search.trim().toLowerCase()
-    const rows =
-      tab === 'tubeproxies' && needle
-        ? tabRows.filter(
-            (p) =>
-              p.host.toLowerCase().includes(needle) ||
-              (p.label?.toLowerCase().includes(needle) ?? false)
-          )
-        : tabRows
-    return [...rows].sort((a, b) => {
-      if (a.proxy_number == null && b.proxy_number == null) return 0
-      if (a.proxy_number == null) return 1
-      if (b.proxy_number == null) return -1
-      return (a.proxy_number - b.proxy_number) * sign
-    })
-  }, [tabRows, sortDir, search, tab])
+  const { bySource, tabRows, filtered } = useProxyRows(view, tab, search, sortDir)
 
   const {
     paged,
@@ -90,7 +71,8 @@ export function Proxies(): React.ReactElement {
     pageSelectedCount,
     onToggleRow,
     onToggleSelectAll,
-    selected
+    selected,
+    clearSelection
   } = useSelectionAndPaging(filtered, [sortDir, tab, search])
 
   const onCreatedMany = (rows: ProxyRow[]): void => {
@@ -99,41 +81,12 @@ export function Proxies(): React.ReactElement {
     showToast('success', `${rows.length} ${rows.length === 1 ? 'proxy' : 'proxies'} added`)
   }
 
-  const onDelete = async (row: ProxyRow): Promise<void> => {
-    if (!confirm(`Delete proxy "${row.label || `${row.host}:${row.port}`}"?`)) return
-    try {
-      await removeRow(row.id)
-      setSelectedRow(null)
-      showToast('success', 'Proxy deleted')
-    } catch (e) {
-      showToast('error', (e as Error).message)
-    }
-  }
-
   // Expired proxies have no credentials to test with (withheld server-side),
   // so testing them would just produce a row of failures.
   const onCheckAll = (): void => {
     filtered
       .filter((p) => p.status === 'active')
       .forEach((p) => proxyTest.run(p, () => undefined, showToast))
-  }
-
-  // Purchased proxies are read live and kept current by a realtime
-  // subscription, so this is not a sync. It re-attaches (picking up anything
-  // bought since the page opened) and re-reads. The pending flag exists
-  // because without it a fast refresh looks like a dead button.
-  const [refreshing, setRefreshing] = useState(false)
-  const onRefresh = async (): Promise<void> => {
-    if (refreshing) return
-    setRefreshing(true)
-    try {
-      await refresh()
-      showToast('info', 'Proxies refreshed')
-    } catch (e) {
-      showToast('error', (e as Error).message)
-    } finally {
-      setRefreshing(false)
-    }
   }
 
   if (!ws) return <CenterMessage text="Loading workspace…" />
@@ -197,6 +150,7 @@ export function Proxies(): React.ReactElement {
             tab={tab}
             canCreate={canCreate}
             onCreate={() => setShowAddPanel(true)}
+            onBuy={() => navigate('/buy-proxies')}
             onSync={() => void onRefresh()}
           />
         ) : (
@@ -218,7 +172,21 @@ export function Proxies(): React.ReactElement {
               onDelete={onDelete}
               onAssign={(p) => setAssignRow(p)}
               onEditLabel={(p) => setSelectedRow(p)}
+              onCopied={(text) => showToast('info', `Copied ${text}`)}
               sortHeader={<SortHeader label="#" active dir={sortDir} onClick={toggleSort} />}
+              footer={
+                <ProxyBulkActionBar
+                  selectedRows={selectedRows}
+                  canEdit={canEdit}
+                  canDelete={canDelete}
+                  canTest={canTest}
+                  onClear={clearSelection}
+                  onTestOne={(p) => proxyTest.run(p, () => undefined, showToast)}
+                  onDeleteOne={onDeleteRaw}
+                  onPatchLocal={data.patchLocal}
+                  onToast={showToast}
+                />
+              }
             />
             <div style={{ marginTop: '14px' }}>
               <Pagination
@@ -246,6 +214,7 @@ export function Proxies(): React.ReactElement {
         onTest={(row, set) => proxyTest.run(row, set, showToast)}
         onToast={showToast}
         onRefresh={data.refresh}
+        onPatchLocal={data.patchLocal}
       />
 
       <ToastView toast={toast} position="bottom-center" />

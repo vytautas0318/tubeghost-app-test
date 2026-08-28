@@ -8,7 +8,7 @@ import { useState } from 'react'
 import { Plus, Trash2, Pencil } from 'lucide-react'
 import { FilterChip } from './FilterChip'
 import { TagCreateRow, TagEditRow } from './TagRows'
-import { type TagRow } from '@/lib/tags'
+import { type TagRow } from '@tubeghost/ui'
 
 export function TagFilterDropdown({
   tags,

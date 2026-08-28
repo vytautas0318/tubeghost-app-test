@@ -25,7 +25,9 @@ import { GroupCreateRow } from './GroupCreateRow'
 import { GroupContextMenu } from './GroupContextMenu'
 import { GroupItem, GroupRenameRow } from './GroupSidebarItem'
 
-export type GroupFilter = 'all' | 'ungrouped' | string
+import type { GroupFilter } from './groupFilterType'
+
+export type { GroupFilter }
 
 const COLLAPSE_KEY = 'tpb.groupSidebar.collapsed'
 

@@ -3,17 +3,16 @@
 // Tag colors are the shared workspace registry (lib/tags via useWorkspaceTags),
 // so a color set here shows the same everywhere (Authenticator included).
 
+import { Badge, DEFAULT_TAG_COLOR } from '@tubeghost/ui'
 import * as React from 'react'
 import { useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Plus } from 'lucide-react'
 import { updateProfile, type ProfileRow as ProfileRowType } from '@/lib/profiles'
-import { Badge } from '@/components/ui'
 import { useAnchoredPopover } from './useAnchoredPopover'
 import { useWorkspace } from '@/store/workspace'
 import { useHasPermission } from '@/lib/permissions'
 import { useWorkspaceTags } from '@/lib/useWorkspaceTags'
-import { DEFAULT_TAG_COLOR } from '@/lib/tags'
 import { TagsPopover } from './TagsPopover'
 
 const stop = (e: React.MouseEvent | React.SyntheticEvent): void => e.stopPropagation()
@@ -21,7 +20,8 @@ const stop = (e: React.MouseEvent | React.SyntheticEvent): void => e.stopPropaga
 export function TagsCell({
   raw,
   canEdit,
-  onChanged
+  onChanged,
+  onTagRenamedOrRemoved
 }: {
   raw: ProfileRowType
   // allTags kept for API compatibility with the row; suggestions now come from
@@ -31,6 +31,12 @@ export function TagsCell({
   // With an updated row → patched in place. Without → full refetch, needed
   // for a registry-wide tag rename, which rewrites every profile's tags.
   onChanged: (updated?: ProfileRowType) => void
+  // Called when a tag's workspace-wide NAME changes or disappears, so the page
+  // can keep the active filter in step. `to` is null for a delete. Without
+  // this, renaming or deleting a tag that is currently filtered on leaves a
+  // chip matching nothing -- and on delete the chip can't even be unticked,
+  // because the tag is gone from the dropdown.
+  onTagRenamedOrRemoved?: (from: string, to: string | null) => void
 }): React.ReactElement {
   const workspaceId = useWorkspace((s) => s.current?.workspace_id ?? null)
   const canTagCreate = useHasPermission('tags.create')
@@ -116,10 +122,14 @@ export function TagsCell({
     const name = editName.trim()
     setEditingId(null)
     if (!id || !name) return
+    const prevName = wsTags.find((t) => t.id === id)?.name
     // editTag renames in the registry AND cascades the new name into every
     // profile's tags array (rename_tag RPC). Reload the row so a renamed tag
     // shows its new label here immediately.
-    void editTag(id, name, editColor).then(() => onChanged())
+    void editTag(id, name, editColor).then(() => {
+      if (prevName && prevName !== name) onTagRenamedOrRemoved?.(prevName, name)
+      onChanged()
+    })
   }
 
   if (!canEdit) {
@@ -182,7 +192,16 @@ export function TagsCell({
             startEdit={startEdit}
             cancelEdit={() => setEditingId(null)}
             saveEdit={saveEdit}
-            removeTag={(id) => void removeTag(id)}
+            removeTag={(id) => {
+              // Deleting from the registry strips the tag from every profile,
+              // so the row needs a refetch — and the page needs to drop the
+              // now-dead filter chip.
+              const gone = wsTags.find((t) => t.id === id)?.name
+              void removeTag(id).then(() => {
+                if (gone) onTagRenamedOrRemoved?.(gone, null)
+                onChanged()
+              })
+            }}
           />,
           document.body
         )}

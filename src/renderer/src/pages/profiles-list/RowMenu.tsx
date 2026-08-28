@@ -8,7 +8,7 @@ import { useNavigate } from 'react-router-dom'
 import { Copy, Download, MoreVertical, Pencil, Trash2, Unlock } from 'lucide-react'
 import { useHasPermission } from '@/lib/permissions'
 import { deleteProfile, duplicateProfile, exportProfile, type ProfileRow } from '@/lib/profiles'
-import { forceReleaseProfileLock } from '@/lib/profile-locks'
+import { forceReleaseProfileLock } from '@tubeghost/ui'
 
 export function RowMenu({
   profile,
@@ -26,6 +26,9 @@ export function RowMenu({
 
   const [open, setOpen] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
+  // Re-entrancy guard for the mutating actions (a ref, not state — it must
+  // update synchronously within the same tick to block a double-click).
+  const busyRef = useRef(false)
 
   useEffect(() => {
     if (!open) return
@@ -69,12 +72,19 @@ export function RowMenu({
   }
 
   const onDuplicate = async (): Promise<void> => {
+    // Guard against a second invocation while the insert is still in flight.
+    // Closing the menu is a state update (async), so a fast double-click could
+    // otherwise fire two inserts and really create two profiles.
+    if (busyRef.current) return
+    busyRef.current = true
     setOpen(false)
     try {
       await duplicateProfile(profile.id)
       onChange()
     } catch (e) {
       window.alert(`Duplicate failed: ${(e as Error).message}`)
+    } finally {
+      busyRef.current = false
     }
   }
 

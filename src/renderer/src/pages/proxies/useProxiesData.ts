@@ -27,6 +27,7 @@ interface UseProxiesDataResult {
   error: string | null
   removeRow: (id: string) => Promise<void>
   insertLocal: (row: ProxyRow) => void
+  patchLocal: (id: string, patch: Partial<ProxyRow>) => void
   refresh: () => Promise<void>
 }
 
@@ -238,9 +239,7 @@ export function useProxiesData(
   const removeRow = async (id: string): Promise<void> => {
     const row = rows.find((p) => p.id === id)
     if (row && row.source !== 'custom') {
-      throw new Error(
-        'Purchased proxies are managed on tubeproxies.com — cancel or swap it there.'
-      )
+      throw new Error('Purchased proxies are managed on tubeproxies.com — cancel or swap it there.')
     }
     await deleteProxy(id)
     setRows((prev) => prev.filter((p) => p.id !== id))
@@ -253,6 +252,18 @@ export function useProxiesData(
     setProfileNumbers((prev) => ({ ...prev, [row.id]: [] }))
   }
 
+  // Apply an already-persisted patch to the list in place, so the table
+  // reflects an edit made in the drawer without a full re-fetch.
+  //
+  // Required for label/notes edits: the drawer used to update only its own
+  // copy of the row, leaving the Tag column (and the label search filter)
+  // showing the stale value until the next Refresh. Purchased proxies make
+  // this worse — their label/notes live in ghost.proxy_annotations, which no
+  // realtime subscription watches, so nothing else would ever heal the list.
+  const patchLocal = (id: string, patch: Partial<ProxyRow>): void => {
+    setRows((prev) => prev.map((p) => (p.id === id ? { ...p, ...patch } : p)))
+  }
+
   return {
     rows,
     view,
@@ -262,6 +273,7 @@ export function useProxiesData(
     error,
     removeRow,
     insertLocal,
+    patchLocal,
     refresh
   }
 }

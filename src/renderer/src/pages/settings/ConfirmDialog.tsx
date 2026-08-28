@@ -1,6 +1,6 @@
 import * as React from 'react'
 import { useState } from 'react'
-import { Button } from '@/components/ui'
+import { Button } from '@tubeghost/ui'
 
 // Shared confirm dialog for destructive Settings actions. Mirrors the modal
 // shell used elsewhere (members/ConfirmRemoveModal). When `confirmPhrase` is

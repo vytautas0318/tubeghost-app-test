@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { cn } from '@/lib/cn'
+import { cn } from '@tubeghost/ui'
 
 export type ProfileStatus = 'open' | 'idle' | 'error'
 

@@ -120,7 +120,12 @@ function GroupMenu({
 
   return (
     <div className="py-1 min-w-[210px]">
-      <MenuRow label="All profiles" count={counts.all} active={filter === 'all'} onClick={() => onPick('all')} />
+      <MenuRow
+        label="All profiles"
+        count={counts.all}
+        active={filter === 'all'}
+        onClick={() => onPick('all')}
+      />
       <MenuRow
         label="Ungrouped"
         count={counts.ungrouped}
@@ -191,7 +196,9 @@ function MenuRow({
     <div
       className={
         'group/mr w-full flex items-center gap-2 px-3 py-1.5 text-xs cursor-pointer ' +
-        (active ? 'bg-[var(--red-soft)] text-[var(--red)] font-semibold' : 'text-[var(--t1)] hover:bg-[var(--hover)]')
+        (active
+          ? 'bg-[var(--red-soft)] text-[var(--red)] font-semibold'
+          : 'text-[var(--t1)] hover:bg-[var(--hover)]')
       }
       onClick={onClick}
     >

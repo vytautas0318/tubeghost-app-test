@@ -1,6 +1,6 @@
 import * as React from 'react'
 import { Search, Smartphone, ChevronDown, ChevronRight, Plus, Lock } from 'lucide-react'
-import { Button } from '@/components/ui'
+import { Button } from '@tubeghost/ui'
 import { APP_STORE_URL, PLAY_STORE_URL } from './authData'
 import { APPLE_ICON, ANDROID_ICON } from './appIcons'
 

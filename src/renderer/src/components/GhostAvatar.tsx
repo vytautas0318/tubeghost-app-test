@@ -1,5 +1,5 @@
 import * as React from 'react'
-import type { GhostFace, GhostGlasses, GhostHat, GhostHand } from './ghost-avatar-parts'
+import type { GhostFace, GhostGlasses, GhostHat, GhostHand } from '@tubeghost/ui'
 
 // Composable brand-mascot avatar (color + expression + glasses + hat +
 // gesture), rendered entirely as inline SVG — no image upload, no storage.

@@ -3,12 +3,11 @@
 // toggle, ⋮ menu). Row actions come in via props; the menu handles positioning
 // + upward-flip like the other row menus in the app.
 
+import { Badge, Toggle, type BadgeTone, AutomationWithMeta } from '@tubeghost/ui'
 import * as React from 'react'
 import { useEffect, useState } from 'react'
 import { formatDistanceToNow } from 'date-fns'
 import { MoreVertical, Pencil, Zap, Copy, Trash2, List } from 'lucide-react'
-import { Badge, Toggle, type BadgeTone } from '@/components/ui'
-import type { AutomationWithMeta } from '@/lib/automations'
 import { describeSchedule } from '@/lib/automations/schedule'
 
 export interface RowActions {
@@ -45,10 +44,13 @@ function actionSubline(a: AutomationWithMeta): string {
 export function AutomationsTable({
   autos,
   totalProfiles,
+  loading = false,
   actions
 }: {
   autos: AutomationWithMeta[]
   totalProfiles: number
+  // True while the first fetch is in flight — suppresses the empty state.
+  loading?: boolean
   actions: RowActions
 }): React.ReactElement {
   const [menu, setMenu] = useState<{ id: string; x: number; y: number; up: boolean } | null>(null)
@@ -74,7 +76,16 @@ export function AutomationsTable({
         <span />
       </div>
 
-      {autos.length === 0 && (
+      {loading && (
+        <div style={{ padding: '36px 20px', textAlign: 'center' }}>
+          <div style={{ fontSize: '13px', color: 'var(--t3)' }}>Loading automations…</div>
+        </div>
+      )}
+
+      {/* `loading` must be checked BEFORE the empty state: an in-flight fetch
+          also has zero rows, so without this the page flashes "No automations
+          yet" on every visit. */}
+      {!loading && autos.length === 0 && (
         <div style={{ padding: '36px 20px', textAlign: 'center' }}>
           <div style={{ fontSize: '13.5px', fontWeight: 600, color: 'var(--t1)' }}>
             No automations yet

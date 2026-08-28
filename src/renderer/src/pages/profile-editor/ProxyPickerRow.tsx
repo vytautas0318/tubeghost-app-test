@@ -57,7 +57,7 @@ export function ProxyPickerRow({
             {usage}× used
           </span>
         )}
-        <Flag code={p.country_code} />
+        <span><Flag code={p.country_code} /></span>
         <span className="uppercase">{p.country_code ?? '—'}</span>
         <span className="uppercase">{p.proxy_type}</span>
       </div>

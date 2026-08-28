@@ -5,7 +5,7 @@
 
 import * as OTPAuth from 'otpauth'
 import jsQR from 'jsqr'
-import type { AuthPlatform } from '@/lib/authenticator'
+import type { AuthPlatform } from '@tubeghost/ui'
 
 export interface ParsedSecret {
   secret: string // Base32, uppercased, no spaces

@@ -75,6 +75,7 @@ export type PermissionKey =
   | 'proxies.refresh'
   | 'proxies.test'
   | 'proxies.view_credentials'
+  | 'phone_numbers.view'
   | 'activity.view'
 
 export type FeatureKey =

@@ -3,7 +3,7 @@
 // was no shared multi-select component, so this is the canonical one for scope.
 
 import * as React from 'react'
-import { Select, Checkbox } from '@/components/ui'
+import { Select, Checkbox } from '@tubeghost/ui'
 import type { GroupRow } from '@/lib/groups'
 import type { ProfileRow } from '@/lib/profiles'
 import type { ProfileScope } from '../../../../shared/automations/types'

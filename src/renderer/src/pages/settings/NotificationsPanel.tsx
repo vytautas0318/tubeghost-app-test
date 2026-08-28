@@ -1,18 +1,9 @@
+import { Button, Toggle, Input, NOTIFICATION_EVENTS, getNotificationPrefs, saveNotificationPrefs, validateWebhookUrl, sendWebhookTest, defaultPrefs, type NotificationPrefs } from '@tubeghost/ui'
 import * as React from 'react'
 import { useEffect, useState } from 'react'
 import { Send } from 'lucide-react'
 import { useAuth } from '@/store/auth'
 import { usePrefs } from '@/store/prefs'
-import { Button, Toggle, Input } from '@/components/ui'
-import {
-  NOTIFICATION_EVENTS,
-  getNotificationPrefs,
-  saveNotificationPrefs,
-  validateWebhookUrl,
-  sendWebhookTest,
-  defaultPrefs,
-  type NotificationPrefs
-} from '@/lib/notifications'
 import { Srow, type Toast } from './settingsCommon'
 
 export function NotificationsPanel({ onToast }: { onToast: Toast }): React.ReactElement {

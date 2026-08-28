@@ -70,6 +70,11 @@ export function useProfilesListData(workspaceId: string | null): UseProfilesList
           setRows((prev) => {
             if (payload.eventType === 'INSERT') {
               const next = payload.new as ProfileRow
+              // Drafts are desktop-editor scratch rows and are excluded from
+              // the list query — so they must be excluded here too, or a
+              // teammate merely OPENING the editor makes a phantom profile
+              // appear in an already-loaded web list.
+              if (next.is_draft) return prev
               // The row may already be here: creating/duplicating a profile
               // triggers an immediate refetch (reload(), or this page
               // mounting after the editor navigates back) AND a realtime
@@ -83,6 +88,13 @@ export function useProfilesListData(workspaceId: string | null): UseProfilesList
             }
             if (payload.eventType === 'UPDATE') {
               const next = payload.new as ProfileRow
+              // commitProfileDraft() flips is_draft false on first save, which
+              // arrives as an UPDATE for a row this list never saw. Treat that
+              // as the insert it effectively is; a row that became a draft
+              // again (or still is one) is dropped.
+              const known = prev.some((p) => p.id === next.id)
+              if (next.is_draft) return known ? prev.filter((p) => p.id !== next.id) : prev
+              if (!known) return [next, ...prev]
               return prev.map((p) => (p.id === next.id ? next : p))
             }
             return prev

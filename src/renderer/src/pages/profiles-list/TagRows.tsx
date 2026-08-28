@@ -7,7 +7,7 @@
 import * as React from 'react'
 import { useEffect, useRef, useState } from 'react'
 import { Check } from 'lucide-react'
-import { TAG_PRESET_COLORS, DEFAULT_TAG_COLOR } from '@/lib/tags'
+import { TAG_PRESET_COLORS, DEFAULT_TAG_COLOR } from '@tubeghost/ui'
 
 // Popover swatch picker triggered by a color dot. Shared by create + edit rows.
 // Dismissal is a scoped document-mousedown-outside listener rather than a

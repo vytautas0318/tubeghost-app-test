@@ -1,6 +1,6 @@
 import * as React from 'react'
 import { MoreVertical, Tag, Pin } from 'lucide-react'
-import { Badge, Toggle } from '@/components/ui'
+import { Badge, Toggle } from '@tubeghost/ui'
 import { NavIcon } from '@/components/sidebar/navIcons'
 import type { ExtensionWithAssignment } from '@/lib/extensions'
 import type { GroupRow } from '@/lib/groups'

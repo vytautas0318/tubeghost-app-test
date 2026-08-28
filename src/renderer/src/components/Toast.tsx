@@ -1,7 +1,7 @@
 import * as React from 'react'
 import { useEffect, useState } from 'react'
 import { CheckCircle2, XCircle } from 'lucide-react'
-import { cn } from '@/lib/cn'
+import { cn } from '@tubeghost/ui'
 
 export interface ToastState {
   kind: 'error' | 'info' | 'success'
@@ -19,8 +19,17 @@ const TOAST_ICON: Record<ToastState['kind'], React.ReactElement> = {
 
 // Dark pill notification (matches the TubeGhost toast style) — a charcoal
 // rounded pill with a colored status glyph + white label, consistent in both
-// themes. Sits bottom-right of the parent by default, or bottom-center when
+// themes. Sits bottom-right of the VIEWPORT by default, or bottom-center when
 // `position="bottom-center"`. Use with the useToast hook below.
+//
+// fixed, not absolute: an absolutely-positioned toast anchors to whichever
+// scroll container it happens to render inside, so on a scrolled page it lands
+// mid-document instead of at the bottom of the screen.
+//
+// z-[450] puts it above the detail drawers and overlays (z-50) — a toast fired
+// from inside a drawer was rendering BEHIND it, clipped by the drawer edge —
+// while staying below the blocking confirm modals at z-[500], which should
+// never be obscured by a transient pill.
 export function ToastView({
   toast,
   position = 'bottom-right'
@@ -32,7 +41,7 @@ export function ToastView({
   return (
     <div
       className={cn(
-        'absolute bottom-4 z-30',
+        'fixed bottom-4 z-[450]',
         position === 'bottom-center' ? 'left-1/2 -translate-x-1/2' : 'right-4'
       )}
       style={{

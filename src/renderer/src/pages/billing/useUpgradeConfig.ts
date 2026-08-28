@@ -1,153 +1,121 @@
 // Configurator state for the upgrade modal.
 //
-// Seeds profiles from the workspace's LIVE usage (floored at the plan
-// minimum) so the quote reflects what the user is actually running, then
-// derives every price through the shared pricing module — the same one the
-// marketing site and the checkout endpoint use.
-//
-// Deliberately covers profiles + seats ONLY. Proxies and phone numbers are
-// TubeProxies products on their own Stripe subscriptions; quoting them here
-// would imply one combined bill that checkout doesn't produce. They're bought
-// from /buy-proxies and /phone instead.
+// Mirrors the marketing pricing table: Starter is fixed (10 profiles, solo),
+// Team is a configurator where you pick your profile capacity and how many
+// members you need. Every price comes from the shared pricing module; no math
+// lives in the components.
 
 import { useMemo, useState } from 'react'
 import {
-  addOnsAvailable,
-  applyCycle,
-  billedTotal,
-  perProfileRate,
   PF_MAX,
   PF_MIN,
   PLANS,
-  planList,
-  SEAT_RATE,
-  type Cycle,
-  type GhostPlanKey
+  planQuote,
+  type PlanCycle,
+  type PlanDef,
+  type PlanQuote
 } from '@shared/pricing'
-import { addOnsList } from '@shared/addons'
+import type { BillingUsage } from './types'
 
-export interface Quote {
-  listMonthly: number
-  monthly: number
-  billed: number
-}
+export type Quote = PlanQuote
 
-function quote(list: number, cycle: Cycle): Quote {
-  const monthly = applyCycle(list, cycle)
-  return { listMonthly: list, monthly, billed: billedTotal(monthly, cycle) }
+/** Hard ceiling on the seat stepper; above this it's a sales conversation. */
+export const MAX_MEMBERS = 50
+
+export interface PlanConfig {
+  plan: PlanDef
+  /** Total members seated, including those bundled in the price. */
+  members: number
+  setMembers: (n: number) => void
+  /** Lowest seat count this workspace may buy (included, or what it uses). */
+  minMembers: number
+  /** Profile capacity being bought. Fixed plans report their included count. */
+  profiles: number
+  setProfiles: (n: number) => void
+  /** Lowest profile count this workspace may buy. */
+  minProfiles: number
+  atMaxProfiles: boolean
+  /** Seats billed on top of the price. */
+  extraSeats: number
+  quote: Quote
 }
 
 export interface UpgradeConfig {
-  cycle: Cycle
-  setCycle: (c: Cycle) => void
-  starter: { quote: Quote }
-  team: {
-    profiles: number
-    setProfiles: (n: number) => void
-    seats: number
-    setSeats: (n: number) => void
-    /** Derived per-profile label — never an input. */
-    perProfile: number
-    atMax: boolean
-    quote: Quote
-  }
-  /**
-   * TubeProxies add-ons bought in the same checkout. Unavailable on annual —
-   * they have no annual price, and one Checkout session cannot mix intervals.
-   */
-  addOns: {
-    available: boolean
-    proxies: number
-    setProxies: (n: number) => void
-    numbers: number
-    setNumbers: (n: number) => void
-    /** Monthly list price of the selected add-ons, before the cycle discount. */
-    list: number
-  }
-  /** Plan + add-ons, the figure the Buy button commits to. */
-  total: (plan: GhostPlanKey) => Quote
+  cycle: PlanCycle
+  setCycle: (c: PlanCycle) => void
+  starter: PlanConfig
+  team: PlanConfig
 }
 
-/** The marketing page's opening configuration, so quotes match tubeghost.com. */
-const SITE_DEFAULT_PROFILES = 100
+export function useUpgradeConfig(usage: BillingUsage): UpgradeConfig {
+  const [cycle, setCycle] = useState<PlanCycle>('monthly')
 
-export interface UpgradeUsage {
-  profilesUsed: number
-  seatsUsed: number
-}
+  // Floors, derived every render rather than seeded into useState: usage
+  // arrives asynchronously, so a useState initializer would lock in the
+  // pre-load zeros and quote a plan too small for the workspace. Taking the
+  // max at render time lets the floor rise when the real counts land, without
+  // an effect that would fight the user's own stepper input.
+  const seatFloor = Math.min(MAX_MEMBERS, Math.max(PLANS.team.seatsIncluded, usage.seatsUsed ?? 0))
+  const profileFloor = Math.min(PF_MAX, Math.max(PF_MIN, usage.profilesUsed ?? 0))
 
-export function useUpgradeConfig(usage: UpgradeUsage): UpgradeConfig {
-  // Annual by default, matching the marketing page.
-  const [cycle, setCycle] = useState<Cycle>('annual')
-
-  // Profiles seed from live usage but never below the site default, so a
-  // workspace under 100 still sees the published price while a larger fleet
-  // gets a quote that actually fits it.
-  const [profiles, setProfiles] = useState(
-    Math.min(PF_MAX, Math.max(PF_MIN, SITE_DEFAULT_PROFILES, usage.profilesUsed))
+  // Open on WHAT THE WORKSPACE ALREADY BUYS, not on a generic default.
+  //
+  // A Team customer on 200 profiles / 8 seats opening this modal was shown
+  // 100 / 3 — the marketing defaults — which reads as a downgrade and hides
+  // the configuration they are actually paying for. `seatLimit` and
+  // `profileLimit` are the PURCHASED figures; `*Used` is only how much of that
+  // is consumed, so seeding from usage understated it too.
+  //
+  // Null (free plan, or the read failed) falls back to the marketing opening
+  // position. Seeded once via useState: after that the steppers belong to the
+  // user, and re-deriving would fight their input.
+  const [teamMembers, setTeamMembers] = useState(
+    Math.min(MAX_MEMBERS, Math.max(seatFloor, usage.seatLimit ?? 0))
   )
-  // TOTAL member count, matching the marketing stepper — it floors at the
-  // plan's included seats and only bills beyond them. Seeded from live usage
-  // so an existing team of 5 opens at 5, not at the 3 included.
-  const [seats, setSeats] = useState(
-    Math.max(PLANS.team.seatsIncluded, usage.seatsUsed)
+  const [teamProfiles, setTeamProfiles] = useState(
+    Math.min(PF_MAX, Math.max(100, profileFloor, usage.profileLimit ?? 0))
   )
 
-  // Add-ons start empty — they are things you choose to buy here, not a
-  // reflection of what the workspace already holds on TubeProxies.
-  const [proxies, setProxies] = useState(0)
-  const [numbers, setNumbers] = useState(0)
+  const members = Math.max(teamMembers, seatFloor)
+  const profiles = Math.max(teamProfiles, profileFloor)
 
-  const addOnsOk = addOnsAvailable(cycle)
-  // Selections are ignored (not just hidden) on annual, so a stale value can
-  // never reach checkout and create a line item with no annual price.
-  const addOnList = addOnsOk ? addOnsList(proxies, numbers) : 0
-
-  /**
-   * Switching to annual drops any configured add-ons. Keeping them would
-   * quote a total the checkout cannot produce — proxies and numbers have no
-   * annual price.
-   */
-  const changeCycle = (c: Cycle): void => {
-    setCycle(c)
-    if (!addOnsAvailable(c)) {
-      setProxies(0)
-      setNumbers(0)
-    }
-  }
-
-  const starterQuote = useMemo(() => quote(planList(PLANS.starter), cycle), [cycle])
-  const teamListPrice = planList(PLANS.team, seats, profiles)
-  const teamQuote = useMemo(
-    () => quote(planList(PLANS.team, seats, profiles), cycle),
-    [profiles, seats, cycle]
+  const starterQuote = useMemo(
+    () => planQuote(PLANS.starter, cycle, PLANS.starter.seatsIncluded),
+    [cycle]
+  )
+  const teamQuoteValue = useMemo(
+    () => planQuote(PLANS.team, cycle, members, profiles),
+    [cycle, members, profiles]
   )
 
   return {
     cycle,
-    setCycle: changeCycle,
-    starter: { quote: starterQuote },
+    setCycle,
+    starter: {
+      plan: PLANS.starter,
+      members: PLANS.starter.seatsIncluded,
+      setMembers: () => {},
+      minMembers: PLANS.starter.seatsIncluded,
+      profiles: PLANS.starter.profiles,
+      setProfiles: () => {},
+      minProfiles: PLANS.starter.profiles,
+      atMaxProfiles: false,
+      extraSeats: 0,
+      quote: starterQuote
+    },
     team: {
+      plan: PLANS.team,
+      members,
+      // Clamped to the floors so the steppers can never quote less capacity
+      // than the workspace already occupies — checkout would reject that.
+      setMembers: (n) => setTeamMembers(Math.min(MAX_MEMBERS, Math.max(seatFloor, n))),
+      minMembers: seatFloor,
       profiles,
-      setProfiles,
-      seats,
-      setSeats,
-      perProfile: perProfileRate(profiles),
-      atMax: profiles >= PF_MAX,
-      quote: teamQuote
-    },
-    addOns: {
-      available: addOnsOk,
-      proxies,
-      setProxies,
-      numbers,
-      setNumbers,
-      list: addOnList
-    },
-    total: (plan) =>
-      quote((plan === 'starter' ? planList(PLANS.starter) : teamListPrice) + addOnList, cycle)
+      setProfiles: (n) => setTeamProfiles(Math.min(PF_MAX, Math.max(profileFloor, n))),
+      minProfiles: profileFloor,
+      atMaxProfiles: profiles >= PF_MAX,
+      extraSeats: teamQuoteValue.billableSeats,
+      quote: teamQuoteValue
+    }
   }
 }
-
-/** Seat rate re-exported so the modal can label the add-on without a second import. */
-export { SEAT_RATE }

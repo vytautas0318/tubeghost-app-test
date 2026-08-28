@@ -1,11 +1,10 @@
 // One row in the AddProxiesPanel preview. Shows: parsed proxy, geo (if
 // enriched), auth result (if tested). Pure presentational — no state.
 
+import { IpLookupResult, ParsedProxy } from '@tubeghost/ui'
 import * as React from 'react'
 import { AlertCircle, Check, Loader2 } from 'lucide-react'
-import type { IpLookupResult } from '@/lib/edge'
 import type { ProxyTestResult } from '@/lib/proxy-test'
-import type { ParsedProxy } from '@/lib/proxies-parser'
 import { Flag } from '@/components/Flag'
 
 export interface EnrichedProxy {
@@ -45,12 +44,7 @@ export function ProxyPreviewRow({
         </span>
         <code className="mono text-[var(--t1)] truncate">
           {parsed.host}:{parsed.port}
-          {parsed.username && (
-            <span className="text-[var(--t4)]">
-              {' '}
-              · {parsed.username}
-            </span>
-          )}
+          {parsed.username && <span className="text-[var(--t4)]"> · {parsed.username}</span>}
         </code>
       </div>
       <div className="flex items-center gap-2 shrink-0 ml-3">
@@ -85,9 +79,7 @@ function TestBadge({ enrichment }: { enrichment: EnrichedProxy | null }): React.
     return <span className="text-[var(--t4)] w-16 text-right">—</span>
   }
   if (enrichment.status === 'testing') {
-    return (
-      <span className="text-[var(--t4)] w-16 text-right">testing…</span>
-    )
+    return <span className="text-[var(--t4)] w-16 text-right">testing…</span>
   }
   const t = enrichment.test
   if (!t) {

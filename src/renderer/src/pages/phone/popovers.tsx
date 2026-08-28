@@ -1,6 +1,6 @@
 import * as React from 'react'
 import { Search, X, Check, Plus } from 'lucide-react'
-import { Badge, PlatformIcon } from '@/components/ui'
+import { Badge, PlatformIcon } from '@tubeghost/ui'
 import { TAG_TONES, type PhoneNum, type ProfileOpt, type Tag } from './phoneData'
 
 // Profile-search popover anchored under a number's "Linked profile" cell.
@@ -48,7 +48,7 @@ export function AssignPopover({
         )}
         {matches.map((o) => (
           <div
-            key={o.name}
+            key={o.id}
             className={'grp-opt px-opt' + (num.profile === o.name ? ' on' : '')}
             onClick={() => onPick(o)}
           >

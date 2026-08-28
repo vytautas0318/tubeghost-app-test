@@ -3,11 +3,10 @@
 // "create with color" row. Presentational — all state + handlers come from
 // TagsCell so this stays a pure view.
 
+import { Badge, TagRow } from '@tubeghost/ui'
 import * as React from 'react'
 import { Plus, X, Pencil, Trash2 } from 'lucide-react'
-import { Badge } from '@/components/ui'
 import { ColorSwatches as Swatches } from '@/components/ColorSwatches'
-import type { TagRow } from '@/lib/tags'
 
 const stop = (e: React.SyntheticEvent): void => e.stopPropagation()
 

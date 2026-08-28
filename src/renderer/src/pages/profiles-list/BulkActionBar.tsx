@@ -1,11 +1,12 @@
 import * as React from 'react'
 import { useMemo, useRef, useState } from 'react'
-import { FolderInput, Plus, Tag, TagsIcon, Trash2, X, Pencil } from 'lucide-react'
+import { Download, FolderInput, Plus, Tag, TagsIcon, Trash2, X, Pencil } from 'lucide-react'
 import {
   bulkAddTags,
   bulkDeleteProfiles,
   bulkMoveToGroup,
   bulkRemoveTags,
+  exportProfiles,
   renameTagInWorkspace,
   type BulkResult
 } from '@/lib/profiles'
@@ -53,8 +54,50 @@ export function BulkActionBar({
 }: BulkActionBarProps): React.ReactElement | null {
   const [modal, setModal] = useState<Modal>(null)
   const [working, setWorking] = useState(false)
+  const [runError, setRunError] = useState<string | null>(null)
+  const [exporting, setExporting] = useState(false)
   const ids = useMemo(() => [...selected], [selected])
   const count = ids.length
+
+  // Export the selection as ONE .json bundle (re-importable via Import →
+  // TubeGhost). Proxy passwords are stripped, matching the single-profile row
+  // export — an export is a file that leaves the machine.
+  const onExport = async (): Promise<void> => {
+    if (exporting) return
+    setExporting(true)
+    try {
+      const json = await exportProfiles(ids)
+      const blob = new Blob([json], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      const stamp = new Date().toISOString().slice(0, 10)
+      a.download =
+        count === 1
+          ? `${(selectedRows[0]?.name ?? 'profile').replace(/[^a-z0-9-_ ]/gi, '_')}.tubeproxies-profile.json`
+          : `tubeghost-profiles-${count}-${stamp}.json`
+      a.click()
+      setTimeout(() => URL.revokeObjectURL(url), 1000)
+    } catch (e) {
+      window.alert(`Export failed: ${(e as Error).message}`)
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  // Deleting a profile with a live Chromium process orphans it: the row goes
+  // and its lock cascades away. The web build can't launch, so the only case
+  // it can see is a teammate's open session (open_session_id on the row).
+  const undeletable = useMemo(
+    () => selectedRows.filter((r) => r.open_session_id != null),
+    [selectedRows]
+  )
+  // Set, not .some(): this runs on every selection click, and a select-all at
+  // the Team plan's 1000-profile cap made it quadratic.
+  const deletableIds = useMemo(() => {
+    const blocked = new Set(undeletable.map((r) => r.id))
+    return ids.filter((id) => !blocked.has(id))
+  }, [ids, undeletable])
 
   const tagsOnSelected = useMemo(() => {
     const s = new Set<string>()
@@ -64,15 +107,24 @@ export function BulkActionBar({
 
   if (count === 0) return null
 
-  const close = (): void => setModal(null)
+  const close = (): void => {
+    setModal(null)
+    setRunError(null)
+  }
 
+  // A rejection here used to propagate as an unhandled promise: onChanged and
+  // close() never ran, so the modal just sat there with no message and the user
+  // clicked again. Surface it instead.
   const run = async (op: () => Promise<BulkResult>): Promise<void> => {
     if (working) return
     setWorking(true)
+    setRunError(null)
     try {
       const r = await op()
       onChanged(r)
       close()
+    } catch (e) {
+      setRunError((e as Error).message || 'Something went wrong.')
     } finally {
       setWorking(false)
     }
@@ -121,12 +173,24 @@ export function BulkActionBar({
             />
           </>
         )}
+        <BarButton
+          icon={<Download className="w-3.5 h-3.5" />}
+          label={exporting ? 'Exporting…' : 'Export'}
+          onClick={() => void onExport()}
+          disabled={exporting}
+        />
         {canDelete && (
           <BarButton
             icon={<Trash2 className="w-3.5 h-3.5" />}
             label="Delete"
             danger
             onClick={() => setModal({ kind: 'delete' })}
+            disabled={deletableIds.length === 0}
+            title={
+              deletableIds.length === 0
+                ? 'Every selected profile is open — close it before deleting.'
+                : undefined
+            }
           />
         )}
         <span className="ml-auto" />
@@ -144,6 +208,7 @@ export function BulkActionBar({
           title={`Add tag to ${count} ${count === 1 ? 'profile' : 'profiles'}`}
           allTags={allTags}
           working={working}
+          error={runError}
           onCancel={close}
           onSubmit={(tags) => run(() => bulkAddTags(ids, tags))}
         />
@@ -154,6 +219,7 @@ export function BulkActionBar({
           title={`Remove tag from ${count} ${count === 1 ? 'profile' : 'profiles'}`}
           allTags={tagsOnSelected}
           working={working}
+          error={runError}
           onCancel={close}
           onSubmit={(tags) => run(() => bulkRemoveTags(ids, tags))}
           submitLabel="Remove"
@@ -166,6 +232,7 @@ export function BulkActionBar({
           count={count}
           groups={groups}
           working={working}
+          error={runError}
           onCancel={close}
           onSubmit={(groupId) => run(() => bulkMoveToGroup(ids, groupId))}
         />
@@ -175,6 +242,7 @@ export function BulkActionBar({
         <RenameTagModal
           allTags={allTags}
           working={working}
+          error={runError}
           onCancel={close}
           onSubmit={(from, to) =>
             run(() => renameTagInWorkspace(workspaceId, from, to))
@@ -184,10 +252,12 @@ export function BulkActionBar({
 
       {modal?.kind === 'delete' && (
         <ConfirmDeleteModal
-          count={count}
+          count={deletableIds.length}
+          skippedOpen={undeletable.length}
           working={working}
+          error={runError}
           onCancel={close}
-          onConfirm={() => run(() => bulkDeleteProfiles(ids))}
+          onConfirm={() => run(() => bulkDeleteProfiles(deletableIds))}
         />
       )}
     </>
@@ -250,6 +320,7 @@ function TagInputModal({
   title,
   allTags,
   working,
+  error,
   onCancel,
   onSubmit,
   submitLabel = 'Add',
@@ -258,6 +329,7 @@ function TagInputModal({
   title: string
   allTags: string[]
   working: boolean
+  error: string | null
   onCancel: () => void
   onSubmit: (tags: string[]) => void
   submitLabel?: string
@@ -371,6 +443,7 @@ function TagInputModal({
         submitLabel={submitLabel}
         working={working}
         disabled={chips.length === 0}
+        error={error}
       />
     </ModalShell>
   )
@@ -380,12 +453,14 @@ function MoveToGroupModal({
   count,
   groups,
   working,
+  error,
   onCancel,
   onSubmit
 }: {
   count: number
   groups: GroupRow[]
   working: boolean
+  error: string | null
   onCancel: () => void
   onSubmit: (groupId: string | null) => void
 }): React.ReactElement {
@@ -412,6 +487,7 @@ function MoveToGroupModal({
         onSubmit={() => onSubmit(groupId === '__ungrouped__' ? null : groupId)}
         submitLabel="Move"
         working={working}
+        error={error}
       />
     </ModalShell>
   )
@@ -420,11 +496,13 @@ function MoveToGroupModal({
 function RenameTagModal({
   allTags,
   working,
+  error,
   onCancel,
   onSubmit
 }: {
   allTags: string[]
   working: boolean
+  error: string | null
   onCancel: () => void
   onSubmit: (from: string, to: string) => void
 }): React.ReactElement {
@@ -475,6 +553,7 @@ function RenameTagModal({
         submitLabel="Rename"
         working={working}
         disabled={!from.trim() || !to.trim() || from.trim() === to.trim()}
+        error={error}
       />
     </ModalShell>
   )
@@ -482,12 +561,16 @@ function RenameTagModal({
 
 function ConfirmDeleteModal({
   count,
+  skippedOpen,
   working,
+  error,
   onCancel,
   onConfirm
 }: {
   count: number
+  skippedOpen: number
   working: boolean
+  error: string | null
   onCancel: () => void
   onConfirm: () => void
 }): React.ReactElement {
@@ -497,9 +580,17 @@ function ConfirmDeleteModal({
         Delete {count} {count === 1 ? 'profile' : 'profiles'}?
       </h3>
       <p className="text-sm text-[var(--t2)] mb-4">
-        This cannot be undone. Proxies assigned to these profiles will be released back to
-        the workspace pool.
+        This cannot be undone. Proxies assigned to these profiles will be released back to the
+        workspace pool.
+        {skippedOpen > 0 && (
+          <>
+            {' '}
+            {skippedOpen} selected {skippedOpen === 1 ? 'profile is' : 'profiles are'} open and will
+            be skipped — close {skippedOpen === 1 ? 'it' : 'them'} first.
+          </>
+        )}
       </p>
+      {error && <p className="text-sm text-[var(--red)] mb-3">{error}</p>}
       <div className="flex justify-end gap-2">
         <button
           onClick={onCancel}
@@ -524,16 +615,20 @@ function ModalButtons({
   onSubmit,
   submitLabel,
   working,
-  disabled
+  disabled,
+  error
 }: {
   onCancel: () => void
   onSubmit: () => void
   submitLabel: string
   working: boolean
   disabled?: boolean
+  error?: string | null
 }): React.ReactElement {
   return (
-    <div className="flex justify-end gap-2 mt-4">
+    <>
+      {error && <p className="text-sm text-[var(--red)] mt-3">{error}</p>}
+      <div className="flex justify-end gap-2 mt-4">
       <button
         onClick={onCancel}
         className="px-3 py-1.5 text-sm font-medium border border-[var(--line)] rounded-lg text-[var(--t1)] hover:bg-[var(--hover)]"
@@ -546,8 +641,9 @@ function ModalButtons({
         className="px-3 py-1.5 text-sm font-medium bg-[var(--red)] text-white rounded-lg hover:bg-[var(--red-hover)] disabled:opacity-50"
       >
         {working ? 'Working…' : submitLabel}
-      </button>
-    </div>
+        </button>
+      </div>
+    </>
   )
 }
 

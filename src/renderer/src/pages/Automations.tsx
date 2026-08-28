@@ -9,7 +9,7 @@ import { useWorkspace } from '@/store/workspace'
 import { useAuth } from '@/store/auth'
 import { useHasPermission } from '@/lib/permissions'
 import { ToastView, useToast } from '@/components/Toast'
-import { createAutomation, updateAutomation, type AutomationWithMeta } from '@/lib/automations'
+import { createAutomation, updateAutomation, type AutomationWithMeta } from '@tubeghost/ui'
 import { TEMPLATES } from '../../../shared/automations/catalog'
 import type { AutomationFlow } from '../../../shared/automations/types'
 import { useAutomationsData } from './automations/useAutomationsData'
@@ -165,6 +165,7 @@ export function Automations(): React.ReactElement {
 
         <AutomationsTable
           autos={data.autos}
+          loading={data.loading}
           totalProfiles={data.profiles.length}
           actions={{
             canWrite,

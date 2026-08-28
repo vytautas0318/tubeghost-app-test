@@ -4,7 +4,7 @@
 
 import * as React from 'react'
 import { useEffect, useRef, useState } from 'react'
-import type { GroupFilter } from './GroupSidebar'
+import type { GroupFilter } from './groupFilterType'
 
 export function GroupItem({
   id,
@@ -68,9 +68,7 @@ export function GroupItem({
           <span
             className={
               'text-xs font-medium px-1.5 rounded ' +
-              (active
-                ? 'text-[var(--red)]'
-                : 'text-[var(--t4)]')
+              (active ? 'text-[var(--red)]' : 'text-[var(--t4)]')
             }
           >
             {count}

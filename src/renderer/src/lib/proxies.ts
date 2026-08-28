@@ -192,6 +192,11 @@ export type ProxyPatch = Partial<
     ProxyRow,
     | 'label'
     | 'notes'
+    | 'proxy_type'
+    | 'host'
+    | 'port'
+    | 'username'
+    | 'password_encrypted'
     | 'country_code'
     | 'country_name'
     | 'city'
@@ -261,6 +266,45 @@ export async function updateProxyRow(row: ProxyRow, patch: ProxyPatch): Promise<
   return { ...row, ...patch }
 }
 
+// Edit a custom proxy's connection details, then re-snapshot the change onto
+// every profile bound to it.
+//
+// browser_profiles carries a denormalised copy of the connection (proxy_host,
+// proxy_port, proxy_user, proxy_pass) so a launch does not need a join. That
+// copy goes stale the moment the proxy is edited, so the profiles are updated
+// in the same call — otherwise a profile keeps dialling the old host.
+export async function updateCustomProxyConnection(
+  row: ProxyRow,
+  patch: ProxyPatch
+): Promise<{ proxy: ProxyRow; profilesUpdated: number }> {
+  if (row.source !== 'custom') {
+    throw new Error('Only custom proxies can have their connection edited.')
+  }
+  const proxy = await updateProxy(row.id, patch)
+
+  // Best-effort: the proxy edit itself has already committed, so a failure
+  // here must not present as "nothing happened". Caller surfaces the count.
+  let profilesUpdated = 0
+  try {
+    const { data, error } = await client()
+      .from('browser_profiles')
+      .update({
+        proxy_type: proxy.proxy_type,
+        proxy_host: proxy.host,
+        proxy_port: proxy.port,
+        proxy_user: proxy.username,
+        proxy_pass: proxy.password_encrypted
+      })
+      .eq('proxy_id', proxy.id)
+      .select('id')
+    if (error) throw error
+    profilesUpdated = data?.length ?? 0
+  } catch {
+    /* proxy saved; profiles keep their old snapshot until reassigned */
+  }
+  return { proxy, profilesUpdated }
+}
+
 // Delete a CUSTOM proxy. Purchased proxies cannot be deleted from here —
 // they belong to the user's TubeProxies subscription and are cancelled
 // there; nothing local exists to remove.
@@ -276,7 +320,12 @@ export async function countProfilesUsingProxy(
   proxyId: string,
   tubeproxiesIpId?: string | null
 ): Promise<number> {
-  const q = client().from('browser_profiles').select('id', { count: 'exact', head: true })
+  // Drafts excluded: an editor session that assigned this proxy but was never
+  // saved would otherwise inflate the count with a profile the user can't see.
+  const q = client()
+    .from('browser_profiles')
+    .select('id', { count: 'exact', head: true })
+    .eq('is_draft', false)
   const { count, error } = await (tubeproxiesIpId
     ? q.or(`proxy_id.eq.${proxyId},tubeproxies_ip_id.eq.${tubeproxiesIpId}`)
     : q.eq('proxy_id', proxyId))

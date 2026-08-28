@@ -1,7 +1,7 @@
 import * as React from 'react'
 import { useMemo, useState } from 'react'
 import { X } from 'lucide-react'
-import { Button, Checkbox, SegmentedControl, Input } from '@/components/ui'
+import { Button, Checkbox, SegmentedControl, Input } from '@tubeghost/ui'
 import type { ExtensionWithAssignment, AssignMode } from '@/lib/extensions'
 import type { GroupRow } from '@/lib/groups'
 import type { ProfileRow } from '@/lib/profiles'

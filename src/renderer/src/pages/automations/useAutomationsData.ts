@@ -15,7 +15,7 @@ import {
   deleteAutomation,
   duplicateAutomation,
   type AutomationWithMeta
-} from '@/lib/automations'
+} from '@tubeghost/ui'
 import { listGroups, type GroupRow } from '@/lib/groups'
 import { listProfiles, type ProfileRow } from '@/lib/profiles'
 

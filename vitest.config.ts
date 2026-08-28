@@ -20,7 +20,12 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      // Mirror the app alias so renderer-side units resolve `@/…` imports.
+      // Mirror the app aliases so renderer-side units resolve the same
+      // specifiers the app does. `@shared` is the pricing module shared with
+      // the serverless functions — billing tests import it directly.
+      // Exact match only: '@/lib/automations/…' is a DIFFERENT, desktop-only
+      // directory that must keep resolving inside the host app.
+      '@shared': resolve(__dirname, 'src/shared'),
       '@': resolve(__dirname, 'src/renderer/src')
     }
   }

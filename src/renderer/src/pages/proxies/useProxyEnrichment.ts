@@ -6,10 +6,9 @@
 // Returns a per-key status map plus a `running` flag and the runner.
 // We do NOT auto-run on paste — the user opted in by clicking the button.
 
+import { lookupIp, ParsedProxy } from '@tubeghost/ui'
 import { useCallback, useRef, useState } from 'react'
-import { lookupIp } from '@/lib/edge'
 import { testProxy } from '@/lib/proxy-test'
-import type { ParsedProxy } from '@/lib/proxies-parser'
 import type { EnrichedProxy } from './ProxyPreviewRow'
 
 const CONCURRENCY = 4

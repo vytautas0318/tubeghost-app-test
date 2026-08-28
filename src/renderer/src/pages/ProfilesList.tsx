@@ -1,32 +1,32 @@
 import * as React from 'react'
 import { useEffect, useMemo, useState } from 'react'
-import { useLocation, useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { AlertCircle } from 'lucide-react'
 import { useWorkspace } from '@/store/workspace'
 import { useAuth } from '@/store/auth'
 import { EmptyState } from '@/pages/EmptyState'
 import { ProfilesListHeader } from './profiles-list/ProfilesListHeader'
 import { Filters } from './profiles-list/Filters'
+import { SimpleProfilesView, AdvancedProfilesView } from './profiles-list/ProfilesViews'
+import { SortFilter } from './profiles-list/SortFilter'
 import { EMPTY_FILTERS, type FilterState } from './profiles-list/filterTypes'
-import { ProfileRow } from './profiles-list/ProfileRow'
 import { type GroupFilter } from './profiles-list/GroupSidebar'
 import { GroupFilterDropdown } from './profiles-list/GroupFilter'
 import { TagFilterDropdown } from './profiles-list/TagFilter'
 import { useProfilesListData } from './profiles-list/useProfilesListData'
 import { toView, type ViewProfile } from './profiles-list/types'
-import { SortHeader, type SortKey, type SortState } from './profiles-list/SortHeader'
+import { type SortKey, type SortState } from './profiles-list/SortHeader'
 import { applyFiltersAndSort } from './profiles-list/applyFilters'
 import { Pagination } from './profiles-list/Pagination'
-import { SelectAllCheckbox } from './profiles-list/SelectAllCheckbox'
 import { useSelectionAndPaging } from './profiles-list/useSelectionAndPaging'
 import { BulkActionBar } from './profiles-list/BulkActionBar'
-import { ProfileCardGrid } from './profiles-list/ProfileCardGrid'
-import { readStoredView, storeView, type ProfilesView } from './profiles-list/cardViewState'
+import { usePrefs, type ProfileView } from '@/store/prefs'
 import { listGroups, type GroupRow } from '@/lib/groups'
 import { listProxies, type ProxyRow } from '@/lib/proxies'
 import { useHasPermission } from '@/lib/permissions'
 import { useWorkspaceTags } from '@/lib/useWorkspaceTags'
 import { ToastView, useToast } from '@/components/Toast'
+import { getWorkspaceUserDetailsMap } from '@/lib/users'
 import { DesktopAppModal } from '@/components/DesktopAppModal'
 import { ExpiredProxyModal } from '@/components/ExpiredProxyModal'
 
@@ -52,14 +52,23 @@ export function ProfilesList(): React.ReactElement {
     proxy: string | null
   } | null>(null)
 
-  const [filters, setFilters] = useState<FilterState>(EMPTY_FILTERS)
+  // Seed the assignee filter from ?assignedTo=<userId> so the Members page's
+  // "View assigned profiles" lands here pre-filtered. Read once on mount —
+  // clearing the chip afterwards must not be undone by the stale URL.
+  const [searchParams, setSearchParams] = useSearchParams()
+  const [filters, setFilters] = useState<FilterState>(() => {
+    const assignedTo = searchParams.get('assignedTo')
+    return assignedTo ? { ...EMPTY_FILTERS, assignedTo } : EMPTY_FILTERS
+  })
   // Simple (cards) vs Advanced (table). Persisted, so the page opens the way
   // the user left it.
-  const [view, setView] = useState<ProfilesView>(readStoredView)
-  const pickView = (v: ProfilesView): void => {
-    setView(v)
-    storeView(v)
-  }
+  // Simple (cards) vs Advanced (table). Seeded ONCE from the stored default
+  // (Settings → Appearance) via useState's lazy initializer, then owned by
+  // this component for the rest of the session. Toggling deliberately does
+  // NOT write back to the pref — an in-session look at the other view must
+  // not redefine what the app opens on next launch.
+  const storedView = usePrefs((s) => s.defaultProfileView)
+  const [view, setView] = useState<ProfileView>(() => storedView)
   const [groupFilter, setGroupFilter] = useState<GroupFilter>('all')
   const [groups, setGroups] = useState<GroupRow[]>([])
   // Bumped by the toolbar Group dropdown after a create/delete so the group
@@ -95,6 +104,15 @@ export function ProfilesList(): React.ReactElement {
     showToast('info', handoffToast)
     navigate(location.pathname, { replace: true, state: null })
   }, [handoffToast])
+
+  // Drop ?assignedTo once it has seeded the filter above, so clearing the chip
+  // sticks (a refresh would otherwise re-apply it from the URL).
+  useEffect(() => {
+    if (!searchParams.has('assignedTo')) return
+    const next = new URLSearchParams(searchParams)
+    next.delete('assignedTo')
+    setSearchParams(next, { replace: true })
+  }, [searchParams, setSearchParams])
 
   useEffect(() => {
     try {
@@ -154,10 +172,28 @@ export function ProfilesList(): React.ReactElement {
     return m
   }, [groups])
 
+  // Display names for the concurrent-open lock holder. Fetched once per
+  // workspace; a failure just leaves the badge showing the device only.
+  const [userNames, setUserNames] = useState<Map<string, string>>(new Map())
+  useEffect(() => {
+    const ws = workspace?.workspace_id
+    if (!ws) return
+    let cancelled = false
+    void getWorkspaceUserDetailsMap(ws)
+      .then((m) => {
+        if (cancelled) return
+        setUserNames(new Map([...m].map(([id, u]) => [id, u.display_name || u.email])))
+      })
+      .catch(() => undefined)
+    return () => {
+      cancelled = true
+    }
+  }, [workspace?.workspace_id])
+
   // Named `viewRows`, not `view` — `view` is the Simple/Advanced mode above.
   const viewRows: ViewProfile[] = useMemo(
-    () => rows.map((r) => toView(r, user?.id ?? null, groupName)),
-    [rows, user?.id, groupName]
+    () => rows.map((r) => toView(r, user?.id ?? null, groupName, userNames)),
+    [rows, user?.id, groupName, userNames]
   )
 
   const allTags = useMemo(() => {
@@ -218,10 +254,21 @@ export function ProfilesList(): React.ReactElement {
 
   const selectedRows = useMemo(() => rows.filter((r) => selected.has(r.id)), [rows, selected])
 
-  const rawById = useMemo(() => {
-    const m = new Map<string, (typeof rows)[number]>()
-    for (const r of rows) m.set(r.id, r)
-    return m
+  // Distinct proxies actually in use, for the Proxy filter's multi-select list.
+  // Derived from the PROFILES rather than the workspace proxy inventory: the
+  // question this answers is "which profiles are on this proxy?", so a proxy
+  // nothing uses would only be noise. Sorted by host:port so the order is
+  // stable as counts change.
+  const proxyOptions = useMemo(() => {
+    const byKey = new Map<string, { key: string; label: string; count: number }>()
+    for (const r of rows) {
+      if (!r.proxy_host) continue
+      const key = `${r.proxy_host}:${r.proxy_port ?? ''}`
+      const hit = byKey.get(key)
+      if (hit) hit.count += 1
+      else byKey.set(key, { key, label: key, count: 1 })
+    }
+    return [...byKey.values()].sort((a, b) => a.label.localeCompare(b.label))
   }, [rows])
 
   // Shared by the table row and the card: opening a profile from the web
@@ -315,137 +362,107 @@ export function ProfilesList(): React.ReactElement {
         onImported={reload}
         onToast={showToast}
         view={view}
-        onViewChange={pickView}
+        onViewChange={setView}
       />
 
       <div className="flex-1 min-h-0 px-8 pb-6 flex flex-col overflow-hidden">
-        {view === 'simple' ? (
-          <ProfileCardGrid
-            rows={paged}
-            raws={rawById}
-            matched={filtered.length}
-            total={rows.length}
-            query={filters.search}
-            onQuery={(search) => setFilters({ ...filters, search })}
+        {/* One filter bar for BOTH views, as on the desktop app: the two views
+            show the same filtered/sorted/paged rows, so the controls that
+            produce them belong above the switch rather than inside one view. */}
+        <Filters
+          state={filters}
+          onChange={setFilters}
+          proxyOptions={proxyOptions}
+          leading={groupChip}
+          trailing={tagChip}
+          sortControl={<SortFilter sort={sort} onChange={setSort} />}
+        />
+
+        <div
+          className={
+            view === 'simple'
+              ? 'flex-1 min-w-0 min-h-0 flex flex-col'
+              : 'flex-1 min-w-0 min-h-0 border border-[var(--line)] bg-[var(--panel)] rounded-[var(--r-lg)] shadow-[var(--shadow)] overflow-hidden flex flex-col'
+          }
+        >
+          {view === 'simple' ? (
+            <SimpleProfilesView
+              paged={paged}
+              rows={rows}
+              proxyMetaFor={proxyFor}
+              onChanged={(updated) => (updated ? patchRow(updated) : reload())}
+              selected={selected}
+              onToggleRow={onToggleRow}
+              workspaceId={workspace.workspace_id}
+              onOpen={(p, raw) => openProfile(p.name, proxyFor(raw))}
+              canLaunch={canLaunch}
+              onToast={showToast}
+              groups={groups}
+              canEdit={canEdit}
+            />
+          ) : (
+            <AdvancedProfilesView
+              onTagRenamedOrRemoved={(from, to) =>
+                setFilters((f) =>
+                  f.tags.includes(from)
+                    ? {
+                        ...f,
+                        tags: to
+                          ? f.tags.map((t) => (t === from ? to : t))
+                          : f.tags.filter((t) => t !== from)
+                      }
+                    : f
+                )
+              }
+              paged={paged}
+              rows={rows}
+              proxyMetaFor={proxyFor}
+              onChanged={(updated) => (updated ? patchRow(updated) : reload())}
+              selected={selected}
+              onToggleRow={onToggleRow}
+              workspaceId={workspace.workspace_id}
+              onOpen={(p, raw) => openProfile(p.name, proxyFor(raw))}
+              canLaunch={canLaunch}
+              onToast={showToast}
+              pageIds={pageIds}
+              pageSelectedCount={pageSelectedCount}
+              onToggleSelectAll={onToggleSelectAll}
+              sort={sort}
+              toggleSort={toggleSort}
+              allTags={allTags}
+              groups={groups}
+              canEdit={canEdit}
+              safePage={safePage}
+              pageSize={pageSize}
+            />
+          )}
+          <BulkActionBar
+            selected={selected}
+            selectedRows={selectedRows}
+            groups={groups}
+            allTags={allTags}
+            canEdit={canEdit}
+            canDelete={canDelete}
+            workspaceId={workspace.workspace_id}
+            onClear={clearSelection}
+            onChanged={(r) => {
+              reload()
+              if (r.failed > 0) {
+                window.alert(
+                  `${r.ok} updated, ${r.failed} failed.\n\n` + r.errors.slice(0, 3).join('\n')
+                )
+              }
+            }}
+          />
+          <Pagination
+            total={filtered.length}
             page={safePage}
             pageSize={pageSize}
             onPageChange={setPage}
             onPageSizeChange={setPageSize}
-            filters={
-              <>
-                {groupChip}
-                {tagChip}
-              </>
-            }
-            onChanged={(updated) => (updated ? patchRow(updated) : reload())}
-            canEdit={canEdit}
-            onToast={showToast}
-            onOpen={(p, raw) => openProfile(p.name, proxyFor(raw))}
-            canLaunch={canLaunch}
+            selectedCount={selectedCount}
           />
-        ) : (
-          <>
-            <Filters state={filters} onChange={setFilters} leading={groupChip} trailing={tagChip} />
-
-            <div className="flex-1 min-w-0 min-h-0 border border-[var(--line)] bg-[var(--panel)] rounded-[var(--r-lg)] shadow-[var(--shadow)] overflow-hidden flex flex-col">
-              <div className="flex-1 min-h-0 overflow-auto">
-                <table className="w-full text-sm">
-                  <thead className="bg-[var(--panel-2)] border-b border-[var(--line)] text-[var(--t3)] text-[11.5px] font-semibold sticky top-0 z-10">
-                    <tr>
-                      <th className="text-center px-4 py-3 w-12">
-                        <SelectAllCheckbox
-                          total={pageIds.length}
-                          selectedCount={pageSelectedCount}
-                          onToggle={onToggleSelectAll}
-                        />
-                      </th>
-                      <th className="text-left px-3 py-3 w-14">
-                        <SortHeader
-                          label="#"
-                          active={sort.key === 'number'}
-                          dir={sort.dir}
-                          onClick={() => toggleSort('number')}
-                        />
-                      </th>
-                      <th className="text-left px-3 py-3">
-                        <SortHeader
-                          label="Profile"
-                          active={sort.key === 'name'}
-                          dir={sort.dir}
-                          onClick={() => toggleSort('name')}
-                          showInactiveIcon
-                        />
-                      </th>
-                      <th className="text-left px-3 py-3">Group</th>
-                      <th className="text-left px-3 py-3">Proxy</th>
-                      <th className="text-left px-3 py-3">Tags</th>
-                      <th className="text-left px-3 py-3">
-                        <SortHeader
-                          label="Last opened"
-                          active={sort.key === 'last_opened'}
-                          dir={sort.dir}
-                          onClick={() => toggleSort('last_opened')}
-                        />
-                      </th>
-                      <th className="text-right px-3 py-3 w-[130px]">Action</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-[var(--line-2)]">
-                    {paged.map((p, idx) => {
-                      const raw = rawById.get(p.id)
-                      if (!raw) return null
-                      const meta = proxyFor(raw)
-                      return (
-                        <ProfileRow
-                          key={p.id}
-                          profile={p}
-                          raw={raw}
-                          rowNumber={(safePage - 1) * pageSize + idx + 1}
-                          proxyMeta={meta}
-                          onChanged={(updated) => (updated ? patchRow(updated) : reload())}
-                          selected={selected.has(p.id)}
-                          onSelectChange={(c) => onToggleRow(p.id, c)}
-                          allTags={allTags}
-                          groups={groups}
-                          workspaceId={workspace.workspace_id}
-                          canEdit={canEdit}
-                          onOpen={() => openProfile(p.name, meta)}
-                          canLaunch={canLaunch}
-                        />
-                      )
-                    })}
-                  </tbody>
-                </table>
-              </div>
-              <BulkActionBar
-                selected={selected}
-                selectedRows={selectedRows}
-                groups={groups}
-                allTags={allTags}
-                canEdit={canEdit}
-                canDelete={canDelete}
-                workspaceId={workspace.workspace_id}
-                onClear={clearSelection}
-                onChanged={(r) => {
-                  reload()
-                  if (r.failed > 0) {
-                    window.alert(
-                      `${r.ok} updated, ${r.failed} failed.\n\n` + r.errors.slice(0, 3).join('\n')
-                    )
-                  }
-                }}
-              />
-              <Pagination
-                total={filtered.length}
-                page={safePage}
-                pageSize={pageSize}
-                onPageChange={setPage}
-                onPageSizeChange={setPageSize}
-                selectedCount={selectedCount}
-              />
-            </div>
-          </>
-        )}
+        </div>
       </div>
       {/* Expired proxy takes precedence: it's the reason the profile would
           fail to connect, and renewing is the useful action. "Open anyway"

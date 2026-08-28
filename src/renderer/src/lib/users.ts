@@ -4,7 +4,7 @@
 // SECURITY DEFINER RPC — see supabase/migrations/0004_user_details.sql.
 
 import { getSupabase, type GhostClient } from '@/lib/supabase'
-import type { AvatarConfig } from '@/lib/avatar'
+import type { AvatarConfig } from '@tubeghost/ui'
 
 export interface WorkspaceUserDetails {
   user_id: string

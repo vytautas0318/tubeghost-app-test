@@ -1,35 +1,19 @@
-// AskBar — "Describe what you want and TubeGhost sets it up…".
+// The Simple editor's contextual assistant — the shell only: input,
+// suggestion chips, and the applied/undo strip.
 //
-// Port of the design system's AskBar.jsx, backed by the real assistant
-// instead of its regex mock. Its reason for existing, from the design:
-// "Sits under the hero so the 'don't touch 40 fields' promise of Simple has
-// a natural entry point."
-//
-// Division of labour, which is the whole point of the design:
-//   * the MODEL decides WHAT the user asked for (closed intent set,
-//     shared/assistant/profilePatch.ts)
-//   * this component decides HOW each intent is carried out — so "switch to
-//     mac" runs the same coherent device regeneration the Device tile uses,
-//     and a proxy request is matched against the real pool rather than
-//     invented
-//   * nothing happens invisibly: every change is listed, and Undo restores
-//     the exact prior values.
+// Two parsers back it: askParse (deterministic, instant, offline) runs first,
+// and anything it can't match goes to askModel (claude-haiku-4-5 via the
+// assistant edge function). Nothing happens invisibly — every run reports
+// which fields changed and offers a one-click Undo.
 
 import * as React from 'react'
-import { useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Check, Sparkles, X } from 'lucide-react'
-import {
-  assignProxyToProfile,
-  clearProfileProxy,
-  updateProfile,
-  type ProfileRow
-} from '@/lib/profiles'
-import type { ProxyRow } from '@/lib/proxies'
-import { createGroup, type GroupRow } from '@/lib/groups'
-import { askProfilePatch, buildAskContext, resolveProxy } from '@/lib/profile-ask'
-import type { PatchIntent } from '../../../../shared/assistant/profilePatch'
-import { newFingerprintPatch, optimizedPatch } from './simpleFingerprint'
-import type { FormState } from './types'
+import { listProxies, listUnusedProxies, type ProxyRow } from '@/lib/proxies'
+import { listGroups, type GroupRow } from '@/lib/groups'
+import { parseAsk } from './askParse'
+import { askModel, editToPatch } from './askModel'
+import type { SimpleDraft } from './useSimpleDraft'
 
 const EXAMPLES = [
   'Make it a mac profile on the Dallas IP',
@@ -37,279 +21,174 @@ const EXAMPLES = [
   'Fresh fingerprint, optimized for YouTube'
 ]
 
-// What Undo restores. Only the fields an intent can touch — restoring the
-// whole row would clobber anything changed in another tab meanwhile.
-interface Snapshot {
-  form: FormState
-  row: Pick<ProfileRow, 'platform' | 'proxy_host' | 'proxy_port' | 'google_optimized'>
-  // The full row as it was, for the columns a fingerprint/proxy change
-  // rewrites. Restored wholesale because those columns only make sense
-  // together.
-  fullRow: ProfileRow
-}
-
-const GROUP_COLOR = '#6B7280'
-
 export function AskBar({
-  profile,
-  form,
-  setForm,
-  groups,
-  groupName,
-  proxies,
-  allTags,
+  draft,
+  patch,
   workspaceId,
-  canEdit,
-  onProfileSaved,
+  currentProxyHost,
+  knownTags,
+  disabled,
+  onPickProxy,
+  onClearProxy,
   onToast
 }: {
-  profile: ProfileRow
-  form: FormState
-  setForm: (f: FormState) => void
-  groups: GroupRow[]
-  groupName: string
-  proxies: ProxyRow[]
-  allTags: string[]
-  workspaceId: string
-  canEdit: boolean
-  onProfileSaved: (p: ProfileRow) => void
-  onToast: (kind: 'error' | 'info', text: string) => void
+  draft: SimpleDraft
+  patch: (p: Partial<SimpleDraft>) => void
+  workspaceId: string | null
+  currentProxyHost: string | null
+  knownTags: string[]
+  disabled: boolean
+  onPickProxy: (p: ProxyRow) => void
+  onClearProxy: () => void
+  onToast?: (kind: 'error' | 'info', text: string) => void
 }): React.ReactElement {
   const [q, setQ] = useState('')
-  const [busy, setBusy] = useState(false)
   const [open, setOpen] = useState(false)
-  const [done, setDone] = useState<{ changes: string[]; snap: Snapshot } | null>(null)
+  // True while a model request is in flight (the fast path is synchronous).
+  const [thinking, setThinking] = useState(false)
+  const [proxies, setProxies] = useState<ProxyRow[]>([])
+  // Free proxies, so "assign a proxy" hands out one nobody is on.
+  const [unusedProxies, setUnusedProxies] = useState<ProxyRow[]>([])
+  const [groups, setGroups] = useState<GroupRow[]>([])
+  // The pre-run values of exactly the fields we changed, for Undo.
+  const [done, setDone] = useState<{
+    changes: string[]
+    before: Partial<SimpleDraft>
+  } | null>(null)
+  const wrapRef = useRef<HTMLDivElement>(null)
 
-  // Applies validated intents in order and returns a human list of what
-  // changed. Row writes are sequential on purpose: they all UPDATE the same
-  // row, so running them in parallel would race and the last write would win.
-  // Returns both what changed and what was already true — "asked for macOS,
-  // nothing happened" is indistinguishable from a broken feature unless the
-  // bar can say which it was.
-  const applyIntents = async (
-    intents: PatchIntent[]
-  ): Promise<{ changes: string[]; noops: string[] }> => {
-    const changes: string[] = []
-    const noops: string[] = []
-    let nextForm = form
-    let row = profile
-
-    for (const it of intents) {
-      switch (it.kind) {
-        case 'set_os': {
-          const label = it.os === 'macos' ? 'macOS' : 'Windows'
-          const already = (row.platform ?? '').includes('mac') === (it.os === 'macos')
-          // Say so rather than silently doing nothing — "asked for macOS,
-          // nothing happened" is indistinguishable from a broken feature.
-          if (already) {
-            noops.push(`Device is already ${label}`)
-            break
-          }
-          // Same path as the Device tile — never a bare platform write.
-          row = await updateProfile(row.id, newFingerprintPatch(it.os, row.brand_version))
-          changes.push(`Device → ${label}`)
-          break
-        }
-        case 'set_proxy': {
-          const hit = resolveProxy(it.query, proxies)
-          if (!hit) {
-            changes.push(`No proxy matched “${it.query}”`)
-            break
-          }
-          row = await assignProxyToProfile(row.id, {
-            id: hit.id,
-            proxy_type: hit.proxy_type,
-            host: hit.host,
-            port: hit.port,
-            username: hit.username,
-            password_encrypted: hit.password_encrypted,
-            source: hit.source,
-            tubeproxies_ip_id: hit.tubeproxies_ip_id
-          })
-          changes.push(`Proxy → ${hit.host}:${hit.port}${hit.city ? ` (${hit.city})` : ''}`)
-          break
-        }
-        case 'clear_proxy': {
-          if (!row.proxy_host) {
-            noops.push('There is no proxy to remove')
-            break
-          }
-          row = await clearProfileProxy(row.id)
-          changes.push('Proxy → none')
-          break
-        }
-        case 'new_fingerprint': {
-          row = await updateProfile(row.id, newFingerprintPatch(row.platform, row.brand_version))
-          changes.push('New fingerprint')
-          break
-        }
-        case 'set_optimized': {
-          if (row.google_optimized === it.on) {
-            noops.push(`Optimized for YouTube is already ${it.on ? 'on' : 'off'}`)
-            break
-          }
-          row = await updateProfile(row.id, optimizedPatch(it.on))
-          changes.push(`Optimized for YouTube → ${it.on ? 'on' : 'off'}`)
-          break
-        }
-        case 'set_group': {
-          const existing = groups.find((g) => g.name.toLowerCase() === it.name.toLowerCase())
-          const id = existing?.id ?? (await createGroup(workspaceId, it.name, GROUP_COLOR)).id
-          if (nextForm.group_id === id) break
-          nextForm = { ...nextForm, group_id: id }
-          changes.push(`Group → ${existing?.name ?? it.name}`)
-          break
-        }
-        case 'add_tags': {
-          const add = it.names.filter((n) => !nextForm.tags.includes(n))
-          if (!add.length) break
-          nextForm = { ...nextForm, tags: [...nextForm.tags, ...add] }
-          changes.push(`Tags → ${add.join(', ')}`)
-          break
-        }
-        case 'remove_tags': {
-          const gone = it.names.filter((n) => nextForm.tags.includes(n))
-          if (!gone.length) break
-          nextForm = { ...nextForm, tags: nextForm.tags.filter((t) => !gone.includes(t)) }
-          changes.push(`Removed tags → ${gone.join(', ')}`)
-          break
-        }
-        case 'set_name': {
-          if (nextForm.name === it.name) break
-          nextForm = { ...nextForm, name: it.name }
-          changes.push(`Name → ${it.name}`)
-          break
-        }
-      }
+  useEffect(() => {
+    if (!workspaceId) return
+    let cancelled = false
+    void listProxies(workspaceId)
+      .then((p) => !cancelled && setProxies(p))
+      .catch(() => undefined)
+    void listUnusedProxies(workspaceId)
+      .then((p) => !cancelled && setUnusedProxies(p))
+      .catch(() => undefined)
+    void listGroups(workspaceId)
+      .then((g) => !cancelled && setGroups(g))
+      .catch(() => undefined)
+    return () => {
+      cancelled = true
     }
+  }, [workspaceId])
 
-    if (nextForm !== form) setForm(nextForm)
-    if (row !== profile) onProfileSaved(row)
-    return { changes, noops }
+  useEffect(() => {
+    if (!open) return
+    const onDoc = (e: MouseEvent): void => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', onDoc)
+    return () => document.removeEventListener('mousedown', onDoc)
+  }, [open])
+
+  const ctx = useMemo(
+    () => ({ draft, proxies, unusedProxies, groups, knownTags, currentProxyHost }),
+    [draft, proxies, unusedProxies, groups, knownTags, currentProxyHost]
+  )
+
+  // Apply a parsed result to the draft + proxy, and show the Applied strip.
+  const applyResult = (
+    changes: string[],
+    patchObj: Partial<SimpleDraft>,
+    proxy?: ProxyRow | null
+  ): void => {
+    // Snapshot only the keys we're about to touch, so Undo can't clobber
+    // anything the user changed by hand in the meantime.
+    const before: Partial<SimpleDraft> = {}
+    for (const k of Object.keys(patchObj) as (keyof SimpleDraft)[]) {
+      before[k] = draft[k] as never
+    }
+    if (Object.keys(patchObj).length > 0) patch(patchObj)
+    if (proxy) onPickProxy(proxy)
+    else if (proxy === null) onClearProxy()
+    setQ('')
+    setOpen(false)
+    setDone({ changes, before })
   }
 
-  const run = async (text: string): Promise<void> => {
-    const t = text.trim()
-    if (!t || busy || !canEdit) return
-    setBusy(true)
-    setDone(null)
-    const snap: Snapshot = {
-      form,
-      row: {
-        platform: profile.platform,
-        proxy_host: profile.proxy_host,
-        proxy_port: profile.proxy_port,
-        google_optimized: profile.google_optimized
-      },
-      fullRow: profile
-    }
+  // Anything the fast path could not handle goes to the model: the same
+  // assistant edge function + claude-haiku-4-5 the Copilot uses. This is what
+  // makes arbitrary phrasing and questions work instead of silently failing.
+  const runModel = async (text: string): Promise<void> => {
+    setThinking(true)
     try {
-      const context = buildAskContext({
-        profile,
-        groupName,
+      const r = await askModel(text, {
+        draft,
         proxies,
-        groups: groups.map((g) => g.name),
-        tags: allTags
+        groups,
+        knownTags,
+        currentProxyHost
       })
-      const parsed = await askProfilePatch(t, context)
-      const { changes, noops } = await applyIntents(parsed.intents)
-      setQ('')
-      if (changes.length) {
-        setDone({ changes, snap })
-        setOpen(false)
-        onToast('info', `${changes.length} change${changes.length === 1 ? '' : 's'} applied`)
-      } else if (noops.length) {
-        // Understood, but the profile is already in that state.
-        onToast('info', noops.join(' · '))
-      } else if (parsed.chatModeResponse) {
-        // The endpoint answered in chat shape, which means the assistant
-        // function is deployed WITHOUT profile-patch mode. Name the cause —
-        // otherwise this is indistinguishable from "the bar ignores me".
-        onToast(
-          'error',
-          'The assistant is answering in chat mode. Deploy the updated assistant function (supabase functions deploy assistant) to enable the AskBar.'
-        )
+      const patchObj = editToPatch(r.edit)
+      const proxy =
+        r.edit.proxy === null
+          ? null
+          : r.edit.proxy
+            ? (proxies.find((p) => `${p.host}:${p.port}` === r.edit.proxy) ?? undefined)
+            : undefined
+
+      if (r.changes.length > 0) {
+        applyResult(r.changes, patchObj, proxy)
+        // A question answered alongside an edit still deserves showing.
+        if (r.reply) onToast?.('info', r.reply)
       } else {
-        onToast(
-          'info',
-          parsed.reply ||
-            parsed.errors[0] ||
-            'Nothing to change — try naming a device, proxy, group or tag'
-        )
+        // No edit — an answer to a question, or why nothing changed.
+        onToast?.('info', r.reply ?? 'Nothing to change.')
+        setQ('')
       }
     } catch (e) {
-      onToast('error', (e as Error).message)
+      onToast?.('error', `Assistant unavailable: ${(e as Error).message}`)
     } finally {
-      setBusy(false)
+      setThinking(false)
     }
   }
 
-  // Restores the row columns wholesale (a fingerprint or proxy change
-  // rewrites a coherent set that only makes sense together) and the form
-  // fields as they were.
-  const undo = async (): Promise<void> => {
-    if (!done) return
-    const { snap } = done
-    setBusy(true)
-    try {
-      const r = snap.fullRow
-      onProfileSaved(
-        await updateProfile(r.id, {
-          platform: r.platform,
-          platform_version: r.platform_version,
-          brand: r.brand,
-          brand_version: r.brand_version,
-          user_agent: r.user_agent,
-          fingerprint_seed: r.fingerprint_seed,
-          webgl_vendor: r.webgl_vendor,
-          webgl_renderer: r.webgl_renderer,
-          hardware_concurrency: r.hardware_concurrency,
-          device_memory: r.device_memory,
-          screen_resolution: r.screen_resolution,
-          device_name: r.device_name,
-          mac_address: r.mac_address,
-          google_optimized: r.google_optimized,
-          webrtc_mode: r.webrtc_mode,
-          timezone_mode: r.timezone_mode,
-          language_mode: r.language_mode,
-          location_mode: r.location_mode,
-          display_language_mode: r.display_language_mode,
-          webgpu_mode: r.webgpu_mode,
-          proxy_id: r.proxy_id,
-          proxy_type: r.proxy_type,
-          proxy_host: r.proxy_host,
-          proxy_port: r.proxy_port,
-          proxy_user: r.proxy_user,
-          proxy_pass: r.proxy_pass,
-          proxy_source: r.proxy_source,
-          tubeproxies_ip_id: r.tubeproxies_ip_id
-        })
-      )
-      setForm(snap.form)
-      setDone(null)
-      onToast('info', 'Reverted')
-    } catch (e) {
-      onToast('error', `Undo failed: ${(e as Error).message}`)
-    } finally {
-      setBusy(false)
+  const run = (text: string): void => {
+    if (disabled || thinking) return
+    // Fast path: an exactly-recognised phrasing applies instantly, offline.
+    const result = parseAsk(text, ctx)
+    if (result.changes.length === 0) {
+      // Nothing matched literally — hand the whole request to the model rather
+      // than telling the user their perfectly reasonable sentence was wrong.
+      void runModel(text)
+      return
     }
+    // The fast path understood it — apply without a round-trip. If it only
+    // half-understood (a term matched nothing), let the model handle the whole
+    // request instead so the unmatched half isn't silently dropped.
+    if (result.unmatched.length > 0) {
+      void runModel(text)
+      return
+    }
+    applyResult(result.changes, result.patch, result.proxy)
+  }
+
+  const undo = (): void => {
+    if (!done) return
+    patch(done.before)
+    setDone(null)
+    onToast?.('info', 'Reverted')
   }
 
   return (
-    <div className="ask">
+    <div className="ask" ref={wrapRef}>
       <div className="ask-bar">
         <span className="ask-ic" aria-hidden="true">
           <Sparkles />
         </span>
         <input
           value={q}
-          placeholder="Describe what you want and TubeGhost sets it up…"
+          disabled={disabled || thinking}
+          placeholder={
+            thinking ? 'Thinking…' : 'Describe what you want and TubeGhost sets it up…'
+          }
           aria-label="Ask TubeGhost to set this profile up"
-          disabled={!canEdit}
           onFocus={() => setOpen(true)}
           onChange={(e) => setQ(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === 'Enter') void run(q)
+            if (e.key === 'Enter') run(q)
             if (e.key === 'Escape') {
               setOpen(false)
               e.currentTarget.blur()
@@ -319,10 +198,10 @@ export function AskBar({
         <button
           type="button"
           className={'ask-go' + (q.trim() ? ' ready' : '')}
-          disabled={busy || !q.trim() || !canEdit}
-          onClick={() => void run(q)}
+          disabled={disabled || thinking || !q.trim()}
+          onClick={() => run(q)}
         >
-          {busy ? 'Working…' : 'Ask'}
+          {thinking ? '…' : 'Ask'}
         </button>
       </div>
 
@@ -337,7 +216,7 @@ export function AskBar({
               style={{ animationDelay: `${60 + i * 70}ms` }}
               onClick={() => {
                 setQ(x)
-                void run(x)
+                run(x)
               }}
             >
               {x}
@@ -353,7 +232,7 @@ export function AskBar({
             Applied
           </span>
           <span className="ask-done-l">{done.changes.join(' · ')}</span>
-          <button type="button" className="ask-undo" disabled={busy} onClick={() => void undo()}>
+          <button type="button" className="ask-undo" onClick={undo}>
             Undo
           </button>
           <button

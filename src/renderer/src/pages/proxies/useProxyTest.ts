@@ -19,10 +19,7 @@ export function useProxyTest(): ProxyTestRunner {
   return {
     run: async (selected, setSelected, showToast) => {
       if (selected.proxy_type === 'wireguard') {
-        showToast(
-          'info',
-          'WireGuard proxies skip the HTTP precheck — start a profile to verify.'
-        )
+        showToast('info', 'WireGuard proxies skip the HTTP precheck — start a profile to verify.')
         return
       }
       showToast('info', 'Testing connection…')
@@ -36,10 +33,7 @@ export function useProxyTest(): ProxyTestRunner {
           expected_egress_ip: selected.last_known_egress_ip
         })
         if (r.ok) {
-          showToast(
-            'info',
-            `OK · egress ${r.egress_ip} · ${r.elapsed_ms}ms`
-          )
+          showToast('info', `OK · egress ${r.egress_ip} · ${r.elapsed_ms}ms`)
           try {
             const updated = await updateProxyRow(selected, {
               last_known_egress_ip: r.egress_ip,

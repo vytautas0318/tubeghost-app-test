@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { cn } from '@/lib/cn'
+import { cn } from '@tubeghost/ui'
 import type { ProxySource, ProxyStatus } from '@/lib/proxies'
 
 export function SourceBadge({ source }: { source: ProxySource }): React.ReactElement {

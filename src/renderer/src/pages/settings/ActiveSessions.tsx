@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { Monitor } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
 import { useAuth } from '@/store/auth'
-import { Button } from '@/components/ui'
+import { Button } from '@tubeghost/ui'
 import {
   listSessions,
   revokeSession,

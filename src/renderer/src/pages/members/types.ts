@@ -1,6 +1,6 @@
 // Shared types + small helpers for the Members page sub-components.
 
-import type { AvatarConfig } from '@/lib/avatar'
+import type { AvatarConfig } from '@tubeghost/ui'
 
 export type MemberStatus = 'pending' | 'active' | 'disabled' | 'removed'
 

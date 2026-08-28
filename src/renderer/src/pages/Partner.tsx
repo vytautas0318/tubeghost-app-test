@@ -2,7 +2,7 @@ import * as React from 'react'
 import { Download, Copy, CreditCard, User } from 'lucide-react'
 import { useAuth } from '@/store/auth'
 import { useWorkspace } from '@/store/workspace'
-import { Button, Badge, MetricCard, type BadgeTone } from '@/components/ui'
+import { Button, Badge, MetricCard, type BadgeTone } from '@tubeghost/ui'
 import { ToastView, useToast } from '@/components/Toast'
 
 // Referral figures below are the design's sample data — the partner/affiliate

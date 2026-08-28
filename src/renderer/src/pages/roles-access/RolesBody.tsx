@@ -1,7 +1,7 @@
 import * as React from 'react'
 import { useState } from 'react'
 import { Plus, ShieldAlert } from 'lucide-react'
-import { Button } from '@/components/ui'
+import { Button } from '@tubeghost/ui'
 import { ToastView } from '@/components/Toast'
 import { useHasPermission } from '@/lib/permissions'
 import { useTeamHeaderSlot } from '../team/TeamHeaderContext'

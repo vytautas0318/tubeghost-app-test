@@ -2,7 +2,7 @@ import * as React from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useHasAnyPermission, useHasPermission } from '@/lib/permissions'
 import { useWorkspace } from '@/store/workspace'
-import { NavItem } from '@/components/ui'
+import { NavItem } from '@tubeghost/ui'
 import { SidebarUser } from './sidebar/SidebarUser'
 import { useProxyAlerts } from './sidebar/useProxyAlerts'
 import { NavIcon } from './sidebar/navIcons'
@@ -68,6 +68,7 @@ function SidebarNav({
   // count between renders and trip React's hook invariant).
   const canViewProfiles = useHasPermission('profiles.view')
   const canViewProxies = useHasPermission('proxies.view')
+  const canViewPhone = useHasPermission('phone_numbers.view')
   // Single "Members" entry opens the tabbed Team page (Members + Roles &
   // access); either permission grants access to at least one tab.
   const canViewMembers = useHasAnyPermission('members.view', 'roles.view')
@@ -132,27 +133,32 @@ function SidebarNav({
             onClick={go('/authenticator')}
           />
         )}
-        <div className="nav-buy-row">
-          <NavItem
-            icon={<NavIcon name="phone" />}
-            label="Phone numbers"
-            badge="New"
-            active={active('/phone')}
-            onClick={go('/phone')}
-            style={{ flex: 1 }}
-          />
-          {/* Mirrors the Proxies buy shortcut. Pricing lives on the phone
+        {/* Roles & Access gates phone numbers (Julian, 2026-08-06): a member
+            without phone_numbers.view doesn't see the page at all. The Edge
+            Function enforces the same check, so this is UX only. */}
+        {canViewPhone && (
+          <div className="nav-buy-row">
+            <NavItem
+              icon={<NavIcon name="phone" />}
+              label="Phone numbers"
+              badge="New"
+              active={active('/phone')}
+              onClick={go('/phone')}
+              style={{ flex: 1 }}
+            />
+            {/* Mirrors the Proxies buy shortcut. Pricing lives on the phone
               page itself rather than a separate route, so this navigates
               there with ?buy — the page scrolls to the price ladder, which
               is what distinguishes it from clicking the label. */}
-          <button
-            className="nav-buy"
-            title="Buy phone numbers — TubeProxies"
-            onClick={go('/phone?buy=1')}
-          >
-            <NavIcon name="briefcase" size={16} />
-          </button>
-        </div>
+            <button
+              className="nav-buy"
+              title="Buy phone numbers — TubeProxies"
+              onClick={go('/phone?buy=1')}
+            >
+              <NavIcon name="briefcase" size={16} />
+            </button>
+          </div>
+        )}
         {canViewExtensions && (
           <NavItem
             icon={<NavIcon name="extensions" />}

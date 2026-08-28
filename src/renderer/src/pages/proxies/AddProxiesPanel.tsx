@@ -10,7 +10,7 @@
 import * as React from 'react'
 import { useEffect, useMemo, useState } from 'react'
 import { X } from 'lucide-react'
-import { parseProxies, type ParsedProxy } from '@/lib/proxies-parser'
+import { parseProxies, type ParsedProxy } from '@tubeghost/ui'
 import { createCustomProxy, type ProxyRow } from '@/lib/proxies'
 import { ProxyPreviewRow } from './ProxyPreviewRow'
 import { AddProxiesActions } from './AddProxiesActions'

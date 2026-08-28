@@ -1,6 +1,6 @@
 import * as React from 'react'
 import { Download, Plus } from 'lucide-react'
-import { Button } from '@/components/ui'
+import { Button } from '@tubeghost/ui'
 
 // Page header: title, live "N enabled · synced across M profiles" subtitle,
 // and the two add actions (gated by canAdd — permission + the 'extensions'

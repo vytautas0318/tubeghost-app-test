@@ -5,6 +5,7 @@
 import * as React from 'react'
 import { Loader2, Save, Zap } from 'lucide-react'
 import { ProxyCardFields, type ProxyFieldsState } from './ProxyCardFields'
+import { ProxyPasteRow } from './ProxyPasteRow'
 
 export type TestResult =
   | { ok: true; egress: string; ms: number }
@@ -50,6 +51,12 @@ export function ProxyCustomMode({
           ✗ Test failed: {testResult.reason}
         </div>
       )}
+
+      <ProxyPasteRow
+        disabled={fieldsDisabled}
+        defaultType={form.type}
+        onParsed={(fields) => setForm({ ...form, ...fields })}
+      />
 
       <ProxyCardFields
         form={form}

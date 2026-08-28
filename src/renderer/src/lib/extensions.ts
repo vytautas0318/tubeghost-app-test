@@ -97,7 +97,34 @@ export interface NewExtensionInput {
   manifest: Record<string, unknown>
 }
 
+// Look up an extension the workspace already has. Same add-on = same Web Store
+// id, or (for an uploaded .crx, which has no store id) the same name.
+export async function findDuplicateExtension(
+  workspaceId: string,
+  identity: { web_store_id: string | null; name: string }
+): Promise<ExtensionRow | null> {
+  const c = client()
+  let q = c.from('extensions').select('*').eq('workspace_id', workspaceId)
+  q = identity.web_store_id
+    ? q.eq('web_store_id', identity.web_store_id)
+    : q.is('web_store_id', null).eq('name', identity.name)
+  const { data, error } = await q.limit(1).maybeSingle()
+  if (error) return null
+  return (data as ExtensionRow) ?? null
+}
+
 export async function createExtension(input: NewExtensionInput): Promise<ExtensionRow> {
+  // Refuse a duplicate of an extension the workspace already has. Same add-on =
+  // same Web Store id (or same name for an uploaded .crx). Prevents the "same
+  // extension installed twice" cards.
+  const dup = await findDuplicateExtension(input.workspace_id, {
+    web_store_id: input.web_store_id,
+    name: input.name
+  })
+  if (dup) {
+    throw new Error(`${input.name} is already installed in this workspace.`)
+  }
+
   const { data, error } = await client()
     .from('extensions')
     .insert({

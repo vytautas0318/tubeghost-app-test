@@ -4,7 +4,7 @@
 // down.
 
 import * as React from 'react'
-import { updateProxyRow, type ProxyRow } from '@/lib/proxies'
+import { updateCustomProxyConnection, updateProxyRow, type ProxyRow } from '@/lib/proxies'
 import type { ProfileRow } from '@/lib/profiles'
 import { ProxyDetailDrawer } from './ProxyDetailDrawer'
 import { AssignProfilePopover } from './AssignProfilePopover'
@@ -21,7 +21,8 @@ export function ProxiesOverlays({
   onDelete,
   onTest,
   onToast,
-  onRefresh
+  onRefresh,
+  onPatchLocal
 }: {
   selectedRow: ProxyRow | null
   assignRow: ProxyRow | null
@@ -34,13 +35,19 @@ export function ProxiesOverlays({
   onTest: (r: ViewProxy, set: (row: ProxyRow) => void) => void
   onToast: (kind: 'success' | 'error' | 'info', text: string) => void
   onRefresh: () => void
+  onPatchLocal: (id: string, patch: Partial<ProxyRow>) => void
 }): React.ReactElement {
+  // The drawer takes a ProxyRow, but the profile linkage lives on the ViewProxy
+  // overlay — resolve it once here rather than per prop.
+  const viewRow = selectedRow ? view.find((v) => v.id === selectedRow.id) : undefined
+
   return (
     <>
       {selectedRow && (
         <ProxyDetailDrawer
           proxy={selectedRow}
-          profileCount={view.find((v) => v.id === selectedRow.id)?.profileCount ?? 0}
+          profileCount={viewRow?.profileCount ?? 0}
+          profileNumbers={viewRow?.profileNumbers ?? []}
           canEdit={perms.canEdit}
           canDelete={perms.canDelete}
           canTest={perms.canTest}
@@ -51,7 +58,35 @@ export function ProxiesOverlays({
             try {
               const updated = await updateProxyRow(selectedRow, patch)
               setSelectedRow(updated)
+              // Also heal the page's list: the drawer's copy is separate from
+              // `view`, so without this the Tag column and the label search
+              // keep the pre-edit value until the next Refresh.
+              onPatchLocal(selectedRow.id, patch)
               onToast('success', 'Proxy updated')
+            } catch (e) {
+              onToast('error', (e as Error).message)
+            }
+          }}
+          onSaveConnection={async (draft) => {
+            try {
+              const { proxy, profilesUpdated } = await updateCustomProxyConnection(selectedRow, {
+                proxy_type: draft.proxy_type,
+                host: draft.host.trim(),
+                port: Number(draft.port),
+                username: draft.username.trim() || null,
+                password_encrypted: draft.password || null
+              })
+              setSelectedRow(proxy)
+              onPatchLocal(proxy.id, proxy)
+              onToast(
+                'success',
+                profilesUpdated > 0
+                  ? `Connection saved · ${profilesUpdated} ${profilesUpdated === 1 ? 'profile' : 'profiles'} updated`
+                  : 'Connection saved'
+              )
+              // Host/port drive the geo + test columns; a changed endpoint
+              // makes the stored geo and last-test result meaningless.
+              onRefresh()
             } catch (e) {
               onToast('error', (e as Error).message)
             }

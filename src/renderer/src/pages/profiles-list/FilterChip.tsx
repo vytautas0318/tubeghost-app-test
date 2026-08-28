@@ -9,11 +9,16 @@ import { ChevronDown } from 'lucide-react'
 export function FilterChip({
   label,
   value,
+  placeholder = 'All',
   children
 }: {
   label: string
   // ReactNode so callers can render a flag image alongside the text.
   value: React.ReactNode | null
+  // Shown when `value` is null. Defaults to 'All' for true filters; controls
+  // that always have a value (e.g. Sort) pass their current selection instead,
+  // where "All" would be meaningless.
+  placeholder?: React.ReactNode
   children: (close: () => void) => React.ReactNode
 }): React.ReactElement {
   const [open, setOpen] = useState(false)
@@ -39,7 +44,7 @@ export function FilterChip({
     <div ref={ref} className="relative">
       <button onClick={() => setOpen((v) => !v)} className={'fdrop-btn' + (value ? ' active' : '')}>
         <span className="fl">{label}</span>
-        <span className="fv">{value ?? 'All'}</span>
+        <span className="fv">{value ?? placeholder}</span>
         <ChevronDown />
       </button>
       {open && (

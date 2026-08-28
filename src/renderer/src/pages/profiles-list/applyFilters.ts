@@ -54,7 +54,14 @@ export function applyFiltersAndSort(args: {
   }
 
   // Proxy chip
-  if (filters.proxy !== 'any') {
+  // Specific proxies win over the any/has/none mode: picking one already
+  // implies "has a proxy", so there's no need to set both.
+  if (filters.proxyIds.length > 0) {
+    // Keyed on host:port, not host alone -- a provider can serve two proxies
+    // from one IP on different ports, and the cards show host:port too.
+    const want = new Set(filters.proxyIds)
+    out = out.filter((p) => !!p.proxyIp && want.has(`${p.proxyIp}:${p.proxyPort ?? ''}`))
+  } else if (filters.proxy !== 'any') {
     out = out.filter((p) => {
       const has = !!p.proxyIp
       return filters.proxy === 'has' ? has : !has
@@ -72,6 +79,12 @@ export function applyFiltersAndSort(args: {
       if (filters.lastOpened === 'week') return now - ts < 7 * DAY_MS
       return true
     })
+  }
+
+  // Assignee filter — set by the Members page's "View assigned profiles".
+  // Reads assigned_to off the raw row (the view model doesn't carry it).
+  if (filters.assignedTo) {
+    out = out.filter((p) => rowById.get(p.id)?.assigned_to === filters.assignedTo)
   }
 
   // Free-text search (name, tag, proxy IP, group name, linked channel)
@@ -103,7 +116,9 @@ export function applyFiltersAndSort(args: {
       return (a.number - b.number) * sign
     }
     if (sort.key === 'name') {
-      return a.name.localeCompare(b.name) * sign
+      // Natural sort so "Profile 2" < "Profile 10" (plain localeCompare orders
+      // "10" before "2" because it compares character-by-character).
+      return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }) * sign
     }
     const ra = rowById.get(a.id)
     const rb = rowById.get(b.id)

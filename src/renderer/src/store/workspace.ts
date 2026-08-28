@@ -146,8 +146,17 @@ export const useWorkspace = create<WorkspaceState>()(
           workspace_id: string
           workspaces: { id: string; name: string; plan: string } | null
         }
+        // Dedupe by workspace_id (an invite accepted then re-accepted inserts a
+        // second membership), which would otherwise show the same workspace
+        // multiple times in the switcher. Keep the first row we see.
+        const seenWs = new Set<string>()
         const baseMemberships = ((members as unknown as MemberRow[]) ?? [])
           .filter((r) => r.workspaces !== null)
+          .filter((r) => {
+            if (seenWs.has(r.workspace_id)) return false
+            seenWs.add(r.workspace_id)
+            return true
+          })
           .map((r) => ({
             workspace_id: r.workspace_id,
             workspace_name: r.workspaces!.name,

@@ -3,7 +3,7 @@
 // step.params. Kept generic so adding a field to the catalog needs no UI change.
 
 import * as React from 'react'
-import { Input, Select, Toggle } from '@/components/ui'
+import { Input, Select, Toggle } from '@tubeghost/ui'
 import { ACTIONS } from '../../../../shared/automations/catalog'
 import type { Step } from '../../../../shared/automations/types'
 

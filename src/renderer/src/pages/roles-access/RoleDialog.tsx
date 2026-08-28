@@ -1,7 +1,7 @@
 import * as React from 'react'
 import { useState } from 'react'
 import { Check, X } from 'lucide-react'
-import { Button } from '@/components/ui'
+import { Button } from '@tubeghost/ui'
 
 // Create-role / rename-role dialog. Same modal shell as InviteDialog so it
 // reads native to the app. `mode` switches copy + which fields show.

@@ -6,14 +6,16 @@
 import * as React from 'react'
 import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { X, Globe } from 'lucide-react'
+import { Globe } from 'lucide-react'
 import {
   assignProxyToProfile,
   clearProfileProxy,
   type ProfileRow as ProfileRowType
 } from '@/lib/profiles'
-import { listProxies, type ProxyRow } from '@/lib/proxies'
+import { listProxies, listUnusedProxies, type ProxyRow } from '@/lib/proxies'
 import { useAnchoredPopover } from './useAnchoredPopover'
+import { type ProxyUseFilter } from './ProxyFilterChips'
+import { ProxyPickerPanel } from './ProxyPickerPanel'
 import { Flag } from '@/components/Flag'
 import { hasFlag } from '@/lib/flags'
 
@@ -49,6 +51,10 @@ export function ProxyCell({
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [search, setSearch] = useState('')
+  // Same All / Unused / Used chips the profile-editor's picker offers, so the
+  // two proxy pickers behave identically wherever a proxy is chosen.
+  const [unused, setUnused] = useState<ProxyRow[]>([])
+  const [filter, setFilter] = useState<ProxyUseFilter>('all')
   const { triggerRef, panelRef, style } = useAnchoredPopover(open, setOpen, 320)
 
   // Lazy-load proxies the first time the popover opens.
@@ -59,7 +65,12 @@ export function ProxyCell({
       .then(setProxies)
       .catch(() => setProxies([]))
       .finally(() => setLoading(false))
+    listUnusedProxies(workspaceId)
+      .then(setUnused)
+      .catch(() => setUnused([]))
   }, [open, proxies, loading, workspaceId])
+
+  const unusedIds = useMemo(() => new Set(unused.map((p) => p.id)), [unused])
 
   const filtered = useMemo(() => {
     if (!proxies) return []
@@ -78,6 +89,23 @@ export function ProxyCell({
       })
       .slice(0, 50)
   }, [proxies, search])
+
+  // Counts describe the search-matched set, so a chip never advertises rows the
+  // current search would hide.
+  const counts = useMemo(
+    () => ({
+      all: filtered.length,
+      unused: filtered.filter((p) => unusedIds.has(p.id)).length,
+      used: filtered.filter((p) => !unusedIds.has(p.id)).length
+    }),
+    [filtered, unusedIds]
+  )
+
+  const shown = useMemo(() => {
+    if (filter === 'unused') return filtered.filter((p) => unusedIds.has(p.id))
+    if (filter === 'used') return filtered.filter((p) => !unusedIds.has(p.id))
+    return filtered
+  }, [filtered, filter, unusedIds])
 
   const assigned = raw.proxy_host
     ? `${raw.proxy_host}${raw.proxy_port ? ':' + raw.proxy_port : ''}`
@@ -175,78 +203,23 @@ export function ProxyCell({
 
       {open &&
         createPortal(
-          <div
-            ref={panelRef}
+          <ProxyPickerPanel
+            panelRef={panelRef}
             style={style}
-            onClick={stop}
-            className="z-50 w-80 bg-[var(--panel)] border border-[var(--line)] rounded-[var(--r-lg)] shadow-[var(--shadow-pop)]"
-          >
-            <div className="p-2 border-b border-[var(--line)]">
-              <input
-                autoFocus
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search or paste IP:port…"
-                className="w-full px-2 py-1.5 text-xs bg-[var(--panel-2)] border border-[var(--line)] rounded-[var(--r-sm)] text-[var(--t1)] focus:outline-none focus:ring-2 focus:ring-[var(--red)]/30"
-              />
-            </div>
-            <div className="max-h-60 overflow-auto py-1">
-              {assigned && (
-                <button
-                  onClick={() => void clear()}
-                  className="w-full text-left px-3 py-1.5 text-xs hover:bg-[var(--red-soft)] text-[var(--red)] flex items-center gap-2"
-                >
-                  <X className="w-3 h-3" />
-                  Remove proxy from profile
-                </button>
-              )}
-              {assigned && filtered.length > 0 && (
-                <div className="my-1 border-t border-[var(--line-2)]" />
-              )}
-              {loading && (
-                <div className="px-3 py-2 text-xs text-[var(--t3)]">Loading proxies…</div>
-              )}
-              {!loading && filtered.length === 0 && (
-                <div className="px-3 py-2 text-xs text-[var(--t3)] italic">
-                  {proxies && proxies.length === 0
-                    ? 'No proxies in this workspace yet.'
-                    : 'No matches.'}
-                </div>
-              )}
-              {filtered.map((p) => {
-                const isCurrent = p.host === raw.proxy_host && p.port === raw.proxy_port
-                return (
-                  <button
-                    key={p.id}
-                    onClick={() => void assign(p)}
-                    className="w-full text-left px-3 py-1.5 text-xs hover:bg-[var(--hover)]"
-                  >
-                    <div className="flex items-center gap-2">
-                      <Globe className="w-3 h-3 text-[var(--red)] shrink-0" />
-                      <span className="mono text-[var(--t1)] truncate">
-                        {p.host}:{p.port}
-                      </span>
-                      {p.country_code && (
-                        <span className="text-[9px] uppercase tracking-wider px-1 py-0.5 rounded bg-[var(--hover)] text-[var(--t3)]">
-                          {p.country_code}
-                        </span>
-                      )}
-                      {isCurrent && (
-                        <span className="ml-auto text-[10px] text-[var(--red)] font-semibold">
-                          ✓
-                        </span>
-                      )}
-                    </div>
-                    {(p.city || p.label) && (
-                      <div className="text-[10px] text-[var(--t3)] mt-0.5 truncate pl-[18px]">
-                        {[p.country_code, p.city].filter(Boolean).join(' · ') || p.label}
-                      </div>
-                    )}
-                  </button>
-                )
-              })}
-            </div>
-          </div>,
+            stop={stop}
+            search={search}
+            setSearch={setSearch}
+            filter={filter}
+            setFilter={setFilter}
+            counts={counts}
+            shown={shown}
+            proxies={proxies}
+            loading={loading}
+            assigned={assigned}
+            raw={raw}
+            onPick={(p) => void assign(p)}
+            onClear={() => void clear()}
+          />,
           document.body
         )}
     </div>

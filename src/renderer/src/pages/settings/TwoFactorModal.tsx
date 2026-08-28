@@ -1,12 +1,6 @@
+import { Button, Input, enroll2fa, verify2faEnrollment, disable2fa, type EnrollResult } from '@tubeghost/ui'
 import * as React from 'react'
 import { useEffect, useState } from 'react'
-import { Button, Input } from '@/components/ui'
-import {
-  enroll2fa,
-  verify2faEnrollment,
-  disable2fa,
-  type EnrollResult
-} from '@/lib/account-security'
 import { type Toast } from './settingsCommon'
 
 // Manage the current user's TubeGhost login 2FA (Supabase native MFA / TOTP).

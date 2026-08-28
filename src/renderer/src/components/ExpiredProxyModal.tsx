@@ -16,7 +16,7 @@
 import * as React from 'react'
 import { useEffect } from 'react'
 import { AlertTriangle, ExternalLink, X } from 'lucide-react'
-import { Button } from '@/components/ui'
+import { Button } from '@tubeghost/ui'
 
 const RENEW_URL = 'https://dash.tubeproxies.com/billing'
 

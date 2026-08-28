@@ -1,13 +1,12 @@
 // A slide-over drawer showing recent runs for one automation, with per-profile
 // per-step logs — the visible failure surface (§10). Read-only.
 
+import { Badge, type BadgeTone, AutomationWithMeta } from '@tubeghost/ui'
 import * as React from 'react'
 import { useEffect, useState } from 'react'
 import { formatDistanceToNow } from 'date-fns'
 import { X, CheckCircle2, XCircle, MinusCircle, Loader2 } from 'lucide-react'
-import { Badge, type BadgeTone } from '@/components/ui'
 import { listRunsForAutomation, type RunRow } from '@/lib/automations/runs'
-import type { AutomationWithMeta } from '@/lib/automations'
 import type { StepStatus, RunStatus } from '../../../../shared/automations/types'
 
 const RUN_TONE: Record<RunStatus, BadgeTone> = {

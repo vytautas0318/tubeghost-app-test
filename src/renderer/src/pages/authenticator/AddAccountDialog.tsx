@@ -1,14 +1,12 @@
+import { Button, Input, Select, NewAuthTokenInput, AuthPlatform, TagRow } from '@tubeghost/ui'
 import * as React from 'react'
 import { useState } from 'react'
 import { QrCode, KeyRound, X } from 'lucide-react'
-import { Button, Input, Select } from '@/components/ui'
 import { PLATFORM_ISSUER } from './authData'
 import { parseInput, platformForIssuer, decodeQr, readAsDataUrl } from './parse'
 import type { ParsedSecret } from './parse'
 import { QrDropZone } from './QrDropZone'
 import { TagPicker } from './TagPicker'
-import type { NewAuthTokenInput, AuthPlatform } from '@/lib/authenticator'
-import type { TagRow } from '@/lib/tags'
 
 interface ProfileOpt {
   id: string

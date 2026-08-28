@@ -6,7 +6,7 @@
 import * as React from 'react'
 import { useEffect, useMemo, useState } from 'react'
 import { Check, Plus } from 'lucide-react'
-import { Button, Toggle } from '@/components/ui'
+import { Button, Toggle } from '@tubeghost/ui'
 import { useDirtyGuard, useRegisterSaver, type SaveResult } from './DirtyContext'
 import { updateProfile, type ProfileRow } from '@/lib/profiles'
 import { inspectCookiesJson } from '../../../../shared/cookies'

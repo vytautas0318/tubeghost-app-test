@@ -1,15 +1,20 @@
 import * as React from 'react'
 import { useState } from 'react'
 import { Smartphone, Copy, Check } from 'lucide-react'
-import { PlatformIcon } from '@/components/ui'
+import { PlatformIcon } from '@tubeghost/ui'
 import type { Sms } from './phoneData'
 
-// Right-hand live inbox: verification codes with one-tap copy.
+// Right-hand live inbox: verification codes with one-tap copy. `live` is true
+// only while the page is actively polling for new codes (an active
+// subscription) — so the "Live" badge + auto-refresh copy never appear when
+// there's nothing to receive.
 export function RecentSms({
   inbox,
+  live,
   onCopied
 }: {
   inbox: Sms[]
+  live: boolean
   onCopied: (val: string) => void
 }): React.ReactElement {
   const [copied, setCopied] = useState<string | null>(null)
@@ -33,36 +38,36 @@ export function RecentSms({
         </span>
         <div>
           <div className="inbox-title">Recent SMS</div>
-          <div className="inbox-sub">Codes arrive instantly</div>
+          <div className="inbox-sub">
+            {live ? 'Auto-refreshing for new codes' : 'Codes for your numbers'}
+          </div>
         </div>
-        <span className="inbox-live">
-          <span className="inbox-dot" />
-          Live
-        </span>
+        {live && (
+          <span className="inbox-live">
+            <span className="inbox-dot" />
+            Live
+          </span>
+        )}
       </div>
       <div className="inbox-list">
         {inbox.length === 0 && (
           <div style={{ padding: '32px 16px', textAlign: 'center' }}>
             <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--t1)' }}>Inbox empty</div>
             <div style={{ fontSize: '12px', color: 'var(--t3)', marginTop: '4px' }}>
-              Verification codes appear here the moment they arrive.
+              {live
+                ? 'New verification codes show up here automatically.'
+                : 'Verification codes for your numbers show up here.'}
             </div>
           </div>
         )}
         {inbox.map((m) => (
           <div key={m.id} className="sms">
             <div className="sms-top">
-              {/* The receiving number leads — with several numbers on one
-                  subscription it's the only way to tell the inboxes apart.
-                  The sender shortcode stays, demoted. */}
               <span className="sms-from">
                 <PlatformIcon platform={m.pl} size={22} />
-                {m.to}
+                {m.from}
               </span>
-              <span className="sms-time">
-                <span className="sms-sender">from {m.from}</span>
-                {m.time}
-              </span>
+              <span className="sms-time">{m.time}</span>
             </div>
             <div className="sms-body">{m.body}</div>
             <div className="sms-code" onClick={() => copy(m.code, m.id)}>

@@ -16,7 +16,7 @@ import {
   ChevronUp,
   ChevronDown
 } from 'lucide-react'
-import { Button, Select } from '@/components/ui'
+import { Button, Select } from '@tubeghost/ui'
 import type { GroupRow } from '@/lib/groups'
 import type { ProfileRow } from '@/lib/profiles'
 import { ACTIONS, summarizeStep, makeStep } from '../../../../shared/automations/catalog'

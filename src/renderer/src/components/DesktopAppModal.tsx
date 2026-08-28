@@ -8,7 +8,7 @@
 import * as React from 'react'
 import { useEffect } from 'react'
 import { Download, Monitor, X } from 'lucide-react'
-import { Button } from '@/components/ui'
+import { Button } from '@tubeghost/ui'
 import { DOWNLOAD_URL, desktopPlatformLabel } from '@/lib/desktop-app'
 
 export function DesktopAppModal({

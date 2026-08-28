@@ -4,12 +4,11 @@
 // platform / group / proxy policy. Each profile still gets its own fingerprint
 // from createProfile(), so a batch is N distinct devices, not N clones.
 
+import { Input, Toggle } from '@tubeghost/ui'
 import * as React from 'react'
 import { ChevronRight, Layers } from 'lucide-react'
-import { Input } from '@/components/ui'
 import { SaSelect } from '@/pages/profile-editor/SaSelect'
 import { GroupSelect } from '@/pages/profile-editor/GroupSelect'
-import { Toggle } from '@/components/ui'
 import {
   batchNames,
   MAX_BATCH,

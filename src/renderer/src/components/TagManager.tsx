@@ -1,8 +1,7 @@
+import { Badge, DEFAULT_TAG_COLOR, type TagRow } from '@tubeghost/ui'
 import * as React from 'react'
 import { useState } from 'react'
 import { Check, Plus, Palette, Pencil, Trash2 } from 'lucide-react'
-import { Badge } from '@/components/ui'
-import { DEFAULT_TAG_COLOR, type TagRow } from '@/lib/tags'
 import { ColorSwatches as Swatches } from '@/components/ColorSwatches'
 
 // Shared tag popover used by Profiles and Authenticator. Lists workspace tags

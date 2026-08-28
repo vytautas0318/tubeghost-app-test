@@ -27,8 +27,10 @@
     /* Path aliases (mirror vite.config.ts) */
     "baseUrl": ".",
     "paths": {
+      "@supabase/supabase-js": ["node_modules/@supabase/supabase-js"],
       "@renderer/*": ["src/renderer/src/*"],
       "@shared/*": ["src/shared/*"],
+      "@tubeghost/ui": ["../tubeghost-ui/src/index.ts"],
       "@/*": ["src/renderer/src/*"]
     }
   },
@@ -36,7 +38,9 @@
     "src/renderer/src/env.d.ts",
     "src/renderer/src/**/*.ts",
     "src/renderer/src/**/*.tsx",
-    "src/shared/**/*.ts"
+    "src/shared/**/*.ts",
+    "../tubeghost-ui/src/**/*.ts",
+    "../tubeghost-ui/src/**/*.tsx"
   ],
   "exclude": ["node_modules", "dist", "out", "**/__tests__/**", "**/*.test.ts"]
 }

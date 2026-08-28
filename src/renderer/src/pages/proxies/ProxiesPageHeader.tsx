@@ -4,7 +4,7 @@
 
 import * as React from 'react'
 import { Plus } from 'lucide-react'
-import { Button } from '@/components/ui'
+import { Button } from '@tubeghost/ui'
 import type { ProxyTab } from './proxy-tab'
 
 export function ProxiesPageHeader({

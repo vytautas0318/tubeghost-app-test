@@ -47,19 +47,25 @@ export function uaMatchesPlatform(ua: string, platform: string): boolean {
 }
 
 // Browser versions available for launch *per spoofed platform*. Must
-// stay in sync with what src/main/engine/versions.ts actually pins AND
-// with which engine binaries are actually bundled in browsers/<arch>/ —
-// we never offer a version we can't launch. Both 150 (current) and 148
-// (previous) engines are bundled so users can A/B test across majors.
-// The FIRST entry is the default for new profiles.
+// stay in sync with what the desktop app's src/main/engine/versions.ts pins
+// AND with which engine binaries are actually available on R2 — we never offer
+// a version that can't launch. 150 (default), 148 (previous) and 151 (newest
+// port). The FIRST entry is the default for new profiles.
+//
+// ⚠ ARCH CAVEAT: 151 is currently x64-ONLY (arm64 not built yet). This list is
+// renderer-side and NOT arch-aware, so an Apple-Silicon user still SEES 151 —
+// but macReleaseForMajor() in the desktop app's versions.ts returns null for
+// the un-built arm64 placeholder, so the launch gate refuses it cleanly
+// (engine-missing, no crash or 404). Once arm64 v151 is built + its
+// versions.ts placeholder filled, it works everywhere. Drop this caveat then.
 export const BROWSER_VERSIONS_BY_PLATFORM: Record<string, readonly string[]> = {
-  windows: ['150', '148'],
-  macos: ['150', '148'],
-  linux: ['150', '148']
+  windows: ['150', '148', '151'],
+  macos: ['150', '148', '151'],
+  linux: ['150', '148', '151']
 }
 
 export function browserVersionsFor(platform: string): readonly string[] {
-  return BROWSER_VERSIONS_BY_PLATFORM[platform] ?? ['150', '148']
+  return BROWSER_VERSIONS_BY_PLATFORM[platform] ?? ['150', '148', '151']
 }
 
 // OS-version options per platform for the Fingerprint "OS version" picker. The

@@ -1,25 +1,30 @@
 import * as React from 'react'
 import { useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { SegmentedControl } from '@/components/ui'
+import { SegmentedControl } from '@tubeghost/ui'
 import { MembersBody } from '../members/MembersBody'
 import { RolesBody } from '../roles-access/RolesBody'
+import { ProfileAccessBody } from './ProfileAccessBody'
 import { TeamHeaderContext, type TeamHeaderContent } from './TeamHeaderContext'
 
-type Tab = 'members' | 'roles'
+type Tab = 'members' | 'roles' | 'access'
 
 const TABS = [
   { value: 'members' as const, label: 'Members' },
-  { value: 'roles' as const, label: 'Roles & access' }
+  { value: 'roles' as const, label: 'Roles & access' },
+  { value: 'access' as const, label: 'Profile access' }
 ]
 
 const PATH: Record<Tab, string> = {
   members: '/team/members',
-  roles: '/team/roles'
+  roles: '/team/roles',
+  access: '/team/access'
 }
 
 function tabFromPath(pathname: string): Tab {
-  return pathname.startsWith('/team/roles') ? 'roles' : 'members'
+  if (pathname.startsWith('/team/roles')) return 'roles'
+  if (pathname.startsWith('/team/access')) return 'access'
+  return 'members'
 }
 
 /**
@@ -61,7 +66,13 @@ export function TeamPage(): React.ReactElement {
         </div>
 
         <TeamHeaderContext.Provider value={setHeader}>
-          {tab === 'members' ? <MembersBody /> : <RolesBody />}
+          {tab === 'members' ? (
+            <MembersBody />
+          ) : tab === 'roles' ? (
+            <RolesBody />
+          ) : (
+            <ProfileAccessBody />
+          )}
         </TeamHeaderContext.Provider>
       </div>
     </div>

@@ -28,7 +28,9 @@ function defaultVendorFor(platform: string): WebGLVendor {
 }
 
 export function rowToForm(p: ProfileRow): Form {
-  const platform = p.platform ?? 'windows'
+  // Must match useSimpleDraft's fallback ('macos'). When these disagreed,
+  // an unsaved new profile showed macOS in Simple and Windows in Advanced.
+  const platform = p.platform ?? 'macos'
   const vendor = (WEBGL_VENDORS as readonly string[]).includes(p.webgl_vendor ?? '')
     ? (p.webgl_vendor as WebGLVendor)
     : defaultVendorFor(platform)

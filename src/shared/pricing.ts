@@ -15,10 +15,25 @@
 export type Cycle = 'monthly' | 'quarterly' | 'annual'
 
 /** Billing-cycle multipliers applied to the monthly list price. */
+/**
+ * Billing-cycle multipliers applied to the monthly list price.
+ *
+ * Annual is a flat −20%, matching proxies and phone numbers on TubeProxies
+ * (Julian, 2026-08-14: "Maybe we can change it to 20% off … so everything is
+ * consistent. Because annual for proxies + phone numbers is 20% off").
+ *
+ * It was 10/12 — literal "2 months free", ≈ −16.7% — which made a plan's annual
+ * term a weaker discount than the add-ons sitting on the same card. One rate
+ * across plans and add-ons is what keeps a mixed basket explicable.
+ * tubeproxies-dash agrees: ANNUAL_DISCOUNT = 0.20.
+ *
+ * Annual is charged UPFRONT for the full year; the discount is expressed in the
+ * price, not in skipped months.
+ */
 export const CYCLE_MULT: Record<Cycle, number> = {
   monthly: 1,
   quarterly: 0.9, // −10%
-  annual: 10 / 12 // 2 months free
+  annual: 0.8 // −20%
 }
 
 /** [cap, ratePerUnitUpToCap] — graduated bands, like tax brackets. */
@@ -68,9 +83,26 @@ export function pfPrice(profiles: number): number {
   return total
 }
 
-/** Team monthly list price: graduated profiles + flat seats. */
-export function teamList(profiles: number, seats: number): number {
-  return pfPrice(profiles) + seats * SEAT_RATE
+/** Starter monthly list price: fixed base + per-unit add-ons. */
+export function starterList(proxies: number, numbers: number): number {
+  return (
+    STARTER_BASE + proxies * rate(PROXY_TIERS, proxies) + numbers * rate(PHONE_TIERS, numbers)
+  )
+}
+
+/** Team monthly list price: graduated profiles + seats + per-unit add-ons. */
+export function teamList(
+  profiles: number,
+  seats: number,
+  proxies: number,
+  numbers: number
+): number {
+  return (
+    pfPrice(profiles) +
+    seats * SEAT_RATE +
+    proxies * rate(PROXY_TIERS, proxies) +
+    numbers * rate(PHONE_TIERS, numbers)
+  )
 }
 
 /** Applies the billing-cycle discount to a monthly list price. */
@@ -111,8 +143,15 @@ export function money(v: number): string {
 
 // ── Plan identity ───────────────────────────────────────────────────
 
-/** TubeGhost plan keys. Distinct from TubeProxies' proxy plan names. */
-export type GhostPlanKey = 'starter' | 'team'
+/** Every TubeGhost plan, including the free tier a new workspace starts on. */
+export type PlanKey = 'free' | 'starter' | 'team'
+
+/**
+ * The PAID TubeGhost plans. Distinct from TubeProxies' proxy plan names, and
+ * deliberately excludes 'free': a free workspace can never be the target of a
+ * checkout, so anything on that path narrows to this instead of PlanKey.
+ */
+export type GhostPlanKey = Exclude<PlanKey, 'free'>
 
 export function isCycle(v: unknown): v is Cycle {
   return v === 'monthly' || v === 'quarterly' || v === 'annual'
@@ -179,7 +218,7 @@ export function addOnsAvailable(cycle: Cycle): boolean {
 }
 
 export interface PlanDef {
-  key: GhostPlanKey
+  key: PlanKey
   name: string
   /** Fixed base price. Team is null — its profiles are graduated. */
   base: number | null
@@ -202,7 +241,18 @@ export interface PlanDef {
  * beyond those three bill at SEAT_RATE. Starter is solo and sells no seats.
  * Enterprise is sales-led and has no entry.
  */
-export const PLANS: Record<GhostPlanKey, PlanDef> = {
+export const PLANS: Record<PlanKey, PlanDef> = {
+  free: {
+    key: 'free',
+    name: 'Free',
+    base: 0,
+    // 3, matching ghost.plans — migration 0013 lowered it from the original
+    // seed's 5, and the DB is what enforce_profile_limit actually reads.
+    profiles: 3,
+    configurableProfiles: false,
+    seatsIncluded: 1,
+    extraSeats: false
+  },
   starter: {
     key: 'starter',
     name: 'Starter',
@@ -266,4 +316,134 @@ export function validateTeamConfig(profiles: number, seats: number): string | nu
   if (seats < 0) return 'Seat count cannot be negative'
   if (seats > PF_MAX) return 'Seat count is out of range'
   return null
+}
+
+// ── Compatibility aliases for the shared billing components ─────────────────
+//
+// The billing UI is shared with the desktop app, which imports these names
+// from TubeGhostMarketing/app/lib/pricing.ts. Rather than keep a second copy of
+// the pricing MATH, they are thin aliases over what this module already
+// computes — so there is exactly one implementation of every number.
+
+/** The billing cycles, in ascending commitment order. */
+export const PLAN_CYCLES = ['monthly', 'quarterly', 'annual'] as const
+
+/** Alias of `Cycle`, under the name the shared billing components import. */
+export type PlanCycle = Cycle
+
+export function isPlanCycle(v: unknown): v is PlanCycle {
+  return v === 'monthly' || v === 'quarterly' || v === 'annual'
+}
+
+/**
+ * Full TubeGhost plan-key guard, including 'free'.
+ *
+ * Distinct from isGhostPlanKey(), which excludes 'free' because a free
+ * workspace can never be the target of a checkout.
+ */
+export function isPlanKey(v: unknown): v is PlanKey {
+  return v === 'free' || v === 'starter' || v === 'team'
+}
+
+/** Everything a plan card needs to render one priced option. */
+export interface PlanQuote {
+  listMonthly: number
+  monthly: number
+  charged: number
+  billableSeats: number
+  /** Profiles this quote actually buys — the denominator for perProfile. */
+  profiles: number
+  /** Effective per-profile rate, for display only. */
+  perProfile: number
+}
+
+export function planQuote(
+  plan: PlanDef,
+  cycle: PlanCycle,
+  members: number,
+  profiles = plan.profiles
+): PlanQuote {
+  const effectiveProfiles = plan.configurableProfiles
+    ? Math.min(PF_MAX, Math.max(PF_MIN, profiles))
+    : plan.profiles
+  const listMonthly = planList(plan, members, effectiveProfiles)
+  const monthly = applyCycle(listMonthly, cycle)
+  return {
+    listMonthly,
+    monthly,
+    charged: cycle === 'annual' ? monthly * 12 : cycle === 'quarterly' ? monthly * 3 : monthly,
+    billableSeats: billableSeats(plan, members),
+    profiles: effectiveProfiles,
+    perProfile: plan.configurableProfiles ? perProfileRate(effectiveProfiles) : 0
+  }
+}
+
+// ── TubeProxies add-on pricing (proxies + phone numbers) ────────────────────
+//
+// These are TubeProxies' numbers, not TubeGhost's: the same threshold rates
+// tubeproxies-dash sells from (dash/src/lib/plans.ts — e.g. Hobby $39 for 5 IPs
+// = $7.80/IP, matching [5, 7.8] below). Duplicated here only because the
+// Billing UI needs them client-side; the checkout Edge Function re-computes
+// every total server-side and refuses a mismatched client quote, so a drift
+// here surfaces loudly rather than mischarging.
+
+/** Proxy quantities the stepper offers — the pack sizes TubeProxies sells. */
+export const PX_STOPS = [0, 1, 5, 10, 25, 50, 100]
+
+/** Snap an arbitrary proxy count to the nearest sellable pack size. */
+export function snapProxyQty(n: number): number {
+  if (!Number.isFinite(n) || n <= 0) return 0
+  return PX_STOPS.reduce((best, s) => (Math.abs(s - n) < Math.abs(best - n) ? s : best), PX_STOPS[0])
+}
+
+/**
+ * Phone quantities the stepper offers — the ladder TubeProxies sells.
+ *
+ * Only these have tile prices. A stepper moving by 1 could quote 2 or 4
+ * numbers, which no tile covers: on the live account those fall back to a
+ * per-unit price plus a volume coupon whose percentage only approximates the
+ * ladder rate, so the quoted total would not be the charged total.
+ */
+export const PHONE_STOPS = [0, 1, 3, 7, 15]
+
+/** Snap an arbitrary number count to the nearest sellable ladder size. */
+export function snapPhoneQty(n: number): number {
+  if (!Number.isFinite(n) || n <= 0) return 0
+  return PHONE_STOPS.reduce(
+    (best, s) => (Math.abs(s - n) < Math.abs(best - n) ? s : best),
+    PHONE_STOPS[0]
+  )
+}
+
+/** Threshold rates: the whole pack bills at the rate its size unlocks. */
+export const PROXY_TIERS: Tier[] = [
+  [100, 5],
+  [50, 6.5],
+  [25, 7],
+  [10, 7.5],
+  [5, 7.8],
+  [1, 8]
+]
+
+export const PHONE_TIERS: Tier[] = [
+  [15, 12.49],
+  [7, 12.99],
+  [3, 13.33],
+  [1, 14.99]
+]
+
+/** First tier whose threshold the quantity reaches. */
+export function rate(tiers: Tier[], qty: number): number {
+  for (const [q, r] of tiers) if (qty >= q) return r
+  return tiers[tiers.length - 1][1]
+}
+
+/**
+ * Cycle multipliers for ADD-ONS (proxies + phone), which discount on a
+ * different ladder from workspace plans: quarterly -10%, annual -20%.
+ */
+export const ADDON_CYCLE_MULT: Record<Cycle, number> = {
+  monthly: 1,
+  quarterly: 0.9,
+  annual: 0.8
 }

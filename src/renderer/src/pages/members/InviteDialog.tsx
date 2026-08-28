@@ -1,7 +1,7 @@
 import * as React from 'react'
 import { useState } from 'react'
 import { UserPlus, X } from 'lucide-react'
-import { Button } from '@/components/ui'
+import { Button } from '@tubeghost/ui'
 import { emailSchema } from '@/lib/invitations'
 import type { CreateInvitationResult, InviteInput } from '@/lib/invitations'
 import type { AppRoleRow } from './types'

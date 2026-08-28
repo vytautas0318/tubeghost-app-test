@@ -11,7 +11,15 @@ export interface FilterState {
   status: StatusFilter
   tags: string[]
   proxy: ProxyFilter
+  // Specific proxies (host:port keys) to restrict to. Multi-select, like tags.
+  // Kept SEPARATE from `proxy` above so the any/has/none modes still work: an
+  // empty array means "no specific-proxy restriction", and picking proxies
+  // implies "has proxy" without having to change the mode.
+  proxyIds: string[]
   lastOpened: LastOpenedFilter
+  // Restrict to profiles assigned to this user id. Set by the Members page
+  // ("View assigned profiles"); null = no assignee restriction.
+  assignedTo: string | null
 }
 
 export const EMPTY_FILTERS: FilterState = {
@@ -19,15 +27,18 @@ export const EMPTY_FILTERS: FilterState = {
   status: 'all',
   tags: [],
   proxy: 'any',
-  lastOpened: 'any'
+  proxyIds: [],
+  lastOpened: 'any',
+  assignedTo: null
 }
 
 export function activeFilterCount(f: FilterState): number {
   let n = 0
   if (f.status !== 'all') n += 1
   if (f.tags.length > 0) n += 1
-  if (f.proxy !== 'any') n += 1
+  if (f.proxy !== 'any' || f.proxyIds.length > 0) n += 1
   if (f.lastOpened !== 'any') n += 1
+  if (f.assignedTo) n += 1
   return n
 }
 

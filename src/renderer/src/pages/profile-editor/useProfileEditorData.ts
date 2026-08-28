@@ -9,7 +9,6 @@ import {
   type ProfileRow
 } from '@/lib/profiles'
 import { rowToForm, type FormState } from './types'
-import { resolveProxyDraft, type ProxyDraft } from './proxy-draft'
 
 export interface UseProfileEditorDataResult {
   profile: ProfileRow | null
@@ -21,16 +20,7 @@ export interface UseProfileEditorDataResult {
   setSaving: (v: boolean) => void
   error: string | null
   setError: (e: string | null) => void
-  // Resolves to null when the save failed (see `error`). `note` is set when
-  // the save succeeded but the proxy request degraded (e.g. auto mode found
-  // an empty pool) — returned rather than stored in state so the caller can
-  // act on it in the same tick it navigates away.
-  save: (
-    workspaceId: string,
-    isNew: boolean,
-    id?: string,
-    proxyDraft?: ProxyDraft
-  ) => Promise<{ row: ProfileRow; note?: string } | null>
+  save: (workspaceId: string, isNew: boolean, id?: string) => Promise<ProfileRow | null>
   remove: (id: string) => Promise<{ ok: true } | { ok: false; message: string }>
   reload: () => Promise<void>
 }
@@ -76,35 +66,25 @@ export function useProfileEditorData(
     workspaceId: string,
     isNewArg: boolean,
     idArg?: string,
-    proxyDraft?: ProxyDraft
-  ): Promise<{ row: ProfileRow; note?: string } | null> => {
+    // Simple passes the OS the user picked so the inserted device is coherent
+    // from the start. Omitted elsewhere → createProfile uses the workspace default.
+    platform?: string | null
+  ): Promise<ProfileRow | null> => {
     setSaving(true)
     setError(null)
     try {
       if (isNewArg) {
-        // Single-step creation: the proxy the user configured on the Proxy
-        // tab is resolved now (auto mode re-checks the pool) and written with
-        // the INSERT, so there's no create-then-attach round trip.
-        let proxy = null
-        let note: string | undefined
-        if (proxyDraft) {
-          const resolved = await resolveProxyDraft(workspaceId, proxyDraft)
-          if (!resolved.ok) {
-            setError(resolved.error)
-            return null
-          }
-          proxy = resolved.fields
-          note = resolved.note
-        }
-        const created = await createProfile({
+        return await createProfile({
           workspace_id: workspaceId,
           name: form.name.trim() || 'Untitled profile',
           group_id: form.group_id,
           notes: form.notes || null,
           tags: form.tags,
-          proxy
+          // Simple lets the user pick the OS before saving; seeding it here
+          // means createProfile generates a coherent device for that platform
+          // rather than defaulting to Windows and being patched afterwards.
+          platform
         })
-        return { row: created, note }
       }
       const updated = await updateProfile(idArg!, {
         name: form.name.trim() || 'Untitled profile',
@@ -117,7 +97,7 @@ export function useProfileEditorData(
       // immediately (otherwise the user keeps seeing "unsaved" warnings
       // even right after Save).
       setForm(rowToForm(updated))
-      return { row: updated }
+      return updated
     } catch (e) {
       setError((e as Error).message)
       return null
@@ -126,9 +106,7 @@ export function useProfileEditorData(
     }
   }
 
-  const remove = async (
-    idArg: string
-  ): Promise<{ ok: true } | { ok: false; message: string }> => {
+  const remove = async (idArg: string): Promise<{ ok: true } | { ok: false; message: string }> => {
     try {
       await deleteProfile(idArg)
       return { ok: true }

@@ -63,11 +63,11 @@ describe('graduated profile pricing', () => {
 
 describe('seats + team totals', () => {
   it('adds flat seat cost on top of profiles', () => {
-    expect(teamList(100, 4)).toBeCloseTo(89 + 4 * SEAT_RATE, 2)
+    expect(teamList(100, 4, 0, 0)).toBeCloseTo(89 + 4 * SEAT_RATE, 2)
   })
 
   it('team with no seats is just the profile cost', () => {
-    expect(teamList(25, 0)).toBeCloseTo(40, 2)
+    expect(teamList(25, 0, 0, 0)).toBeCloseTo(40, 2)
   })
 })
 
@@ -117,10 +117,12 @@ describe('billing cycles', () => {
     expect(applyCycle(100, 'quarterly')).toBeCloseTo(90, 2)
   })
 
-  it('annual gives 2 months free', () => {
-    expect(applyCycle(120, 'annual')).toBeCloseTo(100, 2)
-    // 12 months at the discounted rate = the price of 10 months.
-    expect(billedTotal(applyCycle(120, 'annual'), 'annual')).toBeCloseTo(1200, 2)
+  it('annual takes 20% off the monthly rate', () => {
+    // Changed 2026-08-14 from 10/12 ("2 months free", ~-16.7%) to a flat -20%,
+    // so plans and the proxy/phone add-ons discount at the same rate. Annual is
+    // charged upfront for 12 months at the discounted price.
+    expect(applyCycle(120, 'annual')).toBeCloseTo(96, 2)
+    expect(billedTotal(applyCycle(120, 'annual'), 'annual')).toBeCloseTo(1152, 2)
   })
 
   it('monthly is unchanged and reports no up-front total', () => {

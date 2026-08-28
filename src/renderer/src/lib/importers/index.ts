@@ -3,9 +3,14 @@
 // via the standard data layer, so every import gets the same safe-by-default
 // fingerprint + RLS treatment as a hand-created profile.
 
-import { createProfile, importProfile, updateProfile, type ProfileRow } from '@/lib/profiles'
+import {
+  createProfile,
+  importProfilesBundle,
+  updateProfile,
+  type ProfileRow
+} from '@/lib/profiles'
 import { createGroup, listGroups, PRESET_COLORS } from '@/lib/groups'
-import { createTag, listTags, TAG_PRESET_COLORS } from '@/lib/tags'
+import { createTag, listTags, TAG_PRESET_COLORS } from '@tubeghost/ui'
 import {
   isTubeGhostExport,
   parseForeignProfiles,
@@ -161,8 +166,8 @@ export async function importForeignFile(file: File, workspaceId: string): Promis
     // file itself says what it is, so honour that.
     if (isTubeGhostExport(text)) {
       try {
-        await importProfile(text, workspaceId)
-        return { created: 1, failed: 0, errors: [] }
+        // Bundle-aware: a bulk export carries many profiles in one file.
+        return await importProfilesBundle(text, workspaceId)
       } catch (e) {
         return { created: 0, failed: 1, errors: [(e as Error).message] }
       }

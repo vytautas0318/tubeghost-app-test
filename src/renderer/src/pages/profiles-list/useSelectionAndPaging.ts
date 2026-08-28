@@ -8,8 +8,9 @@
 //  - Page index is clamped on filter / page-size changes.
 //  - Page size persists in localStorage.
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { PAGE_SIZE_OPTIONS, type PageSize } from './Pagination'
+import { applySpan, selectionSpan } from './selectionRange'
 
 const STORAGE_KEY = 'tpb.profiles.pageSize'
 
@@ -25,7 +26,7 @@ export interface UseSelectionAndPagingResult<T extends { id: string }> {
   selected: Set<string>
   selectedCount: number
   pageSelectedCount: number
-  onToggleRow: (id: string, checked: boolean) => void
+  onToggleRow: (id: string, checked: boolean, range?: boolean) => void
   onToggleSelectAll: (checked: boolean) => void
   clearSelection: () => void
 }
@@ -85,13 +86,23 @@ export function useSelectionAndPaging<T extends { id: string }>(
     0
   )
 
-  const onToggleRow = (id: string, checked: boolean): void => {
-    setSelected((prev) => {
-      const next = new Set(prev)
-      if (checked) next.add(id)
-      else next.delete(id)
-      return next
-    })
+  // Last row toggled without shift — the anchor a shift-click extends from.
+  // A ref, not state: it must not re-render the list, and the handler needs to
+  // read the value set by the immediately preceding click.
+  const anchorRef = useRef<string | null>(null)
+
+  const onToggleRow = (id: string, checked: boolean, range = false): void => {
+    // Shift-click extends from the anchor to this row, applying THIS row's new
+    // checked state across the whole span (so shift-unchecking clears a range
+    // too). selectionSpan falls back to the single row when no span resolves.
+    const anchor = anchorRef.current
+    const span = selectionSpan(pageIds, anchor, id, range)
+    setSelected((prev) => applySpan(prev, span, checked))
+    // A resolved shift-click keeps the existing anchor, so repeated
+    // shift-clicks re-extend from the same origin rather than walking it
+    // forward one row at a time. Every other click — including a shift-click
+    // whose anchor is no longer on this page — sets a fresh anchor.
+    if (!(range && anchor && pageIds.includes(anchor))) anchorRef.current = id
   }
 
   const onToggleSelectAll = (checked: boolean): void => {

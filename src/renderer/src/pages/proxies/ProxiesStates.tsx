@@ -8,9 +8,7 @@ import { ProxiesHeader } from './ProxiesHeader'
 
 export function CenterMessage({ text }: { text: string }): React.ReactElement {
   return (
-    <div className="flex-1 flex items-center justify-center text-sm text-[var(--t3)]">
-      {text}
-    </div>
+    <div className="flex-1 flex items-center justify-center text-sm text-[var(--t3)]">{text}</div>
   )
 }
 
@@ -25,7 +23,8 @@ export function NoPermissionState(): React.ReactElement {
             You don&apos;t have access to proxies
           </h3>
           <p className="text-xs text-[var(--t3)]">
-            Ask a workspace admin to grant you the <span className="mono">proxies.view</span> permission.
+            Ask a workspace admin to grant you the <span className="mono">proxies.view</span>{' '}
+            permission.
           </p>
         </div>
       </div>
@@ -46,9 +45,7 @@ export function ErrorState({
       <div className="flex-1 flex items-center justify-center p-8">
         <div className="max-w-md text-center">
           <AlertCircle className="w-8 h-8 mx-auto mb-3 text-[var(--red)]" />
-          <h3 className="text-sm font-bold text-[var(--t1)] mb-1">
-            Failed to load proxies
-          </h3>
+          <h3 className="text-sm font-bold text-[var(--t1)] mb-1">Failed to load proxies</h3>
           <p className="text-xs text-[var(--t3)]">{message}</p>
         </div>
       </div>

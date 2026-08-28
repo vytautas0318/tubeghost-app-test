@@ -1,10 +1,9 @@
-// Quantity steppers for the upgrade configurator, matching the marketing
-// pricing page (PricingTable.tsx) and the desktop app's copy of this file.
-// Breakpoint tables come from the shared pricing module so the hop points can
-// never drift from the discount bands.
+// Quantity steppers for the upgrade configurator, ported from the marketing
+// pricing page (PricingTable.tsx). Breakpoint tables come from the shared
+// pricing module so the hop points can never drift from the discount bands.
 //
-// Both strip non-digits on change and clamp on blur, so an empty or garbage
-// field can never NaN the total.
+// All three strip non-digits on change and clamp on blur, so an empty or
+// garbage field can never NaN the total.
 
 import * as React from 'react'
 import { Minus, Plus } from 'lucide-react'
@@ -47,7 +46,10 @@ function Stepper({
         inputMode="numeric"
         value={value}
         aria-label={label}
-        onChange={(e) => onType(parse(e.target.value) ?? 0)}
+        onChange={(e) => {
+          const n = parse(e.target.value)
+          onType(n ?? 0)
+        }}
         onBlur={(e) => onCommit(parse(e.target.value))}
         onKeyDown={(e) => {
           if (e.key === 'ArrowUp') {
@@ -97,6 +99,7 @@ export function ProfileStepper({
   )
 }
 
+/** Proxies: hops the volume-discount breakpoints. */
 /** Team members: plain ±1. */
 export function CountStepper({
   value,

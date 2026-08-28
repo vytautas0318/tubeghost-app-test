@@ -11,7 +11,7 @@
 
 import { getSupabase } from '@/lib/supabase'
 import { usePrefs } from '@/store/prefs'
-import type { AutomationWithMeta } from '@/lib/automations'
+import type { AutomationWithMeta } from '@tubeghost/ui'
 import type { ProfileResult, RunStatus } from '../../../../shared/automations/types'
 
 export async function emitAutomationDone(

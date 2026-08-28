@@ -23,7 +23,10 @@ const FLAG_URLS = import.meta.glob<string>('@flags/*.svg', {
 
 const BY_CODE: Record<string, string> = {}
 for (const [path, url] of Object.entries(FLAG_URLS)) {
-  const code = path.slice(path.lastIndexOf('/') + 1).replace('.svg', '').toUpperCase()
+  const code = path
+    .slice(path.lastIndexOf('/') + 1)
+    .replace('.svg', '')
+    .toUpperCase()
   BY_CODE[code] = url
 }
 

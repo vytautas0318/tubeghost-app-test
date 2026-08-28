@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { Fingerprint, Check } from 'lucide-react'
 import { useWorkspace } from '@/store/workspace'
 import { useHasPermission } from '@/lib/permissions'
-import { Button, Toggle, Select } from '@/components/ui'
+import { Button, Toggle, Select } from '@tubeghost/ui'
 import {
   getWorkspaceSettings,
   updateFingerprintDefaults,
@@ -12,6 +12,14 @@ import {
   type WebrtcMode
 } from '@/lib/settings'
 import { Srow, type Toast } from './settingsCommon'
+import { browserVersionsFor } from '@/pages/profile-editor/randomize'
+
+// The TubeGhost Browser versions available, newest first. Read from the same
+// table the randomizer uses, so the dropdown can never offer a version that
+// can't actually launch — and a new engine appears here for free.
+const BROWSER_CORE_OPTIONS = browserVersionsFor('windows')
+// What "Latest" resolves to right now.
+const LATEST_MAJOR = BROWSER_CORE_OPTIONS[0] ?? '150'
 
 // Read-only cards: these are always randomized per profile (not a workspace
 // default) — shown so the user understands the anti-detect posture.
@@ -99,9 +107,23 @@ export function FingerprintPanel({ onToast }: { onToast: Toast }): React.ReactEl
               disabled={dis}
               style={{ minWidth: '100%' }}
             >
-              <option value="150">Chromium 150</option>
-              <option value="148">Chromium 148</option>
+              {/* Options come from the shared version table, so the list can't
+                  drift from what can really launch. "Latest" follows app
+                  updates; a pinned version deliberately does not. */}
+              <option value="latest">Latest (recommended)</option>
+              {BROWSER_CORE_OPTIONS.map((v) => (
+                <option key={v} value={v}>
+                  TubeGhost Browser {v}
+                </option>
+              ))}
             </Select>
+            {/* "Latest" is otherwise opaque — name the version it resolves to
+                today so the choice isn't a black box. */}
+            <div className="text-[11px] text-[var(--t3)] mt-1">
+              {fp.browser_core === 'latest'
+                ? `New profiles use TubeGhost Browser ${LATEST_MAJOR} — follows app updates automatically.`
+                : `Pinned. New profiles stay on version ${fp.browser_core} even after app updates.`}
+            </div>
           </div>
         </div>
         <div className="fpgrid">

@@ -20,7 +20,9 @@ export function ProxyTable({
   onDelete,
   onAssign,
   onEditLabel,
-  sortHeader
+  onCopied,
+  sortHeader,
+  footer
 }: {
   rows: ViewProxy[]
   columns: ColumnConfig[]
@@ -32,14 +34,31 @@ export function ProxyTable({
   onDelete: (row: ViewProxy) => void
   onAssign: (row: ViewProxy) => void
   onEditLabel: (row: ViewProxy) => void
+  // Optional: lets the page toast after a cell copies a value.
+  onCopied?: (text: string) => void
   sortHeader: React.ReactNode
+  // Rendered inside the table panel, below the rows (the bulk-action bar).
+  // Must live INSIDE .tbl so it shares the panel's border/background instead
+  // of floating in the gap beneath it.
+  footer?: React.ReactNode
 }): React.ReactElement {
   // 34px select · 36px sortable # · <config columns> · 44px actions
   const gridTemplate = ['34px', '36px', ...columns.map((c) => c.width), '44px'].join(' ')
-  const handlers: CellHandlers = { onEditLabel }
+  // Width below which the row scrolls horizontally instead of squeezing columns
+  // into ellipsis. Derived from each column's measured minPx (plus the fixed
+  // select/#/actions tracks, the 12px inter-column gaps and 32px row padding),
+  // so adding or removing a column keeps this correct automatically.
+  const trackCount = columns.length + 3
+  const minWidth =
+    34 + 36 + 44 + columns.reduce((n, c) => n + c.minPx, 0) + (trackCount - 1) * 12 + 32
+
+  const handlers: CellHandlers = { onEditLabel, onCopied }
 
   return (
-    <div className="tbl proxy" style={{ ['--px-cols' as string]: gridTemplate }}>
+    <div
+      className="tbl proxy"
+      style={{ ['--px-cols' as string]: gridTemplate, ['--px-min' as string]: `${minWidth}px` }}
+    >
       <div className="tbl-head">
         {selectAllNode}
         {sortHeader}
@@ -64,6 +83,7 @@ export function ProxyTable({
           onAssign={() => onAssign(p)}
         />
       ))}
+      {footer}
     </div>
   )
 }

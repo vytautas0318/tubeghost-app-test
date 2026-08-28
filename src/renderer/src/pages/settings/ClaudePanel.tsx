@@ -1,7 +1,7 @@
 import * as React from 'react'
 import { useCallback, useEffect, useState } from 'react'
 import { Copy, RefreshCw, Sparkles } from 'lucide-react'
-import { Button, Input } from '@/components/ui'
+import { Button, Input } from '@tubeghost/ui'
 import { useAuth } from '@/store/auth'
 import {
   generatePairingCode,

@@ -39,7 +39,7 @@ const COUNTRY_SHORT: Record<string, string> = {
   'Syrian Arab Republic': 'Syria',
   "Lao People's Democratic Republic": 'Laos',
   'Viet Nam': 'Vietnam',
-  'Czechia': 'Czech Republic',
+  Czechia: 'Czech Republic',
   'Taiwan, Province of China': 'Taiwan',
   'Hong Kong': 'Hong Kong',
   'United Arab Emirates': 'UAE'

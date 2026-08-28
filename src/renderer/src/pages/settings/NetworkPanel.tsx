@@ -2,7 +2,7 @@ import * as React from 'react'
 import { useEffect, useState } from 'react'
 import { useWorkspace } from '@/store/workspace'
 import { useHasPermission } from '@/lib/permissions'
-import { Toggle, Select } from '@/components/ui'
+import { Toggle, Select } from '@tubeghost/ui'
 import {
   getWorkspaceSettings,
   updateNetworkDefaults,

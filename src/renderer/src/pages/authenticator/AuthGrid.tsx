@@ -3,7 +3,7 @@ import { Lock, Plus } from 'lucide-react'
 import { AuthCard } from './AuthCard'
 import { Ring } from './Ring'
 import { PERIOD } from './useAuthData'
-import type { AuthTokenRow } from '@/lib/authenticator'
+import type { AuthTokenRow } from '@tubeghost/ui'
 
 // Status bar (§3) + responsive card grid, ending with the dashed "Add an
 // account" card. All cards share the one `remaining`/`low` tick so their codes

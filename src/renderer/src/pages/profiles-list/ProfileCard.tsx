@@ -1,158 +1,215 @@
-// One profile as a card in the Simple view. A direct port of the design
-// system's ArcadeCard (ui_kits/browser/ProfileCards.jsx + cards.css `.ar`):
-// avatar, name, channel line, OS + proxy chips, last-opened, a full-width
-// Launch button, and the row menu revealed on hover.
-//
-// It deliberately carries LESS than the table row — no group, no tags, no
-// selection, no inline editing. Those live in the Advanced view; this one is
-// for picking a profile and launching it.
-
 import * as React from 'react'
-import { useState } from 'react'
-import { Play, Plus } from 'lucide-react'
-import { useNavigate } from 'react-router-dom'
+import { Play } from 'lucide-react'
 import { GhostAvatar } from '@/components/GhostAvatar'
-import { OsMark } from './osFlag'
 import { RowMenu } from './RowMenu'
-import { groupColor, profileFace } from './cardVisuals'
-import { LinkChannelPopover } from './LinkChannelPopover'
-import { anchorTo, type Anchor } from './cardViewState'
+import { OsMark } from './osFlag'
+import { InlineName } from './InlineName'
+import { GroupCell } from './GroupCell'
+import { ProxyCell } from './InlineCells'
+import type { GroupRow } from '@/lib/groups'
 import type { ViewProfile } from './types'
-import { updateProfile, type ProfileRow as ProfileRowType } from '@/lib/profiles'
-import type { LinkedChannel } from '@/lib/youtube'
+import type { ProxyRow } from '@/lib/proxies'
+import type { ProfileRow as ProfileRowType } from '@/lib/profiles'
+import { profileColor } from './profileColor'
 
+/**
+ * ProfileCard — the Simple view's tile. Shows only what a non-technical user
+ * needs: a per-profile ghost mark, name, group, proxy + OS, a status line,
+ * and one primary
+ * Launch/Stop button.
+ *
+ * Ported from the desktop renderer so both apps present the same card. Two
+ * desktop-only capabilities are deliberately absent here: launching a browser
+ * and cross-device session sync both run through the local engine, which a web
+ * page has no access to. The Launch slot instead carries the same
+ * "open in the desktop app" prompt the table row uses.
+ *
+ * Name, group and proxy are inline-editable here, using the SAME components as
+ * the table row (InlineName / GroupCell / ProxyCell) so the two views cannot
+ * drift on edit semantics or permissions. Tags remain an Advanced affordance —
+ * they need more room than a card gives.
+ */
 export function ProfileCard({
   profile: p,
   raw,
+  proxyMeta,
   onChanged,
-  canEdit,
+  selected,
+  selectionActive,
+  onSelectChange,
+  workspaceId,
   onToast,
   onOpen,
-  canLaunch
+  canLaunch,
+  groups,
+  canEdit
 }: {
   profile: ViewProfile
   raw: ProfileRowType
+  proxyMeta?: ProxyRow | null
+  // Passing the updated row lets the page patch it in place; omitting it
+  // forces a full reload (for changes touching more than this profile).
   onChanged: (updated?: ProfileRowType) => void
-  canEdit: boolean
+  selected: boolean
+  // True once ANY card is selected: the grid is in selection mode, so a click
+  // anywhere on a card toggles it instead of doing nothing.
+  selectionActive: boolean
+  // `range` is true when shift was held — extends from the list's anchor card.
+  onSelectChange: (checked: boolean, range?: boolean) => void
+  workspaceId: string
   onToast?: (kind: 'error' | 'info', text: string) => void
+  // Web has no local engine: this raises the "desktop app required" modal.
   onOpen: () => void
   canLaunch: boolean
+  // Group list for the inline group picker (same source the table row uses).
+  groups: GroupRow[]
+  canEdit: boolean
 }): React.ReactElement {
-  const navigate = useNavigate()
-  const [linkAnchor, setLinkAnchor] = useState<Anchor | null>(null)
-
+  const [avatarFailed, setAvatarFailed] = React.useState(false)
+  // The desktop app stores the linked channel as six flat columns; this app
+  // stores one `youtube_channel` JSON blob (the two schemas both exist in the
+  // shared database — see the migration note). Reading it into the same shape
+  // here keeps the card's markup identical to the desktop's. `subs` is already
+  // human-formatted ("412K") on this side, so no formatSubs() is needed.
   const channel = raw.youtube_channel ?? null
+  // Shift state of the click that produced the pending change event.
+  const shiftRef = React.useRef(false)
   const running = p.status === 'open'
-  const inUse = !!p.openByOther && !running
-  const proxy = p.proxyIp ? p.proxyIp : 'No proxy'
-
-  const linkChannel = async (ch: LinkedChannel): Promise<void> => {
-    const updated = await updateProfile(raw.id, { youtube_channel: ch })
-    onChanged(updated)
-    onToast?.('info', `${ch.title} linked to ${p.name}`)
-  }
+  const heldByOther = !!p.openByOther
+  const geo =
+    proxyMeta?.country_code && proxyMeta.city
+      ? `${proxyMeta.country_code} · ${proxyMeta.city}`
+      : (proxyMeta?.country_code ?? null)
 
   return (
-    <div className={'ar group' + (running ? ' live' : '') + (inUse ? ' inuse' : '')}>
-      <div className="ar-menu">
-        <RowMenu profile={raw} heldByOther={!!p.openByOther} onChange={onChanged} />
-      </div>
-
-      <span className="ar-halo">
-        {channel?.thumbnail ? (
-          <img className="pc-pic" src={channel.thumbnail} alt="" width={64} height={64} />
-        ) : (
-          <GhostAvatar
-            size={64}
-            radius={999}
-            color={groupColor(p.group, p.id)}
-            face={profileFace(p.id)}
-            glasses="round"
-          />
-        )}
-        {inUse && (
-          <span className="ar-user" title={`In use by ${p.openByOther?.initials}`}>
-            {p.openByOther?.initials}
-          </span>
-        )}
-      </span>
-
-      <button
-        type="button"
-        className="ar-name"
-        title={p.name}
-        onClick={() => navigate(`/profiles/${raw.id}`)}
-      >
-        {p.name}
-      </button>
-
-      {channel ? (
-        <div className="ar-chan" title={channel.title}>
-          {channel.handle}
-          {channel.subs ? (
-            <>
-              <span>·</span>
-              {channel.subs} subs
-            </>
-          ) : null}
-        </div>
-      ) : canEdit ? (
-        <button
-          type="button"
-          className="ar-chan link"
-          aria-haspopup="dialog"
-          aria-expanded={!!linkAnchor}
-          onClick={(e) => setLinkAnchor(linkAnchor ? null : anchorTo(e.currentTarget))}
-        >
-          <Plus />
-          Link channel
-        </button>
-      ) : (
-        // Keeps every card the same height whether or not a channel is
-        // linked — an empty row here, not a collapsed one.
-        <div className="ar-chan" />
-      )}
-
-      <div className="ar-chips">
-        <span className="ar-chip" title={raw.platform}>
-          <OsMark platform={raw.platform} className="w-[11px] h-[11px] shrink-0" />
-          {(raw.platform ?? '').toLowerCase().includes('mac') ? 'macOS' : 'Win'}
-        </span>
-        <span className={'ar-chip' + (p.proxyIp ? '' : ' none')} title={proxy}>
-          {proxy}
-        </span>
-      </div>
-
-      {inUse ? (
-        <div className="ar-seen inuse-note">Open by {p.openByOther?.initials}</div>
-      ) : (
-        <div className="ar-seen">{p.lastOpened}</div>
-      )}
-
-      <button
-        type="button"
-        className="pc-btn wide"
-        onClick={onOpen}
-        disabled={!canLaunch || inUse}
-        title={
-          inUse
-            ? `In use by ${p.openByOther?.initials}`
-            : canLaunch
-              ? `Launch ${p.name}`
-              : "You don't have permission to launch profiles"
-        }
-      >
-        <Play fill="currentColor" />
-        {inUse ? 'In use' : 'Launch'}
-      </button>
-
-      {linkAnchor && (
-        <LinkChannelPopover
-          anchor={linkAnchor}
-          onClose={() => setLinkAnchor(null)}
-          onLink={linkChannel}
+    // `group` is required by RowMenu: its ⋮ button is `opacity-0
+    // group-hover:opacity-100`, so without a Tailwind group ancestor it never
+    // becomes visible. The table row carries the same class for this reason.
+    <div
+      className={
+        'group pc-card' +
+        (running ? ' live' : '') +
+        (selected ? ' sel' : '') +
+        (selectionActive ? ' selectable' : '')
+      }
+      // Once something is selected, clicking the card body toggles it -- having
+      // to hit the small corner checkbox every time is tedious when picking
+      // several. Interactive children (Launch, the ⋮ menu, the checkbox,
+      // inline editors, links) stop propagation or are excluded here, so this
+      // only fires for clicks on dead space.
+      onClick={
+        selectionActive
+          ? (e) => {
+              const el = e.target as HTMLElement
+              if (el.closest('button, a, input, select, textarea, [role="button"]')) return
+              // A click that ends a text drag must not toggle: users still need
+              // to select and copy an IP, a group name, a timestamp.
+              if (!window.getSelection()?.isCollapsed) return
+              onSelectChange(!selected, e.shiftKey)
+            }
+          : undefined
+      }
+    >
+      <div className="pc-card-top">
+        <input
+          type="checkbox"
+          className="pc-check"
+          checked={selected}
+          // See ProfileRow: modifier keys live on the click, not the change.
+          onMouseDown={(e) => {
+            if (e.shiftKey) e.preventDefault()
+          }}
+          onClick={(e) => {
+            shiftRef.current = e.shiftKey
+          }}
+          onChange={(e) => {
+            const range = shiftRef.current
+            shiftRef.current = false
+            onSelectChange(e.target.checked, range)
+          }}
+          aria-label={`Select ${p.name}`}
         />
+        <RowMenu profile={raw} heldByOther={heldByOther} onChange={onChanged} />
+      </div>
+
+      {/* A linked channel's real avatar identifies the profile far better than
+          a generated mascot. Google's thumbnail URLs can expire, so a failed
+          load falls back to the ghost rather than showing a broken image. */}
+      {channel?.thumbnail && !avatarFailed ? (
+        <img
+          className="pc-avatar"
+          src={channel.thumbnail}
+          alt=""
+          onError={() => setAvatarFailed(true)}
+        />
+      ) : (
+        <GhostAvatar color={profileColor(raw.id, raw.group_id)} size={64} radius={999} />
       )}
+
+      <div className="pc-name">
+        <InlineName
+          id={raw.id}
+          name={p.name}
+          canEdit={canEdit}
+          onChanged={onChanged}
+          onToast={onToast}
+        />
+      </div>
+      {/* Channel line replaces the group line when a channel is linked: the
+          handle + sub count is what the user actually recognises. */}
+      {channel ? (
+        <div className="pc-chan" title={channel.title || undefined}>
+          {[channel.handle || channel.title, channel.subs ? `${channel.subs} subs` : null]
+            .filter(Boolean)
+            .join(' · ')}
+        </div>
+      ) : (
+        <div className="pc-grp">
+          <GroupCell
+            raw={raw}
+            groups={groups}
+            canEdit={canEdit}
+            onChanged={onChanged}
+            alwaysShowEmpty
+          />
+        </div>
+      )}
+
+      <div className="pc-chips">
+        <span className="pc-chip">
+          <OsMark platform={raw.platform} />
+        </span>
+        <span className="pc-chip pc-chip-px">
+          <ProxyCell
+            raw={raw}
+            meta={proxyMeta}
+            workspaceId={workspaceId}
+            canEdit={canEdit}
+            onChanged={onChanged}
+          />
+        </span>
+      </div>
+      {geo && <div className="pc-geo">{geo}</div>}
+
+      <div className={'pc-status' + (running ? ' on' : '')}>
+        {heldByOther
+          ? `In use · ${p.openByOther?.device ?? 'another device'}`
+          : running
+            ? 'Running now'
+            : `Last opened ${p.lastOpened}`}
+      </div>
+
+      <div className="pc-launch">
+        <button
+          onClick={onOpen}
+          disabled={!canLaunch}
+          className="row-open"
+          title={canLaunch ? `Launch ${p.name}` : "You don't have permission to launch profiles"}
+        >
+          <Play className="w-3 h-3" fill="currentColor" />
+          Launch
+        </button>
+      </div>
     </div>
   )
 }

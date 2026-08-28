@@ -1,3 +1,4 @@
+import { Badge, PlatformIcon, clearPhoneLink, setPhoneLink } from '@tubeghost/ui'
 import * as React from 'react'
 import { useEffect, useState } from 'react'
 import {
@@ -7,14 +8,14 @@ import {
   ChevronRight,
   MoreVertical,
   Copy,
-  Users,
-  Trash2
+  Users
 } from 'lucide-react'
-import { Badge, PlatformIcon } from '@/components/ui'
 import { NavIcon } from '@/components/sidebar/navIcons'
 import { type ToastState } from '@/components/Toast'
+import { Flag } from '@/components/Flag'
 import { type PhoneNum, type ProfileOpt, type Tag } from './phoneData'
 import { AssignPopover, TagPopover } from './popovers'
+import { useAuth } from '@/store/auth'
 
 type ShowFn = (kind: ToastState['kind'], text: string) => void
 type Anchor = { id: string; x: number; y: number }
@@ -23,11 +24,17 @@ export function NumbersPanel({
   nums,
   setNums,
   profileOpts,
+  workspaceId,
+  onLinksChanged,
   show
 }: {
   nums: PhoneNum[]
   setNums: React.Dispatch<React.SetStateAction<PhoneNum[]>>
   profileOpts: ProfileOpt[]
+  workspaceId: string | null
+  // Re-reads the links after a change, so the row reflects what was persisted
+  // rather than only the optimistic local edit.
+  onLinksChanged: () => void | Promise<void>
   show: ShowFn
 }): React.ReactElement {
   const [q, setQ] = useState('')
@@ -67,7 +74,13 @@ export function NumbersPanel({
     setAq('')
     setAssign({ id, x: r.left, y: r.bottom + 6 })
   }
+  // Assign (or clear) the profile a number is linked to, and PERSIST it.
+  //
+  // Previously this only mutated local state, so the assignment silently
+  // vanished on refresh. The optimistic update stays for responsiveness, but a
+  // failed write is rolled back by re-reading from the server.
   const setProfile = (id: string, opt: ProfileOpt | null): void => {
+    const prev = nums.find((n) => n.id === id)?.profile ?? 'Unassigned'
     setNums((ns) =>
       ns.map((n) =>
         n.id === id ? { ...n, profile: opt ? opt.name : 'Unassigned', pl: opt ? opt.pl : null } : n
@@ -75,7 +88,27 @@ export function NumbersPanel({
     )
     setAssign(null)
     setAq('')
-    show('info', opt ? `Linked to ${opt.name}` : 'Number unassigned')
+
+    if (!workspaceId) {
+      show('error', 'No workspace selected.')
+      return
+    }
+
+    void (async () => {
+      try {
+        if (opt) {
+          await setPhoneLink(workspaceId, id, opt.id, useAuth.getState().user?.id ?? null)
+        } else {
+          await clearPhoneLink(workspaceId, id)
+        }
+        show('info', opt ? `Linked to ${opt.name}` : 'Number unassigned')
+        await onLinksChanged()
+      } catch (e) {
+        // Roll the row back so the UI never claims a link that isn't stored.
+        setNums((ns) => ns.map((n) => (n.id === id ? { ...n, profile: prev } : n)))
+        show('error', `Couldn't save assignment: ${(e as Error).message}`)
+      }
+    })()
   }
   const openTag = (e: React.MouseEvent, id: string): void => {
     e.stopPropagation()
@@ -135,10 +168,26 @@ export function NumbersPanel({
         {shown.map((n) => (
           <div className="pn-tr" key={n.id}>
             <span className="pn-num">
-              <span className="flag" role="img" aria-label="US" style={{ fontSize: '16px' }}>
-                🇺🇸
-              </span>
+              {/* Real SVG flag, not the 🇺🇸 emoji: the emoji sits on its own
+                  baseline with a taller line-box than the mono digits beside
+                  it, so the row read as misaligned — and Windows has no
+                  regional-indicator glyphs at all (it renders bare "US"). */}
+              <Flag code="US" size={18} />
               {n.number}
+              {/* Copy is the single most common action on this page — a
+                  verification flow needs the number pasted elsewhere — so it
+                  gets an inline button rather than living only in the ⋮ menu. */}
+              <button
+                type="button"
+                className="pn-copy"
+                title="Copy number"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  copy(n.number)
+                }}
+              >
+                <Copy size={13} />
+              </button>
             </span>
             <span
               className="pn-link pn-link-edit"
@@ -257,18 +306,19 @@ export function NumbersPanel({
               <Users size={15} />
               Share with team
             </div>
-            <div className="rm-sep" />
-            <div
-              className="rm-item danger"
-              onClick={() => {
-                setNums((ns) => ns.filter((x) => x.id !== menuNum.id))
-                setMenu(null)
-                show('success', 'Number released')
-              }}
-            >
-              <Trash2 size={15} />
-              Release number
-            </div>
+            {/*
+              No "Release number" here (removed 2026-08-05). Releasing is a
+              BILLING operation — it changes the TubeProxies subscription
+              quantity and returns the number upstream — so it lives on
+              dash.tubeproxies.com for the same reason purchase does (Stripe +
+              provider credentials must not ship in a desktop app).
+
+              The old item filtered the row out of local React state and
+              toasted "Number released" while releasing nothing: the number
+              stayed on the subscription and reappeared on the next refresh,
+              having told the user it was gone. Use "Manage numbers" in the
+              page header for real quantity changes.
+            */}
           </div>
         </div>
       )}

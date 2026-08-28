@@ -175,6 +175,10 @@ export function buildContext(opts: {
   workspaceName?: string | null
   roleName?: string | null
   profiles?: ProfileContext[]
+  // Proxy pool size, so "how many proxies do I have?" can be answered from
+  // context without a round trip. Omit when unknown (don't guess zero).
+  proxyCount?: number | null
+  activeProxyCount?: number | null
 }): string {
   const parts = [`The user is currently on the "${routeLabel(opts.pathname)}" page.`]
   if (opts.workspaceName) parts.push(`Workspace: "${opts.workspaceName}".`)
@@ -194,6 +198,11 @@ export function buildContext(opts: {
     )
   } else {
     parts.push('The user has no profiles yet.')
+  }
+
+  if (typeof opts.proxyCount === 'number') {
+    const a = typeof opts.activeProxyCount === 'number' ? `, ${opts.activeProxyCount} active` : ''
+    parts.push(`The user has ${opts.proxyCount} prox${opts.proxyCount === 1 ? 'y' : 'ies'}${a}.`)
   }
   return parts.join(' ')
 }

@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { Badge, type BadgeTone } from '@/components/ui'
+import { Badge, type BadgeTone } from '@tubeghost/ui'
 import type { MemberStatus } from './types'
 
 const STATUS_META: Record<MemberStatus, { tone: BadgeTone; label: string }> = {

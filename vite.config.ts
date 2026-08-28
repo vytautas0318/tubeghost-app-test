@@ -28,17 +28,18 @@ export default defineConfig({
     // ORDER MATTERS: Vite matches aliases by prefix in declaration order, so
     // the more specific '@flags' / '@renderer' must come before the bare '@'
     // (otherwise '@flags/…' is rewritten by the '@' rule and resolves nowhere).
-    alias: {
+    alias: [
       // Country flag SVGs (components/Flag.tsx globs these). Aliased because
       // `root` is src/renderer/, so a root-absolute '/node_modules/…' glob
       // would resolve to src/renderer/node_modules and match nothing.
-      '@flags': resolve(__dirname, 'node_modules/country-flag-icons/3x2'),
-      '@renderer': resolve(__dirname, 'src/renderer/src'),
+      { find: '@flags', replacement: resolve(__dirname, 'node_modules/country-flag-icons/3x2') },
+      { find: /^@\/lib\/automations$/, replacement: resolve(__dirname, '../tubeghost package/src/lib/automations-data') },
+      { find: '@renderer', replacement: resolve(__dirname, 'src/renderer/src') },
       // Code shared with the serverless functions under api/ (pricing math),
       // so both quote the same numbers.
-      '@shared': resolve(__dirname, 'src/shared'),
-      '@': resolve(__dirname, 'src/renderer/src')
-    }
+      { find: '@shared', replacement: resolve(__dirname, 'src/shared') },
+      { find: '@', replacement: resolve(__dirname, 'src/renderer/src') }
+    ]
   },
   server: {
     host: '127.0.0.1',

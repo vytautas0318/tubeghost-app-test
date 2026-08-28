@@ -4,7 +4,7 @@
 import * as React from 'react'
 import { useState } from 'react'
 import { Check, Copy } from 'lucide-react'
-import { cn } from '@/lib/cn'
+import { cn } from '@tubeghost/ui'
 
 export function DrawerSection({
   title,

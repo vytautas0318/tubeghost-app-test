@@ -1,7 +1,7 @@
 import * as React from 'react'
 import { useState } from 'react'
 import { X, AlertTriangle, Trash2 } from 'lucide-react'
-import { Button } from '@/components/ui'
+import { Button } from '@tubeghost/ui'
 
 // Destructive type-to-confirm dialog for deleting a role. The Delete button
 // stays disabled until the user types the role's exact name, so a role can't

@@ -1,7 +1,7 @@
 import * as React from 'react'
 import { useState } from 'react'
 import { Search, Star, Store, Plus } from 'lucide-react'
-import { Button, Badge, Input } from '@/components/ui'
+import { Button, Badge, Input } from '@tubeghost/ui'
 import { ExtTile } from './ExtTile'
 import { RECOMMENDED } from './extData'
 
