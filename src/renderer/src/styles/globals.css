@@ -5,6 +5,9 @@
    their own namespace (--red / --bg / --panel / --t1 …) and don't collide with
    Tailwind's --color-* theme tokens. */
 @import './ds-tokens.css';
+/* Base element styles owned by the design system (native <select> theming,
+   etc). Lives in the package so web + desktop share one copy. */
+@import '@tubeghost/ui/styles/ds-base.css';
 @import './ds-kit.css';
 @import './profiles-cards.css';
 @import './profile-simple.css';
