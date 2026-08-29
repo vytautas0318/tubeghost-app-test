@@ -19,7 +19,7 @@
     "@hookform/resolvers": "^5.2.2",
     "@modelcontextprotocol/sdk": "^1.26.0",
     "@supabase/supabase-js": "^2.105.1",
-    "@tubeghost/ui": "git+ssh://git@github.com/vytautas0318/tubeghost-ui.git#v0.1.0",
+    "@tubeghost/ui": "git+ssh://git@github.com/vytautas0318/tubeghost-ui.git#v0.1.1",
     "@upstash/ratelimit": "^2.0.5",
     "@upstash/redis": "^1.35.1",
     "class-variance-authority": "^0.7.1",
